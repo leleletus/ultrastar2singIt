@@ -321,14 +321,14 @@ class MainWindow(QMainWindow):
         tools_layout.addWidget(self.ffmpeg_label, 0, 0)
         self.ffmpeg_path.editingFinished.connect(self.ffmpeg_path_fv)
         tools_layout.addWidget(self.ffmpeg_path, 0, 1)
-        self.ffmpeg_browse.clicked.connect(lambda: self.browse_file(self.ffmpeg_path, "ffmpeg (*.exe)"))
+        self.ffmpeg_browse.clicked.connect(lambda: self.browse_file(self.ffmpeg_path, "ffmpeg (*.exe);;All Files (*)"))
         tools_layout.addWidget(self.ffmpeg_browse, 0, 2)
 
         # RAD
         tools_layout.addWidget(self.rad_label, 1, 0)
         self.rad_path.editingFinished.connect(self.rad_path_fv)
         tools_layout.addWidget(self.rad_path, 1, 1)
-        self.rad_browse.clicked.connect(lambda: self.browse_file(self.rad_path, "radvideo64 (*.exe)"))
+        self.rad_browse.clicked.connect(lambda: self.browse_file(self.rad_path, "bink2w64 or radvideo64 (*.exe);;All Files (*)"))
         tools_layout.addWidget(self.rad_browse, 1, 2)
 
         tools_group.setLayout(tools_layout)
@@ -530,13 +530,13 @@ class MainWindow(QMainWindow):
 
     def ffmpeg_path_fv(self) -> bool:
         path = self.ffmpeg_path.text().strip()
-        valid = path and os.path.isfile(path) and path.lower().endswith('ffmpeg.exe')
+        valid = path and (os.path.isfile(path) or path.lower() == 'ffmpeg')
         mark_field_valid(self.ffmpeg_path, valid)
         return valid
 
     def rad_path_fv(self) -> bool:
         path = self.rad_path.text().strip()
-        valid = path and os.path.isfile(path) and path.lower().endswith('radvideo64.exe')
+        valid = path and os.path.isfile(path)
         mark_field_valid(self.rad_path, valid)
         return valid
 
@@ -592,7 +592,7 @@ class MainWindow(QMainWindow):
         set_element_enabled(self.max_video_size, not self.still_video_checkbox.isChecked())
 
     def max_video_size_fv(self) -> bool:
-        self.max_video_size.setText(str(max(10, min(int(self.max_video_size.text() or 50), 200))))
+        self.max_video_size.setText(str(max(10, min(int(self.max_video_size.text() or 80), 200))))
         return True
 
     def include_dlc_checkbox_refresh(self) -> None:
@@ -694,6 +694,13 @@ class MainWindow(QMainWindow):
         if not is_blank(self.cfg.tools.ffmpeg_path):
             self.ffmpeg_path.setText(self.cfg.tools.ffmpeg_path)
             return
+        
+        import sys
+        if sys.platform != "win32":
+            if os.path.exists("/usr/bin/ffmpeg"):
+                self.ffmpeg_path.setText("/usr/bin/ffmpeg")
+                return
+
         root_path = os.path.abspath(app_dir())
         ffpmeg_expected_path = os.path.join(root_path, "ffmpeg", "bin", "ffmpeg.exe")
         if os.path.exists(ffpmeg_expected_path):
@@ -707,6 +714,15 @@ class MainWindow(QMainWindow):
     def prefill_rad_path(self) -> None:
         if not is_blank(self.cfg.tools.rad_path):
             self.rad_path.setText(self.cfg.tools.rad_path)
+            return
+            
+        import sys
+        if sys.platform != "win32":
+            wine_path = os.path.expanduser("~/.wine/drive_c/Program Files (x86)/RADVideo/radvideo64.exe")
+            if os.path.exists(wine_path):
+                self.rad_path.setText(wine_path)
+                return
+
         expected_path = r"C:\Program Files (x86)\RADVideo\radvideo64.exe"
         if os.path.exists(expected_path):
             self.rad_path.setText(expected_path)
@@ -1349,7 +1365,6 @@ class MainWindow(QMainWindow):
 
 def main():
     app = QApplication(sys.argv)
-    qdarktheme.setup_theme("auto")
     window = MainWindow()
     apply_theme_change(app.styleHints().colorScheme(), app, window)
     app.styleHints().colorSchemeChanged.connect(lambda scheme: apply_theme_change(scheme, app, window))

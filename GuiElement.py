@@ -15,17 +15,35 @@ class Color(Enum):
     RED = '#ae2012'
     ORANGE = '#ca6702'
 
+from PIL import Image, ImageDraw
+
+def get_colored_icon(shape, color):
+    img = Image.new("RGBA", (16, 16), (255, 255, 255, 0))
+    draw = ImageDraw.Draw(img)
+    if shape == "circle":
+        draw.ellipse([2, 2, 14, 14], fill=color)
+    elif shape == "rect":
+        draw.rectangle([2, 2, 14, 14], fill=color)
+    elif shape == "triangle":
+        draw.polygon([(8, 2), (2, 14), (14, 14)], fill=color)
+    elif shape == "check":
+        draw.line([3, 8, 7, 12, 14, 4], fill=color, width=2)
+    elif shape == "cross":
+        draw.line([4, 4, 12, 12], fill=color, width=2)
+        draw.line([4, 12, 12, 4], fill=color, width=2)
+    return img
+
 class Icon(Enum):
-    START = TablerIcons.load(OutlineIcon.STATUS_CHANGE, color=Color.GREEN.value, stroke_width=2.5)
-    STOP = TablerIcons.load(FilledIcon.PLAYER_STOP, color=Color.RED.value, stroke_width=2.5)
-    CHECK = TablerIcons.load(OutlineIcon.CHECK, color=Color.GREEN.value, stroke_width=2.5)
-    X = TablerIcons.load(OutlineIcon.X, color=Color.RED.value, stroke_width=2.5)
-    FILE_CHECK = TablerIcons.load(OutlineIcon.FILE_CHECK, color=Color.BLUE.value, stroke_width=2.5)
-    REFRESH = TablerIcons.load(OutlineIcon.REFRESH, color=Color.GREEN.value, stroke_width=2.5)
-    FILE_X = TablerIcons.load(OutlineIcon.FILE_X, color=Color.RED.value, stroke_width=2.5)
-    TRASH = TablerIcons.load(OutlineIcon.TRASH, color=Color.RED.value, stroke_width=2.5)
-    ALERT_TRIANGLE = TablerIcons.load(OutlineIcon.ALERT_TRIANGLE, color=Color.ORANGE.value, stroke_width=2.5)
-    INFO_SQUARE_ROUNDED = TablerIcons.load(OutlineIcon.INFO_SQUARE_ROUNDED, color=Color.BLUE.value, stroke_width=2.5)
+    START = get_colored_icon("circle", Color.GREEN.value)
+    STOP = get_colored_icon("rect", Color.RED.value)
+    CHECK = get_colored_icon("check", Color.GREEN.value)
+    X = get_colored_icon("cross", Color.RED.value)
+    FILE_CHECK = get_colored_icon("check", Color.BLUE.value)
+    REFRESH = get_colored_icon("circle", Color.BLUE.value)
+    FILE_X = get_colored_icon("cross", Color.ORANGE.value)
+    TRASH = get_colored_icon("rect", Color.ORANGE.value)
+    ALERT_TRIANGLE = get_colored_icon("triangle", Color.ORANGE.value)
+    INFO_SQUARE_ROUNDED = get_colored_icon("rect", Color.BLUE.value)
 
     def get_icon(self: Icon) -> QIcon:
         try:

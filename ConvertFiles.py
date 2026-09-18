@@ -319,7 +319,16 @@ def create_video_bink(file, list_in_dir, output_video_file_name, compression_per
         return
     file_format = '/V' + str(200)
     remove_sound = '/L-1'
-    bink_args = [_rad_path, 'binkc', file, os.fspath(list_in_dir / output_video_file_name), file_format,
+    import sys
+    bink_in = str(file)
+    bink_out = os.fspath(list_in_dir / output_video_file_name)
+    if sys.platform != "win32":
+        bink_in = "Z:" + bink_in.replace("/", "\\")
+        bink_out = "Z:" + bink_out.replace("/", "\\")
+        bink_args = ['wine', _rad_path, 'binkc', bink_in, bink_out, file_format,
+                    '/(1280', '/)720', remove_sound]
+    else:
+        bink_args = [_rad_path, 'binkc', bink_in, bink_out, file_format,
                     '/(1280', '/)720', remove_sound]
     if compression_percentage:
         data_rate_switch = '/D' + str(compression_percentage)
@@ -361,7 +370,8 @@ def handle_xml_or_json(dlc_id, core_id, json_file_name, list_in_dir, txt_data,
             "genre": genre,
             "theme": "Love, Deep, Party",
             "difficulty": "VeryEasy",
-            "coopfriendly": "Coop"
+            "coopfriendly": "Coop",
+            "language": "English"
         }
         add_song_to_json(dlc_id, json_file_name, song_data, cfg)
 
