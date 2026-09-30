@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['LetsSingUltrastarConverter.py'],
+    ['LetsSingUltraStarConverter.py'],
     pathex=[],
     binaries=[],
     datas=[('config_default.yml', '.'), ('Guide.md', '.'), ('data/repository/data.db', 'data/repository'), ('assets', 'assets')],

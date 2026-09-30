@@ -296,9 +296,18 @@ def clean_artist_name(artist):
             text = text.split(sep)[0]
     return text.strip()
 
+def sanitize_for_genius(text):
+    text = normalize_text(text)
+    text = re.sub(r'\[.*?\]', '', text)
+    text = re.sub(r'\(.*?\)', '', text)
+    text = text.replace('$', 's').replace('!', 'i').replace('+', 'and')
+    return text.strip()
+
 def genius_search_for_correct_path(artist, title):
+    artist = sanitize_for_genius(artist)
+    title = sanitize_for_genius(title)
     primary_artist = clean_artist_name(artist)
-    clean_title = title.split('(')[0].strip() # Remove (Live), (Remix)
+    clean_title = title.strip() # Remove any remaining whitespace
     
     queries_to_try = [
         f"{primary_artist} {clean_title}",  # 1. Try main artist + song
@@ -380,12 +389,15 @@ def genius_get_choruses(input_file_name, artist=None, title=None, use_cache=True
 
     urls_to_try = []
     
-    url_artist_full = normalize_for_url(artist)
-    url_title = normalize_for_url(title)
+    sanitized_artist = sanitize_for_genius(artist)
+    sanitized_title = sanitize_for_genius(title)
+    
+    url_artist_full = normalize_for_url(sanitized_artist)
+    url_title = normalize_for_url(sanitized_title)
     urls_to_try.append(f'https://genius.com/{url_artist_full}-{url_title}-lyrics')
     
-    primary_artist = clean_artist_name(artist)
-    if primary_artist != artist.lower():
+    primary_artist = clean_artist_name(sanitized_artist)
+    if primary_artist != sanitized_artist.lower():
         url_artist_clean = normalize_for_url(primary_artist)
         urls_to_try.append(f'https://genius.com/{url_artist_clean}-{url_title}-lyrics')
 

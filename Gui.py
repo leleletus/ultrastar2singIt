@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                                QHBoxLayout, QLabel, QLineEdit, QPushButton,
                                QCheckBox, QTextEdit, QTableWidgetItem, QFileDialog, QGroupBox,
                                QGridLayout, QAbstractItemView, QProgressBar,
-                               QAbstractButton, QDialog, QTextBrowser, QDialogButtonBox, QComboBox)
+                               QAbstractButton, QDialog, QTextBrowser, QDialogButtonBox, QComboBox, QSpinBox)
 
 import GuiElement
 import SupportedFormats
@@ -195,6 +195,16 @@ class MainWindow(QMainWindow):
         self.watcher_debounce.setSingleShot(True)
         self.watcher_debounce.setInterval(500)
         self.watcher_debounce.timeout.connect(self.do_watcher_refresh)
+
+        # Menu bar for additional tools
+        menu_bar = self.menuBar()
+        tools_menu = menu_bar.addMenu("Tools")
+        
+        recover_action = tools_menu.addAction("Recover Cache from Output")
+        recover_action.triggered.connect(self.tool_recover_cache)
+        
+        unpack_action = tools_menu.addAction("Unpack/Reverse Output to Input")
+        unpack_action.triggered.connect(self.tool_unpack_output)
 
         # Central widget with main layout
         central_widget = QWidget()
@@ -391,10 +401,21 @@ class MainWindow(QMainWindow):
 
         # Slow/Accurate pitch correction
         tweaks_layout.addWidget(self.pitch_correction_checkbox)
+        tweaks_layout.addWidget(self.vocal_isolation_checkbox)
 
         # Still video
         tweaks_layout.addWidget(self.still_video_checkbox)
 
+        # Multithreading
+        mt_layout = QHBoxLayout()
+        self.multithread_checkbox.toggled.connect(self.multithread_workers.setEnabled)
+        mt_layout.addWidget(self.multithread_checkbox)
+        mt_layout.addWidget(QLabel("Threads:"))
+        mt_layout.addWidget(self.multithread_workers)
+        mt_layout.addStretch()
+        tweaks_layout.addLayout(mt_layout)
+        tweaks_layout.addWidget(self.clear_output_checkbox)
+        
         # Max video size
         max_video_layout = QHBoxLayout()
         max_video_layout.addWidget(self.max_video_label)
@@ -406,6 +427,9 @@ class MainWindow(QMainWindow):
 
         # Ignore medley checkbox
         tweaks_layout.addWidget(self.ignore_medley_checkbox)
+
+        # Force reconvert checkbox
+        tweaks_layout.addWidget(self.force_reconvert_checkbox)
 
         tweaks_content = QWidget()
         tweaks_content.setLayout(tweaks_layout)
@@ -462,6 +486,16 @@ class MainWindow(QMainWindow):
     def create_preview_table(self) -> QGroupBox:
         preview_group = QGroupBox("Input folder preview")
         preview_layout = QVBoxLayout()
+
+        # Search bar
+        search_layout = QHBoxLayout()
+        search_label = QLabel("🔍 Search:")
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("Type to filter songs by name...")
+        self.search_input.textChanged.connect(self.on_search_changed)
+        search_layout.addWidget(search_label)
+        search_layout.addWidget(self.search_input)
+        preview_layout.addLayout(search_layout)
 
         # Song preview table
         self.preview_table.checkboxStateChanged.connect(self.update_clear_cache_enabled)
@@ -667,9 +701,15 @@ class MainWindow(QMainWindow):
             self.dlc_tsv_path_fv()
 
         self.pitch_correction_checkbox.setChecked(True if self.cfg.conversion_tweaks.pitch_correction.lower() == 'slow' else False)
+        self.vocal_isolation_checkbox.setChecked(True if getattr(self.cfg.conversion_tweaks, "vocal_isolation", False) else False)
         self.max_video_size.setText(str(self.cfg.conversion_tweaks.max_video_size))
         self.max_video_size_fv()
         self.ignore_medley_checkbox.setChecked(self.cfg.conversion_tweaks.no_medley)
+        
+        force_reconv = getattr(self.cfg.conversion_tweaks, "force_reconvert", False)
+        self.force_reconvert_checkbox.setChecked(force_reconv)
+        self.clear_output_checkbox.setChecked(getattr(self.cfg.conversion_tweaks, "clear_output", True))
+
         self.still_video_checkbox.clicked.connect(self.still_video_checkbox_fv)
         self.still_video_checkbox.setChecked(self.cfg.conversion_tweaks.still_video)
         self.still_video_checkbox_fv()
@@ -721,7 +761,7 @@ class MainWindow(QMainWindow):
             wine_path = os.path.expanduser("~/.wine/drive_c/Program Files (x86)/RADVideo/radvideo64.exe")
             if os.path.exists(wine_path):
                 self.rad_path.setText(wine_path)
-                return
+            return
 
         expected_path = r"C:\Program Files (x86)\RADVideo\radvideo64.exe"
         if os.path.exists(expected_path):
@@ -793,18 +833,20 @@ class MainWindow(QMainWindow):
                 has_txt = GuiElement.Icon.X.get_icon()
 
                 all_files = os.listdir(directory_path)
-                for file in all_files:
-                    file_lower = file.lower()
-                    if directory != Path(file).stem and directory != self.sanitize_name(Path(file).stem):
-                        continue
-                    if file_lower.endswith(SupportedFormats.VIDEO_EXTENSIONS):
-                        has_video = GuiElement.Icon.CHECK.get_icon()
-                    elif file_lower.endswith(SupportedFormats.AUDIO_EXTENSIONS):
-                        has_audio = GuiElement.Icon.CHECK.get_icon()
-                    elif file_lower.endswith(SupportedFormats.IMAGE_EXTENSIONS):
-                        has_image = GuiElement.Icon.CHECK.get_icon()
-                    elif file_lower.endswith(SupportedFormats.TXT_EXTENSIONS):
-                        has_txt = GuiElement.Icon.CHECK.get_icon()
+
+                files_txt = [x for x in all_files if x.lower().endswith(SupportedFormats.TXT_EXTENSIONS) and x != output_txt_name]
+                files_avi = [x for x in all_files if x.lower().endswith(SupportedFormats.VIDEO_EXTENSIONS) and not x.endswith('_cover.mp4') and x != output_video_name]
+                files_mp3 = [x for x in all_files if x.lower().endswith(SupportedFormats.AUDIO_EXTENSIONS) and x != output_audio_name and x != output_audio_preview_name]
+                files_jpg = [x for x in all_files if x.lower().endswith(SupportedFormats.IMAGE_EXTENSIONS) and x not in (output_image_name, png_in_game_file_name, png_long_file_name, png_result_file_name)]
+
+                if files_avi:
+                    has_video = GuiElement.Icon.CHECK.get_icon()
+                if files_mp3:
+                    has_audio = GuiElement.Icon.CHECK.get_icon()
+                if files_jpg:
+                    has_image = GuiElement.Icon.CHECK.get_icon()
+                if files_txt:
+                    has_txt = GuiElement.Icon.CHECK.get_icon()
 
                 cached_video = output_video_name in all_files
                 cached_audio = output_audio_name in all_files
@@ -857,18 +899,73 @@ class MainWindow(QMainWindow):
                 song_item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
                 song_item.setFlags(song_item.flags() & ~Qt.ItemIsEditable)
                 self.preview_table.setItem(row, 1, song_item)
+                
+                # Sync Button (2)
+                is_doubt = self.is_doubtful_sync(song["directory_path"])
+                btn_text = "⚠️ Fix Sync" if is_doubt else "Fix Sync"
+                sync_btn = QPushButton(btn_text)
+                if is_doubt:
+                    sync_btn.setStyleSheet("color: #d97706; font-weight: bold;")
+                    sync_btn.setToolTip("Posible desincronización detectada (GAP 0 o inicio rápido).")
+                sync_btn.clicked.connect(lambda checked=False, p=song["directory_path"]: self.open_sync_editor(p))
+                self.preview_table.setCellWidget(row, 2, sync_btn)
 
-                # Icon columns (2..5)
-                for i, icon in enumerate(song["icons"], start=2):
+                # Icon columns (3..6)
+                for i, icon in enumerate(song["icons"], start=3):
                     icon_item = QTableWidgetItem()
                     icon_item.setIcon(icon)
                     icon_item.setTextAlignment(Qt.AlignCenter)
                     icon_item.setFlags(icon_item.flags() & ~Qt.ItemIsEditable)
                     self.preview_table.setItem(row, i, icon_item)
+                    
+                # Original order column (7)
+                orig_item = QTableWidgetItem(f"{row:06d}")
+                self.preview_table.setItem(row, 7, orig_item)
         finally:
             self.preview_table.blockSignals(False)
             self.preview_table.sync_header_checkbox()
             self.update_clear_cache_enabled()
+
+    def is_doubtful_sync(self, directory_path: str) -> bool:
+        import SupportedFormats
+        import UltrastarToSingit
+        import os
+        txt_files = [x for x in os.listdir(directory_path) if x.lower().endswith(SupportedFormats.TXT_EXTENSIONS) and not x.endswith('.vxla')]
+        if not txt_files: return False
+        txt_path = os.path.join(directory_path, txt_files[-1])
+        try:
+            us_data = UltrastarToSingit.parse_file(txt_path)
+            bpm = float(us_data.get("BPM", "100").replace(',', '.'))
+            gap = float(us_data.get("GAP", "0").replace(',', '.'))
+            if gap == 0 or gap < 0: return True
+            if bpm > 400 or bpm < 50: return True
+            first_beat = -1
+            for note in us_data.get("notes", []):
+                if note[0] in [':', '*', 'F', 'R', 'G']:
+                    first_beat = float(note[1])
+                    break
+            if first_beat != -1:
+                t_lyric = first_beat * 60 / bpm / 4 * 1000 + gap
+                if t_lyric < 500: return True
+            return False
+        except Exception:
+            return False
+
+    def open_sync_editor(self, directory_path):
+        try:
+            from SyncEditor import SyncEditorDialog
+            import glob
+            
+            txt_files = glob.glob(os.path.join(directory_path, "*.txt"))
+            if not txt_files:
+                self.log_message("No .txt file found to edit sync!")
+            return
+            
+            dialog = SyncEditorDialog(txt_files[0], self)
+            dialog.exec()
+            self.log_message(f"Sync edited for {os.path.basename(directory_path)}")
+        except Exception as e:
+            self.log_message(f"Failed to open Sync Editor: {e}")
 
     def browse_file(self, line_edit, file_filter="All Files (*)") -> None:
         """Open file browser and set the selected file path"""
@@ -892,6 +989,7 @@ class MainWindow(QMainWindow):
 
     def clear_preview(self) -> None:
         """Clear preview table contents."""
+        self.preview_table.reset_sorting()
         self.preview_table.setRowCount(0)
         self.preview_table.clearContents()
         self.update_clear_cache_enabled()
@@ -947,6 +1045,17 @@ class MainWindow(QMainWindow):
 
     def clear_logs(self) -> None:
         self.logs_text.clear()
+
+    def on_search_changed(self, text: str) -> None:
+        search_term = text.lower()
+        for row in range(self.preview_table.rowCount()):
+            item = self.preview_table.item(row, 1)
+            if item is None:
+                continue
+            if search_term in item.text().lower():
+                self.preview_table.setRowHidden(row, False)
+            else:
+                self.preview_table.setRowHidden(row, True)
 
     def refresh_preview(self) -> None:
         self.log("Input folder preview refreshed.")
@@ -1005,7 +1114,7 @@ class MainWindow(QMainWindow):
         def req(line_edit: QLineEdit, label: str):
             if not line_edit.isEnabled():
                 mark_field_valid(line_edit, True)
-                return
+            return
             if not line_edit.text().strip():
                 missing.append(label)
                 mark_field_valid(line_edit, False)
@@ -1036,6 +1145,8 @@ class MainWindow(QMainWindow):
         for w in self.findChildren(QAbstractButton):
             w.setEnabled(enabled)
         for w in self.findChildren(QComboBox):
+            w.setEnabled(enabled)
+        for w in self.findChildren(QSpinBox):
             w.setEnabled(enabled)
 
         self.stop_button.setEnabled(not enabled)
@@ -1164,10 +1275,17 @@ class MainWindow(QMainWindow):
         if not self.conversion_running:
             return
 
-        self.log("Stopping conversion once the current item is done...")
+        self.log("Stopping conversion and killing background processes...")
         set_element_enabled(self.stop_button, False)
         self.conversion_running = False
         self._stop_event.set()
+        
+        # In linux, we forcefully kill any running bink video conversions
+        if sys.platform != "win32":
+            import os
+            os.system("pkill -9 -f binkc")
+            os.system("pkill -9 -f radvideo64.exe")
+            os.system("pkill -9 -f radvideo")
 
 
     def show_help(self) -> None:
@@ -1254,7 +1372,14 @@ class MainWindow(QMainWindow):
         self.include_dlc_checkbox = QCheckBox("Include songs from the DLC")
         self.still_video_checkbox = QCheckBox("Use cover image instead of video (very fast)")
         self.pitch_correction_checkbox = QCheckBox("Analyze song vocals for pitch correction (~10s per song)")
+        self.vocal_isolation_checkbox = QCheckBox("Use Vocal Isolation for Pitch (Demucs, SLOWEST)")
         self.ignore_medley_checkbox = QCheckBox("Ignore the UltraStar medley tags for finding chorus sections")
+        self.force_reconvert_checkbox = QCheckBox("Force Re-Generate JSON (Ignore Cache)")
+        self.multithread_checkbox = QCheckBox("Enable Multithreading (faster conversion)")
+        self.clear_output_checkbox = QCheckBox("Clear output folder before converting")
+        self.multithread_workers = QSpinBox()
+        self.multithread_workers.setRange(1, 16)
+        self.multithread_workers.setValue(3)
         self.set_tooltips()
 
     def init_labels(self) -> None:
@@ -1300,6 +1425,7 @@ class MainWindow(QMainWindow):
             "UltraStar files often have lower pitch values than Let's Sing expects so some form of pitch correction is required."
             "\n\nCheck this box to use a pitch tracker based on a convolutional neural network (CREPE) to analyze each song (requires unpacking the required modules into the plugins folder). "
             "\nIf left unchecked, quick maths will be employed for correcting the pitch instead.")
+        self.vocal_isolation_checkbox.setToolTip("Extracts ONLY the human voice before AI pitch analysis to avoid instrument confusion (Requires Demucs, will download models). Use if pitch is wrong.")
         self.still_video_checkbox.setToolTip("Check this box to skip encoding of music videos to the game's format, "
             "the cover image will be used to create a static video instead. This will dramatically speed up the conversion "
             "and reduce the final size of the patch.")
@@ -1307,11 +1433,48 @@ class MainWindow(QMainWindow):
         self.ignore_medley_checkbox.setToolTip(
             "UltraStar medley tags in the lyrics txt file, if they exist, are sometimes incorrect and can lead to a non-chorus sections being marked as choruses."
             "\n\nCheck this box if you wish to ignore the tags and fully rely on the backup chorus lookup methods instead.")
+        self.force_reconvert_checkbox.setToolTip(
+            "Forces the generation of new .vxla (JSON) metadata files even if they already exist and the .txt hasn't changed. Useful when updating the program or changing pitch settings.")
         self.help_button.setToolTip("Show what this program does and instructions on how to use it.")
         self.refresh_button.setToolTip("Refresh the input song folders preview.")
         self.clear_cache_button.setToolTip("Delete the previously converted files from the selected input song's folder, base files won't be deleted.")
         self.stop_button.setToolTip("Stop the conversion process, all the files converted so far will be cached.")
         self.start_button.setToolTip("Start the conversion process, cached videos, audio and images will not be converted again.")
+
+
+    def tool_recover_cache(self) -> None:
+        from PySide6.QtWidgets import QMessageBox
+        import os
+        try:
+            output_dir = os.path.normpath(self.output_path.text().strip())
+            input_dir = os.path.normpath(self.input_path.text().strip())
+            from tools.cache_recovery import recover_cache
+            count, msg = recover_cache(input_dir, output_dir)
+            if count > 0:
+                QMessageBox.information(self, "Recover Cache", msg)
+            else:
+                QMessageBox.warning(self, "Recover Cache", msg)
+            self.refresh_preview()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", str(e))
+
+    def tool_unpack_output(self) -> None:
+        from PySide6.QtWidgets import QMessageBox, QFileDialog
+        import os
+        try:
+            QMessageBox.information(self, "Unpack", "Select a DLC 'Songs' folder to unpack (e.g. romfs/Songs). The unpacked songs will be saved to your current Input folder.")
+            songs_dir = QFileDialog.getExistingDirectory(self, "Select output 'Songs' directory", self.output_path.text())
+            if not songs_dir: return
+            input_dir = os.path.normpath(self.input_path.text().strip())
+            from tools.unpacker import unpack_dlc
+            count, msg = unpack_dlc(songs_dir, input_dir)
+            if count > 0:
+                QMessageBox.information(self, "Unpack", msg)
+            else:
+                QMessageBox.warning(self, "Error", msg)
+            self.refresh_preview()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", str(e))
 
     def save_config(self) -> None:
         dlc_id = self.dlc_id_input.text().strip()
@@ -1352,9 +1515,14 @@ class MainWindow(QMainWindow):
             "enable": self.tweaks_group.isChecked(),
             "dlc_songs": dlc_songs_section,
             "pitch_correction": "slow" if self.pitch_correction_checkbox.isChecked() else "fast",
+            "vocal_isolation": self.vocal_isolation_checkbox.isChecked(),
             "max_video_size": int(self.max_video_size.text()) if self.max_video_size.text().strip().isdigit() else None,
             "no_medley": self.ignore_medley_checkbox.isChecked(),
+            "force_reconvert": self.force_reconvert_checkbox.isChecked(),
             "still_video": self.still_video_checkbox.isChecked(),
+            "multithreading": self.multithread_checkbox.isChecked(),
+            "clear_output": self.clear_output_checkbox.isChecked(),
+            "multithreading_workers": self.multithread_workers.value(),
         }
 
         user_path = Path('.') / 'config.yml'

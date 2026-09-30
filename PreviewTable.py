@@ -100,17 +100,53 @@ class PreviewTable(QTableWidget):
         self.verticalHeader().setDefaultSectionSize(22)
         self.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
         self.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.setColumnCount(6)
+        self.setColumnCount(8)
         self.setHorizontalHeaderLabels(
-            ["", "Song", "Video", "Audio", "Image", "Lyrics"])
+            ["", "Song", "Sync", "Video", "Audio", "Image", "Lyrics", "OrigOrder"])
         self.horizontalHeader().setFixedHeight(24)
         self.horizontalHeader().setMinimumSectionSize(10)
         self.horizontalHeader().setSectionResizeMode(0, QHeaderView.Fixed)
         self.setColumnWidth(0, 24)
         self.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
-        for i in range(2, self.columnCount()):
+        self.horizontalHeader().setSectionResizeMode(2, QHeaderView.Fixed)
+        self.setColumnWidth(2, 80)
+        for i in range(3, 7):
             self.horizontalHeader().setSectionResizeMode(i, QHeaderView.Fixed)
             self.setColumnWidth(i, 40)
+        self.setColumnHidden(7, True)
+        
+        # 3-state sorting
+        self.horizontalHeader().setSectionsClickable(True)
+        self.horizontalHeader().setSortIndicatorShown(True)
+        self.horizontalHeader().setSortIndicator(-1, Qt.AscendingOrder)
+        self.horizontalHeader().sectionClicked.connect(self.on_header_clicked)
+        self.sort_states = {} # col -> 0 (asc), 1 (desc), 2 (orig)
+
+    def reset_sorting(self) -> None:
+        self.sort_states.clear()
+        self.horizontalHeader().setSortIndicator(-1, Qt.AscendingOrder)
+        
+    def on_header_clicked(self, logicalIndex: int) -> None:
+        if logicalIndex == self.checkbox_column:
+            # Let the checkbox header handle itself
+            return
+            
+        current_state = self.sort_states.get(logicalIndex, 2)
+        # Sequence: Original (2) -> Ascending (0) -> Descending (1) -> Original (2)
+        next_state = 0 if current_state == 2 else (1 if current_state == 0 else 2)
+        
+        # Reset all other columns' states to original
+        self.sort_states = {logicalIndex: next_state}
+        
+        if next_state == 0:
+            self.sortItems(logicalIndex, Qt.AscendingOrder)
+            self.horizontalHeader().setSortIndicator(logicalIndex, Qt.AscendingOrder)
+        elif next_state == 1:
+            self.sortItems(logicalIndex, Qt.DescendingOrder)
+            self.horizontalHeader().setSortIndicator(logicalIndex, Qt.DescendingOrder)
+        else:
+            self.sortItems(7, Qt.AscendingOrder)
+            self.horizontalHeader().setSortIndicator(-1, Qt.AscendingOrder)
 
     def selected_rows(self) -> list[int]:
         sm = self.selectionModel()

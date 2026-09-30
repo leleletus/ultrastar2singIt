@@ -1,5 +1,9 @@
+from concurrent.futures import ThreadPoolExecutor
 import csv
 import json
+import threading
+json_lock = threading.Lock()
+
 import logging
 import os
 import re
@@ -112,14 +116,21 @@ def rename_folders_physically():
     for folder in current_dirs:
         old_name = folder.name
         if old_name.startswith(('_', '.')):
-            continue
+                return
 
         new_name = sanitize_name(old_name)
 
         if old_name != new_name:
             try:
-                folder.rename(folder.parent / new_name)
-                logger.info(f"Folder renamed: '{old_name}' -> '{new_name}'")
+                # Handle directory exists error by appending a number
+                target_path = folder.parent / new_name
+                counter = 1
+                while target_path.exists():
+                    target_path = folder.parent / f"{new_name}_{counter}"
+                    counter += 1
+                
+                folder.rename(target_path)
+                logger.info(f"Folder renamed: '{old_name}' -> '{target_path.name}'")
             except Exception as e:
                 logger.error(f"Error while trying to rename {old_name}: {e}")
 
@@ -146,7 +157,10 @@ def find_folders_to_convert():
     return dir_to_convert
 
 
-def delete_output_folder():
+def delete_output_folder(cfg):
+    if getattr(cfg.conversion_tweaks, "clear_output", True) is False:
+        logger.info("Skipping output directory deletion (Clear output unchecked).")
+        return
     try:
         if os.path.exists(_output_dir):
             logger.info(f"Removing existing output directory: {_output_dir}")
@@ -261,6 +275,17 @@ def create_audio_preview(files_avi, files_mp3, list_in_dir, ogg_preview_file_nam
         preview_duration_time = ((preview_end_beat - preview_start_beat) * 60 / bpm / 4)
     elif 'PREVIEWSTART' in txt_data:
         preview_start_time = float(txt_data['PREVIEWSTART'].replace(',', '.'))
+        
+    # Bugfix: prevent preview from exceeding actual song duration
+    try:
+        total_duration = get_duration(os.fspath(file))
+        if preview_start_time + preview_duration_time > total_duration:
+            preview_start_time = max(0.0, total_duration - preview_duration_time)
+            if preview_start_time == 0.0:
+                preview_duration_time = total_duration
+    except Exception as e:
+        logger.warning(f"Could not verify duration for preview: {e}")
+
     ffmpeg_cmd = [_ffmpeg_path, '-ss', str(preview_start_time), '-i', os.fspath(file),
                  '-vn',
                  '-t', str(preview_duration_time), '-ar', '48000',
@@ -293,23 +318,24 @@ def create_audio(files_avi, files_mp3, list_in_dir, ogg_file_name, video_gap):
 
 
 def create_video(file, list_in_dir, output_video_file_name, target_bitrate_kbps):
+    passlog_prefix = os.fspath(list_in_dir / (output_video_file_name + "_passlog"))
     # First pass to analyze video
     ffmpeg_cmd = [_ffmpeg_path, '-y', '-i', os.fspath(file),
                  '-c:v', 'libx264', '-preset', 'medium', '-b:v', f'{target_bitrate_kbps}k',
-                 '-pass', '1', '-an', '-vf',
+                 '-pass', '1', '-passlogfile', passlog_prefix, '-an', '-vf',
                  'scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,fps=25',
                  '-f', 'null', os.devnull]
     subprocess.run(ffmpeg_cmd)
     # Second pass to create final file
     ffmpeg_cmd = [_ffmpeg_path, '-y', '-i', os.fspath(file),
                  '-c:v', 'libx264', '-preset', 'medium', '-b:v', f'{target_bitrate_kbps}k',
-                 '-pass', '2', '-an', '-vf',
+                 '-pass', '2', '-passlogfile', passlog_prefix, '-an', '-vf',
                  'scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,fps=25',
                   os.fspath(list_in_dir / output_video_file_name)]
     subprocess.run(ffmpeg_cmd)
     logger.info('created : ' + output_video_file_name)
     # Clean up FFmpeg passlog files
-    for log_file in Path('.').glob('ffmpeg2pass*'):
+    for log_file in list_in_dir.glob(output_video_file_name + "_passlog*"):
         os.remove(log_file)
 
 
@@ -317,28 +343,47 @@ def create_video_bink(file, list_in_dir, output_video_file_name, compression_per
     if not _rad_path:
         logger.error("RAD Video Tools path not configured - cannot create .bk2 video")
         return
+    import shutil
+    import tempfile
+    import sys
+    
     file_format = '/V' + str(200)
     remove_sound = '/L-1'
-    import sys
-    bink_in = str(file)
-    bink_out = os.fspath(list_in_dir / output_video_file_name)
-    if sys.platform != "win32":
-        bink_in = "Z:" + bink_in.replace("/", "\\")
-        bink_out = "Z:" + bink_out.replace("/", "\\")
-        bink_args = ['wine', _rad_path, 'binkc', bink_in, bink_out, file_format,
-                    '/(1280', '/)720', remove_sound]
-    else:
-        bink_args = [_rad_path, 'binkc', bink_in, bink_out, file_format,
-                    '/(1280', '/)720', remove_sound]
-    if compression_percentage:
-        data_rate_switch = '/D' + str(compression_percentage)
-        bink_args.append(data_rate_switch)
-    if quality:
-        quality_switch = '/Q' + str(quality)
-        bink_args.append(quality_switch)
-    bink_args.append('/#')
-    logger.info(f"Converting video {file} to {output_video_file_name} with args: {bink_args}")
-    subprocess.run(bink_args, capture_output=True, text=True)
+    
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_dir_path = Path(temp_dir)
+        temp_in = temp_dir_path / "input.mp4"
+        temp_out = temp_dir_path / "output.bk2"
+        
+        # Copy input to safe temp location
+        shutil.copy2(file, temp_in)
+        
+        bink_in = str(temp_in)
+        bink_out = str(temp_out)
+        
+        if sys.platform != "win32":
+            bink_in = "Z:" + bink_in.replace("/", "\\")
+            bink_out = "Z:" + bink_out.replace("/", "\\")
+            bink_args = ['wine', _rad_path, 'binkc', bink_in, bink_out, file_format,
+                        '/(1280', '/)720', remove_sound]
+        else:
+            bink_args = [_rad_path, 'binkc', bink_in, bink_out, file_format,
+                        '/(1280', '/)720', remove_sound]
+                        
+        if quality:
+            quality_switch = '/Q' + str(quality)
+            bink_args.append(quality_switch)
+        bink_args.append('/#')
+        
+        logger.info(f"Converting video {file} via temp folder to avoid path issues")
+        subprocess.run(bink_args, capture_output=True, text=True)
+        
+        final_out = list_in_dir / output_video_file_name
+        if temp_out.exists():
+            shutil.copy2(temp_out, final_out)
+            logger.info(f"Successfully created {output_video_file_name}")
+        else:
+            logger.error(f"Failed to generate {output_video_file_name} from binkc")
 
 
 def match_genre(txt_data):
@@ -399,27 +444,30 @@ def create_meta_xml(uid, artist, genre, list_in_dir, name_id, title, xml_file_na
 
 
 def add_song_to_json(dlc_id, json_file_name, song_data, cfg):
-    include_dlc = bool(cfg.conversion_tweaks.dlc_songs.include)
-    source_json = str(cfg.conversion_tweaks.dlc_songs.songs_json_path) if not _is_blank(cfg.conversion_tweaks.dlc_songs.songs_json_path) else None
+    with json_lock:
+        include_dlc = bool(cfg.conversion_tweaks.dlc_songs.include)
+        source_json = str(cfg.conversion_tweaks.dlc_songs.songs_json_path) if not _is_blank(cfg.conversion_tweaks.dlc_songs.songs_json_path) else None
 
-    dlc_romfs_dir = os.path.join(_output_dir, dlc_id, 'romfs')
-    os.makedirs(dlc_romfs_dir, exist_ok=True)
-    dest_json_file = os.path.join(dlc_romfs_dir, json_file_name)
+        dlc_romfs_dir = os.path.join(_output_dir, dlc_id, 'romfs')
+        os.makedirs(dlc_romfs_dir, exist_ok=True)
+        dest_json_file = os.path.join(dlc_romfs_dir, json_file_name)
 
-    if os.path.exists(dest_json_file):
-        with open(dest_json_file, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-    else:
-        if include_dlc and source_json and os.path.exists(source_json):
-            shutil.copy2(source_json, dest_json_file)
+        if os.path.exists(dest_json_file):
             with open(dest_json_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
         else:
-            data = {"name": json_file_name.split('_')[1].split('.')[0], "songs": []}
+            if include_dlc and source_json and os.path.exists(source_json):
+                shutil.copy2(source_json, dest_json_file)
+                with open(dest_json_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+            else:
+                data = {"name": json_file_name.split('_')[1].split('.')[0], "songs": []}
 
-    data['songs'].append(song_data)
-    with open(dest_json_file, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
+                # Remove any existing song with the same ID to replace it
+        data['songs'] = [s for s in data.get('songs', []) if s.get('id') != song_data.get('id')]
+        data['songs'].append(song_data)
+        with open(dest_json_file, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=4)
 
 
 def add_data_to_songsdlc_tsv(core_id, artist, name_id, title, year, cfg):
@@ -542,6 +590,7 @@ def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None)
     dlc_json_name = str(cfg.dlc.json_name) if cfg.dlc.json_name else None
     target_size_mb = float(cfg.conversion_tweaks.max_video_size or 50)
     pitch_correction_method = str(cfg.conversion_tweaks.pitch_correction or FAST).lower()
+    vocal_isolation = getattr(cfg.conversion_tweaks, "vocal_isolation", False)
     ignore_medley = bool(cfg.conversion_tweaks.no_medley)
     ignore_video = bool(cfg.conversion_tweaks.still_video)
     # Map output_format to UltrastarToSingit OLD/NEW constants
@@ -549,16 +598,38 @@ def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None)
 
     json_file_name = (dlc_json_name + '.json') if dlc_json_name else None
     total_song_count = len(dirs_to_convert)
+    
+    import threading
+    completed_songs = 0
+    progress_lock = threading.Lock()
 
-    for song_index, dir_long_name in enumerate(dirs_to_convert):
+    def _process_single_song(song_index, dir_long_name):
+        nonlocal completed_songs
         if stop_event and stop_event.is_set():
             logger.info("Conversion stopped by user.")
-            break
+            with progress_lock:
+                completed_songs += 1
+                if progress_callback:
+                    progress_callback(completed_songs, total_song_count)
+            return
+
+        # Fix Wine trailing dot bug
+        needs_rename = dir_long_name.endswith('.')
+        original_dir_long_name = dir_long_name
+        if needs_rename:
+            clean_name = dir_long_name.rstrip('.')
+            original_path = Path(_input_dir) / original_dir_long_name
+            clean_path = Path(_input_dir) / clean_name
+            try:
+                original_path.rename(clean_path)
+                dir_long_name = clean_name
+            except Exception as e:
+                logger.error(f"Failed to temporarily rename {original_dir_long_name}: {e}")
+                needs_rename = False
+
         try:
             if ' - ' not in dir_long_name:
-                if progress_callback:
-                    progress_callback(song_index + 1, total_song_count)
-                continue
+                return
 
             name_id = construct_name_id_from_directory_name(dir_long_name)
             logger.info(name_id)
@@ -583,7 +654,7 @@ def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None)
             # Getting info from the text file
             if not files_txt:
                 logger.warning('No ultrastar text file found for ' + dir_long_name + ', skipping')
-                continue
+                return
 
             # some songs also have a duet txt file containing '[MULTI]' in its name, alphabetically we want the last one
             txt_data = UltrastarToSingit.parse_file(files_txt[-1])
@@ -595,7 +666,19 @@ def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None)
                 video_gap = float(txt_data['VIDEOGAP'].replace(',', '.'))
 
             if files_avi and not ignore_video:
-                file = files_avi[0]
+                video_filename = txt_data.get('VIDEO', None)
+                file = None
+                if video_filename:
+                    video_path = list_in_dir / video_filename
+                    if video_path.exists():
+                        file = video_path
+                if not file:
+                    valid_videos = [f for f in files_avi if not f.name.endswith('_cover.mp4') and f.name != output_video_file_name]
+                    if valid_videos:
+                        valid_videos.sort(key=lambda x: x.stat().st_size, reverse=True)
+                        file = valid_videos[0]
+                    else:
+                        file = files_avi[0]
                 duration = get_duration(os.fspath(file))
                 original_size_bytes = file.stat().st_size
                 original_size_mb = original_size_bytes / (1024 * 1024)
@@ -662,21 +745,30 @@ def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None)
                         shutil.copy2(list_in_dir / output_video_file_name_mp4, list_in_dir / output_video_file_name)
 
             # generating vxla file
-            if pitch_correction_method == SLOW:
-                pitch_corr = PitchAnalyzer.get_pitch_correction_suggestion_slow(txt_data, os.fspath(list_in_dir / ogg_file_name),
-                                                                                min_pitch=PITCH_MIN, max_pitch=PITCH_MAX)
+            vxla_path = list_in_dir / vxla_file_name
+            txt_path = files_txt[-1]
+            needs_vxla_update = True
+            
+            if vxla_path.exists():
+                force_reconvert = getattr(cfg.conversion_tweaks, "force_reconvert", False)
+                if not force_reconvert and vxla_path.stat().st_mtime > txt_path.stat().st_mtime:
+                    needs_vxla_update = False
+                    
+            if needs_vxla_update:
+                if pitch_correction_method == SLOW:
+                    pitch_corr = PitchAnalyzer.get_pitch_correction_suggestion_slow(txt_data, os.fspath(list_in_dir / ogg_file_name), min_pitch=PITCH_MIN, max_pitch=PITCH_MAX, use_demucs=vocal_isolation)
+                else:
+                    pitch_corr = PitchAnalyzer.get_pitch_correction_suggestion_fast(txt_data, min_pitch=PITCH_MIN, max_pitch=PITCH_MAX)
+                UltrastarToSingit.main(txt_path, song_duration, pitch_corr, s=name_id, directory=list_in_dir, output_type=vxla_output_type, ignore_medley=ignore_medley)
             else:
-                pitch_corr = PitchAnalyzer.get_pitch_correction_suggestion_fast(txt_data, min_pitch=PITCH_MIN, max_pitch=PITCH_MAX)
-            UltrastarToSingit.main(files_txt[-1], song_duration, pitch_corr, s=name_id, directory=list_in_dir, output_type=vxla_output_type, ignore_medley=ignore_medley)
+                logger.info(f"Using cached JSON/XML for {dir_long_name} (no changes to .txt detected).")
 
             # Validate that all required converted files were created successfully
             required = get_required_files(name_id, output_format, list_in_dir)
             missing = validate_converted_files(required)
             if missing:
                 logger.error(f"Skipping '{dir_long_name}': missing converted files: {', '.join(missing)}")
-                if progress_callback:
-                    progress_callback(song_index + 1, total_song_count)
-                continue
+                return
 
             # Handle name.txt
             add_data_to_name_txt(dlc_id, name_id, output_format, dlc_json_name, cfg)
@@ -711,16 +803,51 @@ def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None)
                 shutil.copy2(os.fspath(list_in_dir / png_long_file_name), os.path.join(base_dlc_dir, 'romfs/Songs/covers_long'))
                 shutil.copy2(os.fspath(list_in_dir / xml_file_name), os.path.join(base_dlc_dir, 'romfs'))
 
-            if progress_callback:
-                progress_callback(song_index + 1, total_song_count)
-
         except Exception as e:
             logger.exception(f"Error with directory {dir_long_name}")
             logger.error(f"Error with directory {dir_long_name}: {e}")
-            if progress_callback:
-                progress_callback(song_index + 1, total_song_count)
-            continue
+            return
+        finally:
+            if needs_rename:
+                try:
+                    current_path = Path(_input_dir) / dir_long_name
+                    original_path = Path(_input_dir) / original_dir_long_name
+                    if current_path.exists():
+                        current_path.rename(original_path)
+                except Exception as e:
+                    logger.error(f"Failed to restore original folder name {original_dir_long_name}: {e}")
+            
+            with progress_lock:
+                completed_songs += 1
+                if progress_callback:
+                    progress_callback(completed_songs, total_song_count)
 
+
+
+    is_multithreaded = False
+    max_workers = 1
+    
+    # Check if multithreading is enabled in tweaks
+    if hasattr(cfg.conversion_tweaks, "multithreading"):
+        is_multithreaded = bool(cfg.conversion_tweaks.multithreading)
+    elif "multithreading" in cfg.conversion_tweaks:
+        is_multithreaded = bool(cfg.conversion_tweaks["multithreading"])
+        
+    if is_multithreaded:
+        if hasattr(cfg.conversion_tweaks, "multithreading_workers"):
+            max_workers = int(cfg.conversion_tweaks.multithreading_workers)
+        elif "multithreading_workers" in cfg.conversion_tweaks:
+            max_workers = int(cfg.conversion_tweaks["multithreading_workers"])
+        else:
+            max_workers = 3
+            
+    if max_workers > 1:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            for idx, d_name in enumerate(dirs_to_convert):
+                executor.submit(_process_single_song, idx, d_name)
+    else:
+        for idx, d_name in enumerate(dirs_to_convert):
+            _process_single_song(idx, d_name)
 
 def main(cfg=None, stop_event=None, progress_callback=None):
 
@@ -738,8 +865,7 @@ def main(cfg=None, stop_event=None, progress_callback=None):
     ignore_medley = bool(cfg.conversion_tweaks.no_medley)
     ignore_video = bool(cfg.conversion_tweaks.still_video)
 
-    delete_output_folder()
-    rename_folders_physically()
+    delete_output_folder(cfg)
     dirs_to_convert = find_folders_to_convert()
 
     logger.info('Beginning conversion - format: ' + output_format.upper())

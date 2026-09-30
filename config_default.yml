@@ -17,6 +17,6 @@ conversion_tweaks:
         songs_json_path:
         songs_dlc_tsv_path:
     pitch_correction: fast
-    max_video_size: 50
+    max_video_size: 80
     no_medley: False
     still_video: False
