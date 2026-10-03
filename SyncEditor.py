@@ -32,7 +32,12 @@ class SyncEditorDialog(QDialog):
         
         song_dir = os.path.dirname(txt_path)
         
-        if "MP3" in self.us_data and self.us_data["MP3"]:
+        import glob
+        ogg_files = glob.glob(os.path.join(song_dir, "*.ogg"))
+        if ogg_files:
+            # Siempre preferir el .ogg convertido porque es el que leerá la Switch
+            self.audio_file = ogg_files[0]
+        elif "MP3" in self.us_data and self.us_data["MP3"]:
             self.audio_file = os.path.join(song_dir, self.us_data["MP3"])
         
         if "VIDEO" in self.us_data and self.us_data["VIDEO"]:

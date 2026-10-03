@@ -321,14 +321,14 @@ def create_video(file, list_in_dir, output_video_file_name, target_bitrate_kbps)
     passlog_prefix = os.fspath(list_in_dir / (output_video_file_name + "_passlog"))
     # First pass to analyze video
     ffmpeg_cmd = [_ffmpeg_path, '-y', '-i', os.fspath(file),
-                 '-c:v', 'libx264', '-preset', 'medium', '-b:v', f'{target_bitrate_kbps}k',
+                 '-c:v', 'libx264', '-preset', 'medium', '-bf', '0', '-b:v', f'{target_bitrate_kbps}k',
                  '-pass', '1', '-passlogfile', passlog_prefix, '-an', '-vf',
                  'scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,fps=25',
                  '-f', 'null', os.devnull]
     subprocess.run(ffmpeg_cmd)
     # Second pass to create final file
     ffmpeg_cmd = [_ffmpeg_path, '-y', '-i', os.fspath(file),
-                 '-c:v', 'libx264', '-preset', 'medium', '-b:v', f'{target_bitrate_kbps}k',
+                 '-c:v', 'libx264', '-preset', 'medium', '-bf', '0', '-b:v', f'{target_bitrate_kbps}k',
                  '-pass', '2', '-passlogfile', passlog_prefix, '-an', '-vf',
                  'scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,fps=25',
                   os.fspath(list_in_dir / output_video_file_name)]
