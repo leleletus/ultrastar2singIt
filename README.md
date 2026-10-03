@@ -52,3 +52,9 @@ _Not mandatory reading:_
 4. Silence is added at the start of a song if it has a positive #VIDEOGAP tag in the text file (cropped if the gap is
    negative) in order to sync the audio with the video and lyrics. 
 5. Some songs are way quiter/louder than others, the converter will use ffmpeg to normalize loudness.
+
+## Recent Updates
+- **Multi-language Support:** The GUI now features full i18n support. Simply place translation files in the `locales/` directory (e.g. `es.json`) and switch the language instantly in the top menu.
+- **Linux & Wine Support:** Cross-platform improvements mean you can now run this flawlessly on Linux using Python and Wine to execute Windows dependencies (like RAD Video Tools).
+- **Automated Media Copying:** When extending DLCs, you can now seamlessly copy all media files (Videos, Audio, Covers) from your base JSON's `Songs/` folder directly to the `Output/` patch with visual progress logs. 
+- **Experimental Tools:** Check out the `experimental_tools/` directory for extra scripts, including `fix_dlc_artists_metadata.py`, a robust tool that fixes "Unknown Artist" entries in your large Let's Sing Megapack JSONs using a combination of known hardcoded DLC fixes and iTunes API multi-threaded lookups.

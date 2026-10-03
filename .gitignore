@@ -16,3 +16,8 @@ AGENTS.md
 **/__pycache__/
 !tools/
 !tools/**
+
+!locales/
+!locales/**
+!experimental_tools/
+!experimental_tools/**

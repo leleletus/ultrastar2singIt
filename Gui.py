@@ -1,4 +1,6 @@
 import ctypes
+import i18n
+from i18n import tr
 import logging
 import os
 import re
@@ -199,7 +201,15 @@ class MainWindow(QMainWindow):
         self.watcher_debounce.timeout.connect(self.do_watcher_refresh)
 
         # Menu bar for additional tools
+
         menu_bar = self.menuBar()
+        self.language_menu = menu_bar.addMenu("Language")
+        self.action_en = self.language_menu.addAction("English")
+        self.action_es = self.language_menu.addAction("Español")
+        
+        self.action_en.triggered.connect(lambda: self.on_language_changed('en'))
+        self.action_es.triggered.connect(lambda: self.on_language_changed('es'))
+        
         tools_menu = menu_bar.addMenu("Tools")
         
         recover_action = tools_menu.addAction("Recover Cache from Output")
@@ -303,7 +313,7 @@ class MainWindow(QMainWindow):
         left_layout = QVBoxLayout(left_widget)
 
         ## Game Info Section
-        game_info_group = QGroupBox("Game Info")
+        self.game_info_group = QGroupBox("Game info")
         game_info_layout = QGridLayout()
 
         # game and DLC version
@@ -329,11 +339,11 @@ class MainWindow(QMainWindow):
         game_info_layout.addWidget(self.dlc_json_name_label, 4, 0)
         game_info_layout.addWidget(self.dlc_json_name_input, 4, 1)
 
-        game_info_group.setLayout(game_info_layout)
-        left_layout.addWidget(game_info_group)
+        self.game_info_group.setLayout(game_info_layout)
+        left_layout.addWidget(self.game_info_group)
 
         # Tools Section
-        tools_group = QGroupBox("Conversion tools")
+        self.tools_group = QGroupBox("Conversion tools")
         tools_layout = QGridLayout()
 
         # FFMPEG
@@ -350,8 +360,10 @@ class MainWindow(QMainWindow):
         self.rad_browse.clicked.connect(lambda: self.browse_file(self.rad_path, "bink2w64 or radvideo64 (*.exe);;All Files (*)"))
         tools_layout.addWidget(self.rad_browse, 1, 2)
 
-        tools_group.setLayout(tools_layout)
-        left_layout.addWidget(tools_group)
+
+
+        self.tools_group.setLayout(tools_layout)
+        left_layout.addWidget(self.tools_group)
 
         input_output_group = QGroupBox("Input and Output folders")
         input_output_layout = QGridLayout()
@@ -370,16 +382,24 @@ class MainWindow(QMainWindow):
         self.output_browse.clicked.connect(lambda: self.browse_folder(self.output_path))
         input_output_layout.addWidget(self.output_browse, 3, 2)
 
+        # Songs_xx.json / Base JSON
+        self.songs_json_label.setToolTip("Agrega aquí tu songs_xx.json (o songs_int_combined.json) si deseas conservar las canciones del DLC o agregar canciones que convertiste anteriormente.")
+        input_output_layout.addWidget(self.songs_json_label, 4, 0)
+        self.dlc_json_path.editingFinished.connect(self.dlc_json_path_fv)
+        input_output_layout.addWidget(self.dlc_json_path, 4, 1)
+        self.songs_json_browse.clicked.connect(lambda: self.browse_file(self.dlc_json_path, "JSON (*.json)"))
+        input_output_layout.addWidget(self.songs_json_browse, 4, 2)
+        
+        # Include DLC / Base JSON checkbox
+        self.include_dlc_checkbox.clicked.connect(self.include_dlc_checkbox_refresh)
+        input_output_layout.addWidget(self.include_dlc_checkbox, 5, 0, 1, 3)
+
         input_output_group.setLayout(input_output_layout)
         left_layout.addWidget(input_output_group)
 
         # Tweaks Section
-        self.tweaks_group = QGroupBox("Conversion tweaks")
+        self.tweaks_group = QGroupBox("Advanced settings")
         tweaks_layout = QVBoxLayout()
-
-        # Include DLC songs checkbox
-        self.include_dlc_checkbox.clicked.connect(self.include_dlc_checkbox_refresh)
-        tweaks_layout.addWidget(self.include_dlc_checkbox)
 
         # Name.txt
         name_layout = QHBoxLayout()
@@ -399,18 +419,8 @@ class MainWindow(QMainWindow):
         songs_dlc_layout.addWidget(self.songs_dlc_browse)
         tweaks_layout.addLayout(songs_dlc_layout)
 
-        # Songs_xx.json
-        songs_json_layout = QHBoxLayout()
-        songs_json_layout.addWidget(self.songs_json_label)
-        self.dlc_json_path.editingFinished.connect(self.dlc_json_path_fv)
-        songs_json_layout.addWidget(self.dlc_json_path)
-        self.songs_json_browse.clicked.connect(lambda: self.browse_file(self.dlc_json_path, "songs_xx (*.json)"))
-        songs_json_layout.addWidget(self.songs_json_browse)
-        tweaks_layout.addLayout(songs_json_layout)
-
         # Slow/Accurate pitch correction
         tweaks_layout.addWidget(self.pitch_correction_checkbox)
-        tweaks_layout.addWidget(self.vocal_isolation_checkbox)
 
         # Still video
         tweaks_layout.addWidget(self.still_video_checkbox)
@@ -712,7 +722,6 @@ class MainWindow(QMainWindow):
             self.dlc_tsv_path_fv()
 
         self.pitch_correction_checkbox.setChecked(True if self.cfg.conversion_tweaks.pitch_correction.lower() == 'slow' else False)
-        self.vocal_isolation_checkbox.setChecked(True if getattr(self.cfg.conversion_tweaks, "vocal_isolation", False) else False)
         self.max_video_size.setText(str(self.cfg.conversion_tweaks.max_video_size))
         self.max_video_size_fv()
         self.ignore_medley_checkbox.setChecked(self.cfg.conversion_tweaks.no_medley)
@@ -793,6 +802,7 @@ class MainWindow(QMainWindow):
 
         self.input_path.setText(input_path)
         self.output_path.setText(output_path)
+
         self.output_path_fv()
         self.sync_watched_folders(input_path)
         self.refresh_preview()
@@ -1417,10 +1427,9 @@ class MainWindow(QMainWindow):
         self.preview_table = PreviewTable(checkbox_column=0)
         self.logs_text = QTextEdit()
 
-        self.include_dlc_checkbox = QCheckBox("Include songs from the DLC")
+        self.include_dlc_checkbox = QCheckBox("Add songs presented in songs_xx.json (and copy media files to output)")
         self.still_video_checkbox = QCheckBox("Use cover image instead of video (very fast)")
-        self.pitch_correction_checkbox = QCheckBox("Analyze song vocals for pitch correction (~10s per song)")
-        self.vocal_isolation_checkbox = QCheckBox("Use Vocal Isolation for Pitch (Demucs, SLOWEST)")
+        self.pitch_correction_checkbox = QCheckBox("Analyze song vocals for pitch correction (Includes Vocal Isolation)")
         self.ignore_medley_checkbox = QCheckBox("Ignore the UltraStar medley tags for finding chorus sections")
         self.force_reconvert_checkbox = QCheckBox("Force Re-Generate JSON (Ignore Cache)")
         self.multithread_checkbox = QCheckBox("Enable Multithreading (faster conversion)")
@@ -1429,6 +1438,50 @@ class MainWindow(QMainWindow):
         self.multithread_workers.setRange(1, 16)
         self.multithread_workers.setValue(3)
         self.set_tooltips()
+
+
+
+    def on_language_changed(self, lang):
+        i18n.load_language(lang)
+        self.update_ui_language()
+        self.cfg.language = lang
+        self.save_config()
+
+    def update_ui_language(self):
+        self.lets_sing_label.setText(tr("Let's Sing:"))
+        self.core_id_label.setText(tr('Core TitleID:'))
+        self.dlc_name_label.setText(tr('DLC Name:'))
+        self.dlc_id_label.setText(tr('DLC TitleID:'))
+        self.dlc_json_name_label.setText(tr('DLC JSON Name:'))
+        self.ffmpeg_label.setText(tr('FFmpeg:'))
+        self.rad_label.setText(tr('RAD Video Tools:'))
+        self.input_label.setText(tr('Input folder:'))
+        self.output_label.setText(tr('Output folder:'))
+        self.name_txt_label.setText(tr('name.txt:'))
+        self.songs_dlc_label.setText(tr('SongsDLC.tsv:'))
+        self.songs_json_label.setText(tr('songs_xx.json (Keep DLC / Previous):'))
+        self.max_video_label.setText(tr('Max video size (MB):'))
+        
+        self.include_dlc_checkbox.setText(tr("Add songs presented in songs_xx.json (and copy media files to output)"))
+        self.still_video_checkbox.setText(tr("Use cover image instead of video (very fast)"))
+        self.pitch_correction_checkbox.setText(tr("Analyze song vocals for pitch correction (Includes Vocal Isolation)"))
+        self.ignore_medley_checkbox.setText(tr("Ignore the UltraStar medley tags for finding chorus sections"))
+        self.force_reconvert_checkbox.setText(tr("Force Re-Generate JSON (Ignore Cache)"))
+        self.multithread_checkbox.setText(tr("Enable Multithreading (faster conversion)"))
+        self.clear_output_checkbox.setText(tr("Clear output folder before converting"))
+        
+        self.help_button.setText(tr(" Help"))
+        self.clear_logs_button.setText(tr(" Clear logs"))
+        self.refresh_button.setText(tr(" Refresh"))
+        self.clear_cache_button.setText(tr(" Clear cache"))
+        self.stop_button.setText(tr(" Stop"))
+        self.start_button.setText(tr(" Start conversion"))
+        
+        self.game_info_group.setTitle(tr("Game info"))
+        self.tweaks_group.setTitle(tr("Advanced settings"))
+        self.tools_group.setTitle(tr("Conversion tools"))
+        self.language_menu.setTitle(tr("Language"))
+        self.menuBar().actions()[1].setText(tr("Tools")) # Assuming Tools is 2nd
 
     def init_labels(self) -> None:
         self.lets_sing_label = QLabel("Let's Sing:")
@@ -1442,7 +1495,7 @@ class MainWindow(QMainWindow):
         self.output_label = QLabel('Output folder:')
         self.name_txt_label = QLabel('name.txt:')
         self.songs_dlc_label = QLabel('SongsDLC.tsv:')
-        self.songs_json_label = QLabel('songs_xx.json:')
+        self.songs_json_label = QLabel('songs_xx.json (Conservar DLC / Previas):')
         self.max_video_label = QLabel('Max video size (MB):')
 
     def set_tooltips(self):
@@ -1459,7 +1512,7 @@ class MainWindow(QMainWindow):
             "\n\nNote: The program will cache the converted files in these song folders.")
         self.output_path.setToolTip("Path to the output folder where the converted files will be saved.")
         self.warning_action.setToolTip("Warning: The selected folder, if it exists, will be deleted prior to starting the conversion.")
-        self.include_dlc_checkbox.setToolTip("If left unchecked, the songs from the DLC will not be accessible in the game.")
+        self.include_dlc_checkbox.setToolTip("Une las canciones de tu songs_xx.json al nuevo archivo, Y ADEMÁS, si existe una carpeta 'Songs' al lado de ese json, copiará físicamente todos los archivos de audio/video al Output. ¡No los descarga de internet, los copia de tu PC!")
         self.dlc_name_txt_path.setToolTip(
             "Path to the name.txt file from the DLC. This file contains either a list of the included song IDs "
             "(prior to Let's Sing 2024) or just the name of the DLC metadata JSON file (Let's Sing 2024 and onward)."
@@ -1473,7 +1526,7 @@ class MainWindow(QMainWindow):
             "UltraStar files often have lower pitch values than Let's Sing expects so some form of pitch correction is required."
             "\n\nCheck this box to use a pitch tracker based on a convolutional neural network (CREPE) to analyze each song (requires unpacking the required modules into the plugins folder). "
             "\nIf left unchecked, quick maths will be employed for correcting the pitch instead.")
-        self.vocal_isolation_checkbox.setToolTip("Extracts ONLY the human voice before AI pitch analysis to avoid instrument confusion (Requires Demucs, will download models). Use if pitch is wrong.")
+
         self.still_video_checkbox.setToolTip("Check this box to skip encoding of music videos to the game's format, "
             "the cover image will be used to create a static video instead. This will dramatically speed up the conversion "
             "and reduce the final size of the patch.")
@@ -1548,7 +1601,7 @@ class MainWindow(QMainWindow):
 
         config_dict["folders"] = {
             "input": self.input_path.text().strip(),
-            "output": self.output_path.text().strip(),
+            "output": self.output_path.text().strip()
         }
 
         dlc_songs_section = {"include": self.include_dlc_checkbox.isChecked()}
@@ -1563,7 +1616,7 @@ class MainWindow(QMainWindow):
             "enable": self.tweaks_group.isChecked(),
             "dlc_songs": dlc_songs_section,
             "pitch_correction": "slow" if self.pitch_correction_checkbox.isChecked() else "fast",
-            "vocal_isolation": self.vocal_isolation_checkbox.isChecked(),
+            "vocal_isolation": True if self.pitch_correction_checkbox.isChecked() else False,
             "max_video_size": int(self.max_video_size.text()) if self.max_video_size.text().strip().isdigit() else None,
             "no_medley": self.ignore_medley_checkbox.isChecked(),
             "force_reconvert": self.force_reconvert_checkbox.isChecked(),
@@ -1573,6 +1626,9 @@ class MainWindow(QMainWindow):
             "multithreading_workers": self.multithread_workers.value(),
         }
 
+        
+        config_dict["language"] = getattr(self.cfg, 'language', 'en')
+        
         user_path = Path('.') / 'config.yml'
         with open(user_path, 'w', encoding='utf-8') as f:
             yaml.dump(config_dict, f, default_flow_style=False, allow_unicode=True)

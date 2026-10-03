@@ -465,8 +465,8 @@ def add_song_to_json(dlc_id, json_file_name, song_data, cfg):
             else:
                 data = {"name": json_file_name.split('_')[1].split('.')[0], "songs": []}
 
-                # Remove any existing song with the same ID to replace it
-        data['songs'] = [s for s in data.get('songs', []) if s.get('id') != song_data.get('id')]
+        # Remove any existing song with the same ID to replace it
+        data['songs'] = [s for s in data.get('songs', []) if str(s.get('id')) != str(song_data.get('id'))]
         data['songs'].append(song_data)
         with open(dest_json_file, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=4)
@@ -599,6 +599,34 @@ def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None)
     vxla_output_type = UltrastarToSingit.JSON if output_format == JSON_FORMAT else UltrastarToSingit.XML
 
     json_file_name = (dlc_json_name + '.json') if dlc_json_name else None
+    
+    # Copy DLC media files if requested
+    include_dlc = bool(cfg.conversion_tweaks.dlc_songs.include)
+    source_json = str(cfg.conversion_tweaks.dlc_songs.songs_json_path) if not _is_blank(cfg.conversion_tweaks.dlc_songs.songs_json_path) else None
+    if include_dlc and source_json and os.path.exists(source_json):
+        source_songs_dir = os.path.join(os.path.dirname(source_json), 'Songs')
+        if os.path.exists(source_songs_dir):
+            dest_songs_dir = os.path.join(_output_dir, dlc_id, 'romfs', 'Songs')
+            logger.info(f"Copying DLC media files from {source_songs_dir} to {dest_songs_dir}...")
+            try:
+                os.makedirs(dest_songs_dir, exist_ok=True)
+                copied = 0
+                total_dirs = sum(1 for _ in os.scandir(source_songs_dir) if _.is_dir())
+                logger.info(f"Found {total_dirs} song folders in Base JSON directory. Starting copy (this may take a while)...")
+                
+                for item in os.listdir(source_songs_dir):
+                    s_item = os.path.join(source_songs_dir, item)
+                    d_item = os.path.join(dest_songs_dir, item)
+                    if os.path.isdir(s_item):
+                        shutil.copytree(s_item, d_item, dirs_exist_ok=True)
+                        copied += 1
+                        if copied % 10 == 0:
+                            logger.info(f"Copied {copied}/{total_dirs} base DLC songs...")
+                            
+                logger.info(f"Successfully copied all {copied} DLC media folders.")
+            except Exception as e:
+                logger.error(f"Failed to copy DLC media files: {e}")
+
     total_song_count = len(dirs_to_convert)
     
     import threading
