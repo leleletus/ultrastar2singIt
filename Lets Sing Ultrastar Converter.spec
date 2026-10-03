@@ -5,7 +5,7 @@ a = Analysis(
     ['LetsSingUltraStarConverter.py'],
     pathex=[],
     binaries=[],
-    datas=[('config_default.yml', '.'), ('Guide.md', '.'), ('data/repository/data.db', 'data/repository'), ('assets', 'assets')],
+    datas=[('config_default.yml', '.'), ('Guide.md', '.'), ('data/repository/data.db', 'data/repository'), ('assets', 'assets'), ('locales', 'locales')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
