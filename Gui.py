@@ -16,6 +16,8 @@ import yaml
 from PySide6 import QtCore
 from PySide6.QtCore import Qt, QDateTime, QFileSystemWatcher, QThread, QTimer, Signal
 from PySide6.QtGui import QIcon, QRegularExpressionValidator
+from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
+from PySide6.QtCore import QUrl
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                                QHBoxLayout, QLabel, QLineEdit, QPushButton,
                                QCheckBox, QTextEdit, QTableWidgetItem, QFileDialog, QGroupBox,
@@ -232,6 +234,13 @@ class MainWindow(QMainWindow):
             self.dlc_tsv_path: self.dlc_tsv_path_fv,
             self.dlc_json_path: self.dlc_json_path_fv,
         }
+        
+        self.media_player = QMediaPlayer()
+        self.audio_output = QAudioOutput()
+        self.media_player.setAudioOutput(self.audio_output)
+        self.current_playing_btn = None
+        self.media_player.mediaStatusChanged.connect(self.on_media_status_changed)
+
         self.cfg = load_config()
         self.set_defaults()
 
@@ -491,16 +500,11 @@ class MainWindow(QMainWindow):
         search_layout = QHBoxLayout()
         search_label = QLabel("🔍 Search:")
         
-        self.search_combo = QComboBox()
-        self.search_combo.addItems(["Todo (Artista + Título)", "Solo Artista", "Solo Título"])
-        self.search_combo.currentIndexChanged.connect(lambda: self.on_search_changed(self.search_input.text()))
-        
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Escribe para filtrar...")
+        self.search_input.setPlaceholderText("Type to filter...")
         self.search_input.textChanged.connect(self.on_search_changed)
         
         search_layout.addWidget(search_label)
-        search_layout.addWidget(self.search_combo)
         search_layout.addWidget(self.search_input)
         preview_layout.addLayout(search_layout)
 
@@ -905,7 +909,7 @@ class MainWindow(QMainWindow):
                 play_btn = QPushButton("▶")
                 play_btn.setToolTip("Escuchar canción")
                 play_btn.setStyleSheet("color: #10b981; font-weight: bold;")
-                play_btn.clicked.connect(lambda checked=False, p=song["directory_path"]: self.play_song_audio(p))
+                play_btn.clicked.connect(lambda checked=False, p=song["directory_path"], b=play_btn: self.play_song_audio(p, b))
                 self.preview_table.setCellWidget(row, 1, play_btn)
 
                 # Song name column (2)
@@ -940,21 +944,36 @@ class MainWindow(QMainWindow):
             self.preview_table.sync_header_checkbox()
             self.update_clear_cache_enabled()
 
-    def play_song_audio(self, directory_path):
+    def play_song_audio(self, directory_path, btn):
         import glob
-        import subprocess
         import os
+        from PySide6.QtMultimedia import QMediaPlayer
         audio_files = glob.glob(os.path.join(directory_path, "*.ogg")) + glob.glob(os.path.join(directory_path, "*.mp3"))
         if not audio_files:
             self.log_message(f"No audio file found in {directory_path}!")
             return
+            
+        # If clicking the currently playing button, pause it
+        if self.current_playing_btn == btn and self.media_player.playbackState() == QMediaPlayer.PlayingState:
+            self.media_player.pause()
+            btn.setText("▶")
+            return
+            
+        # If playing something else, stop it and reset its button
+        if self.current_playing_btn and self.current_playing_btn != btn:
+            self.current_playing_btn.setText("▶")
+            
+        self.current_playing_btn = btn
+        btn.setText("⏸")
         
-        try:
-            # En Linux usamos xdg-open
-            subprocess.Popen(['xdg-open', audio_files[0]])
-            self.log_message(f"Reproduciendo: {os.path.basename(audio_files[0])}")
-        except Exception as e:
-            self.log_message(f"Error al reproducir audio: {e}")
+        self.media_player.setSource(QUrl.fromLocalFile(audio_files[0]))
+        self.media_player.play()
+        
+    def on_media_status_changed(self, status):
+        from PySide6.QtMultimedia import QMediaPlayer
+        if status == QMediaPlayer.EndOfMedia and self.current_playing_btn:
+            self.current_playing_btn.setText("▶")
+            self.current_playing_btn = None
 
     def is_doubtful_sync(self, directory_path: str) -> bool:
         import SupportedFormats
@@ -1078,31 +1097,13 @@ class MainWindow(QMainWindow):
 
     def on_search_changed(self, text: str) -> None:
         search_term = text.lower()
-        mode = self.search_combo.currentIndex() # 0 = Todo, 1 = Artista, 2 = Titulo
-        
         for row in range(self.preview_table.rowCount()):
-            item = self.preview_table.item(row, 1)
+            item = self.preview_table.item(row, 2)
             if item is None:
                 continue
-                
-            full_text = item.text().lower()
             
-            # Las carpetas suelen llamarse "Artista - Titulo"
-            parts = full_text.split(' - ', 1)
-            if len(parts) == 2:
-                artist, title = parts[0], parts[1]
-            else:
-                artist, title = full_text, full_text
-                
-            match = False
-            if mode == 0:
-                match = search_term in full_text
-            elif mode == 1:
-                match = search_term in artist
-            elif mode == 2:
-                match = search_term in title
-                
-            self.preview_table.setRowHidden(row, not match)
+            full_text = item.text().lower()
+            self.preview_table.setRowHidden(row, search_term not in full_text)
 
     def refresh_preview(self) -> None:
         self.log("Input folder preview refreshed.")
