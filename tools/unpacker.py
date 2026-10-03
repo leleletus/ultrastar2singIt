@@ -56,6 +56,7 @@ def convert_vxla_to_txt(vxla_file, song_id, meta, output_folder, songs_dir):
     
     notes_layer = None
     passages_layer = None
+    pages_layer = None
     for layer in root.findall('IntervalLayer'):
         if layer.get('name') == 'notes_full':
             notes_layer = layer
@@ -63,6 +64,8 @@ def convert_vxla_to_txt(vxla_file, song_id, meta, output_folder, songs_dir):
             notes_layer = layer
         elif layer.get('name') == 'passages':
             passages_layer = layer
+        elif layer.get('name') == 'pages':
+            pages_layer = layer
             
     if notes_layer is None:
         return False
@@ -127,7 +130,16 @@ def convert_vxla_to_txt(vxla_file, song_id, meta, output_folder, songs_dir):
                 duration = seconds_to_beats(t2) - start_beat
                 if duration <= 0: duration = 1
                     
-                if start_beat > seconds_to_beats(last_t2) + 20:
+                if pages_layer is not None:
+                    # check if this note's t1 is after the end of the page that last_t2 belonged to
+                    for p in pages_layer.findall('Interval'):
+                        pt2 = float(p.get('t2'))
+                        if last_t2 <= pt2 and t1 >= pt2:
+                            # We crossed a page boundary!
+                            f.write(f"- {seconds_to_beats(pt2)}\n")
+                            break
+                elif start_beat > seconds_to_beats(last_t2) + 20:
+                    # Fallback if no pages layer
                     f.write(f"- {seconds_to_beats(last_t2)}\n")
                     
                 is_freestyle = False

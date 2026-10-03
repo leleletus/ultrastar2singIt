@@ -151,6 +151,13 @@ def convert_vxla_to_txt(vxla_file, song_id, meta, output_folder):
                 shutil.copy2(cov_src, os.path.join(output_folder, f"{song_id}{ext}"))
                 break
             
+        # Extract all lyrics for old format
+        lyrics_map = {}
+        for layer in root.findall('IntervalLayer'):
+            if layer.get('name') == 'lyrics':
+                for interval in layer.findall('Interval'):
+                    lyrics_map[float(interval.get('t1'))] = interval.get('value', '~')
+
         last_t2 = 0
         for interval in notes_layer.findall('Interval'):
             t1 = float(interval.get('t1'))
@@ -161,8 +168,13 @@ def convert_vxla_to_txt(vxla_file, song_id, meta, output_folder):
                 pitch_str, lyric = val.split("#.", 1)
                 pitch = int(pitch_str[2:])
                 us_pitch = pitch - 36
-                
                 lyric = clean_lyric(lyric)
+            else:
+                # Old format: val is just pitch like "59"
+                try: pitch = int(val)
+                except: continue
+                us_pitch = pitch - 36
+                lyric = clean_lyric(lyrics_map.get(t1, "~"))
                 
                 if lyric == "-":
                     lyric = "~"
