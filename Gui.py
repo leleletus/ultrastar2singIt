@@ -849,19 +849,19 @@ class MainWindow(QMainWindow):
                 files_mp3 = [x for x in all_files if x.lower().endswith(SupportedFormats.AUDIO_EXTENSIONS) and x != output_audio_name and x != output_audio_preview_name]
                 files_jpg = [x for x in all_files if x.lower().endswith(SupportedFormats.IMAGE_EXTENSIONS) and x not in (output_image_name, png_in_game_file_name, png_long_file_name, png_result_file_name)]
 
-                if files_avi:
-                    has_video = GuiElement.Icon.CHECK.get_icon()
-                if files_mp3:
-                    has_audio = GuiElement.Icon.CHECK.get_icon()
-                if files_jpg:
-                    has_image = GuiElement.Icon.CHECK.get_icon()
-                if files_txt:
-                    has_txt = GuiElement.Icon.CHECK.get_icon()
-
                 cached_video = output_video_name in all_files
                 cached_audio = output_audio_name in all_files
                 cached_image = output_image_name in all_files
                 cached_txt = output_txt_name in all_files
+
+                if files_avi or cached_video:
+                    has_video = GuiElement.Icon.CHECK.get_icon()
+                if files_mp3 or cached_audio:
+                    has_audio = GuiElement.Icon.CHECK.get_icon()
+                if files_jpg or cached_image:
+                    has_image = GuiElement.Icon.CHECK.get_icon()
+                if files_txt or cached_txt:
+                    has_txt = GuiElement.Icon.CHECK.get_icon()
 
                 if cached_video:
                     has_video = GuiElement.combine_icons(has_video, GuiElement.Icon.FILE_CHECK.get_icon())
