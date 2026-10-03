@@ -289,6 +289,7 @@ def create_audio_preview(files_avi, files_mp3, list_in_dir, ogg_preview_file_nam
     ffmpeg_cmd = [_ffmpeg_path, '-ss', str(preview_start_time), '-i', os.fspath(file),
                  '-vn',
                  '-t', str(preview_duration_time), '-ar', '48000',
+                 '-af', 'dynaudnorm,volume=-2.5dB',
                  os.fspath(list_in_dir / ogg_preview_file_name)]
     subprocess.run(ffmpeg_cmd)
     logger.info('created : ' + ogg_preview_file_name)
@@ -307,11 +308,12 @@ def create_audio(files_avi, files_mp3, list_in_dir, ogg_file_name, video_gap):
     elif video_gap > 0:
         # Positive gap: add silence to the beginning
         # Insert video_gap seconds of silence before the audio
-        filter_cmd = f'adelay={int(video_gap * 1000)}|{int(video_gap * 1000)}'
+        filter_cmd = f'adelay={int(video_gap * 1000)}|{int(video_gap * 1000)},'
         
-    ffmpeg_cmd = [_ffmpeg_path, '-i', os.fspath(file), '-vn', '-ar', '48000']
-    if filter_cmd:
-        ffmpeg_cmd.extend(['-af', filter_cmd])
+    # Add dynamic normalizer that preserves sync perfectly + volume reduction to match -16 LUFS
+    filter_cmd += 'dynaudnorm,volume=-2.5dB'
+        
+    ffmpeg_cmd = [_ffmpeg_path, '-i', os.fspath(file), '-vn', '-ar', '48000', '-af', filter_cmd]
     ffmpeg_cmd.append(os.fspath(list_in_dir / ogg_file_name))
     subprocess.run(ffmpeg_cmd)
     logger.info('created : ' + ogg_file_name)
