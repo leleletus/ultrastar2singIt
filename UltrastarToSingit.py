@@ -301,7 +301,7 @@ def get_lyrics_for_beat_range(lyrics_map_list, start_beat, end_beat):
 
 def clean_artist_name(artist):
     text = artist.lower()
-    separators = [' feat', ' ft.', ' ft ', ' with ', ' & ', ' vs ', ',']
+    separators = [' feat', ' ft.', ' ft ', ' with ', ' & ', ' vs ', ',', ' x ']
     for sep in separators:
         if sep in text:
             text = text.split(sep)[0]
@@ -311,14 +311,22 @@ def sanitize_for_genius(text):
     text = normalize_text(text)
     text = re.sub(r'\[.*?\]', '', text)
     text = re.sub(r'\(.*?\)', '', text)
-    text = text.replace('$', 's').replace('!', 'i').replace('+', 'and')
+    # Strip out trailing "+ artist" completely if it exists at the end of a title
+    text = re.sub(r'\+.*$', '', text)
+    # Also strip "Live at MTV..." etc which are in parentheses, but we already did that above.
+    text = text.replace('$', 's').replace('!', 'i')
+    # Replace explicit " X " with " & " so Genius handles it better
+    text = re.sub(r'\b[xX]\b', '&', text)
     return text.strip()
 
 def genius_search_for_correct_path(artist, title):
     artist = sanitize_for_genius(artist)
     title = sanitize_for_genius(title)
     primary_artist = clean_artist_name(artist)
-    clean_title = title.strip() # Remove any remaining whitespace
+    
+    # Strip "+ [Artist]" from title if present
+    clean_title = title.split('+')[0] if '+' in title else title
+    clean_title = clean_title.strip() # Remove any remaining whitespace
     
     queries_to_try = [
         f"{primary_artist} {clean_title}",  # 1. Try main artist + song
