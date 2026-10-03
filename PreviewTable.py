@@ -100,20 +100,22 @@ class PreviewTable(QTableWidget):
         self.verticalHeader().setDefaultSectionSize(22)
         self.verticalHeader().setSectionResizeMode(QHeaderView.Fixed)
         self.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.setColumnCount(8)
+        self.setColumnCount(9)
         self.setHorizontalHeaderLabels(
-            ["", "Song", "Sync", "Video", "Audio", "Image", "Lyrics", "OrigOrder"])
+            ["", "Play", "Song", "Sync", "Video", "Audio", "Image", "Lyrics", "OrigOrder"])
         self.horizontalHeader().setFixedHeight(24)
         self.horizontalHeader().setMinimumSectionSize(10)
         self.horizontalHeader().setSectionResizeMode(0, QHeaderView.Fixed)
         self.setColumnWidth(0, 24)
-        self.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
-        self.horizontalHeader().setSectionResizeMode(2, QHeaderView.Fixed)
-        self.setColumnWidth(2, 80)
-        for i in range(3, 7):
+        self.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+        self.horizontalHeader().setSectionResizeMode(1, QHeaderView.Fixed)
+        self.setColumnWidth(1, 40)
+        self.horizontalHeader().setSectionResizeMode(3, QHeaderView.Fixed)
+        self.setColumnWidth(3, 80)
+        for i in range(4, 8):
             self.horizontalHeader().setSectionResizeMode(i, QHeaderView.Fixed)
             self.setColumnWidth(i, 40)
-        self.setColumnHidden(7, True)
+        self.setColumnHidden(8, True)
         
         # 3-state sorting
         self.horizontalHeader().setSectionsClickable(True)

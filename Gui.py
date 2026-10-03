@@ -901,11 +901,18 @@ class MainWindow(QMainWindow):
                 checkbox_item.setData(Qt.UserRole, {"directory_path": song["directory_path"], "outputs": song["outputs"]})
                 self.preview_table.setItem(row, 0, checkbox_item)
 
-                # Song name column (1)
+                                # Play Button (1)
+                play_btn = QPushButton("▶")
+                play_btn.setToolTip("Escuchar canción")
+                play_btn.setStyleSheet("color: #10b981; font-weight: bold;")
+                play_btn.clicked.connect(lambda checked=False, p=song["directory_path"]: self.play_song_audio(p))
+                self.preview_table.setCellWidget(row, 1, play_btn)
+
+                # Song name column (2)
                 song_item = QTableWidgetItem(song["directory"])
                 song_item.setTextAlignment(Qt.AlignLeft | Qt.AlignVCenter)
                 song_item.setFlags(song_item.flags() & ~Qt.ItemIsEditable)
-                self.preview_table.setItem(row, 1, song_item)
+                self.preview_table.setItem(row, 2, song_item)
                 
                 # Sync Button (2)
                 is_doubt = self.is_doubtful_sync(song["directory_path"])
@@ -915,10 +922,10 @@ class MainWindow(QMainWindow):
                     sync_btn.setStyleSheet("color: #d97706; font-weight: bold;")
                     sync_btn.setToolTip("Posible desincronización detectada (GAP 0 o inicio rápido).")
                 sync_btn.clicked.connect(lambda checked=False, p=song["directory_path"]: self.open_sync_editor(p))
-                self.preview_table.setCellWidget(row, 2, sync_btn)
+                self.preview_table.setCellWidget(row, 3, sync_btn)
 
                 # Icon columns (3..6)
-                for i, icon in enumerate(song["icons"], start=3):
+                for i, icon in enumerate(song["icons"], start=4):
                     icon_item = QTableWidgetItem()
                     icon_item.setIcon(icon)
                     icon_item.setTextAlignment(Qt.AlignCenter)
@@ -927,11 +934,27 @@ class MainWindow(QMainWindow):
                     
                 # Original order column (7)
                 orig_item = QTableWidgetItem(f"{row:06d}")
-                self.preview_table.setItem(row, 7, orig_item)
+                self.preview_table.setItem(row, 8, orig_item)
         finally:
             self.preview_table.blockSignals(False)
             self.preview_table.sync_header_checkbox()
             self.update_clear_cache_enabled()
+
+    def play_song_audio(self, directory_path):
+        import glob
+        import subprocess
+        import os
+        audio_files = glob.glob(os.path.join(directory_path, "*.ogg")) + glob.glob(os.path.join(directory_path, "*.mp3"))
+        if not audio_files:
+            self.log_message(f"No audio file found in {directory_path}!")
+            return
+        
+        try:
+            # En Linux usamos xdg-open
+            subprocess.Popen(['xdg-open', audio_files[0]])
+            self.log_message(f"Reproduciendo: {os.path.basename(audio_files[0])}")
+        except Exception as e:
+            self.log_message(f"Error al reproducir audio: {e}")
 
     def is_doubtful_sync(self, directory_path: str) -> bool:
         import SupportedFormats
@@ -966,7 +989,7 @@ class MainWindow(QMainWindow):
             txt_files = glob.glob(os.path.join(directory_path, "*.txt"))
             if not txt_files:
                 self.log_message("No .txt file found to edit sync!")
-            return
+                return
             
             dialog = SyncEditorDialog(txt_files[0], self)
             dialog.exec()
