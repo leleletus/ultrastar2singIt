@@ -99,6 +99,8 @@ def convert_vxla_to_txt(vxla_file, song_id, meta, output_folder):
     for layer in root.findall('IntervalLayer'):
         if layer.get('name') == 'notes_full':
             notes_layer = layer
+        elif layer.get('name') == 'notes' and notes_layer is None:
+            notes_layer = layer
         elif layer.get('name') == 'passages':
             passages_layer = layer
             
@@ -128,10 +130,23 @@ def convert_vxla_to_txt(vxla_file, song_id, meta, output_folder):
             f.write(f"#MP3:{song_id}.ogg\n")
             shutil.copy2(ogg_src, os.path.join(output_folder, f"{song_id}.ogg"))
             
-        mp4_src = os.path.join(MEGAPACK_DIR, "Songs", "videos", f"{song_id}.mp4")
-        if os.path.exists(mp4_src):
-            f.write(f"#VIDEO:{song_id}.mp4\n")
-            shutil.copy2(mp4_src, os.path.join(output_folder, f"{song_id}.mp4"))
+        # Check for multiple video extensions
+        video_found = False
+        for ext in ['.mp4', '.webm', '.bik']:
+            vid_src = os.path.join(MEGAPACK_DIR, "Songs", "videos", f"{song_id}{ext}")
+            if os.path.exists(vid_src):
+                f.write(f"#VIDEO:{song_id}{ext}\n")
+                shutil.copy2(vid_src, os.path.join(output_folder, f"{song_id}{ext}"))
+                video_found = True
+                break
+        
+        # Check covers too
+        for ext in ['.jpg', '.png']:
+            cov_src = os.path.join(MEGAPACK_DIR, "Songs", "covers", f"{song_id}{ext}")
+            if os.path.exists(cov_src):
+                f.write(f"#COVER:{song_id}{ext}\n")
+                shutil.copy2(cov_src, os.path.join(output_folder, f"{song_id}{ext}"))
+                break
             
         last_t2 = 0
         for interval in notes_layer.findall('Interval'):
@@ -195,17 +210,22 @@ def main():
                     else:
                         meta_db[sid] = {'artist': 'Unknown Artist', 'title': title_raw, 'year': ''}
 
-    json_path = os.path.join(MEGAPACK_DIR, "todas_las_canciones.json")
+    json_path = os.path.join(MEGAPACK_DIR, "songs_int_combined.json")
     with open(json_path, 'r', encoding='utf-8') as f:
         data = json.load(f)
         
-    print(f"Reconstructing {len(data.get('selected_songs', []))} songs...")
+    print(f"Reconstructing {len(data.get('songs', []))} songs...")
     success_count = 0
     
-    for song_id in data.get("selected_songs", []):
+    for s_obj in data.get("songs", []):
+        song_id = s_obj.get('id')
         vxla_file = os.path.join(MEGAPACK_DIR, "Songs", "vxla", f"{song_id}.vxla")
         if os.path.exists(vxla_file):
-            meta = meta_db.get(song_id, {'artist': 'Unknown', 'title': song_id})
+            meta = {
+                'artist': s_obj.get('artist', 'Unknown'),
+                'title': s_obj.get('title', song_id),
+                'year': s_obj.get('year', '')
+            }
             
             safe_artist = "".join(c for c in meta['artist'] if c.isalnum() or c in " -_")
             safe_title = "".join(c for c in meta['title'] if c.isalnum() or c in " -_")
