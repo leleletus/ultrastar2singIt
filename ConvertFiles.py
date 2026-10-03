@@ -754,12 +754,22 @@ def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None)
 
             if files_jpg and png_file_name not in files_all:
                 create_cover(files_jpg, list_in_dir, png_file_name)
+            elif files_avi and png_file_name not in files_all:
+                file = files_avi[0]
+                subprocess.run([_ffmpeg_path, '-ss', '00:00:15', '-i', os.fspath(file), '-vframes', '1', '-vf', 'scale=256:256:force_original_aspect_ratio=increase,crop=256:256', os.fspath(list_in_dir / png_file_name)])
+                logger.info('created cover from video: ' + png_file_name)
 
             if files_jpg and png_long_file_name not in files_all:
                 create_cover_long(files_jpg, list_in_dir, png_long_file_name)
+            elif files_avi and png_long_file_name not in files_all:
+                file = files_avi[0]
+                subprocess.run([_ffmpeg_path, '-ss', '00:00:15', '-i', os.fspath(file), '-vframes', '1', '-vf', 'scale=308:424:force_original_aspect_ratio=increase,crop=308:424', os.fspath(list_in_dir / png_long_file_name)])
 
             if files_jpg and png_in_game_file_name not in files_all:
                 create_in_game_loading_picture(files_jpg, list_in_dir, png_in_game_file_name)
+            elif files_avi and png_in_game_file_name not in files_all:
+                file = files_avi[0]
+                subprocess.run([_ffmpeg_path, '-ss', '00:00:15', '-i', os.fspath(file), '-vframes', '1', '-vf', 'scale=512:256:force_original_aspect_ratio=increase,crop=512:256', os.fspath(list_in_dir / png_in_game_file_name)])
 
             song_duration = get_duration(os.fspath(list_in_dir / ogg_file_name))
 
