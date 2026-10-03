@@ -59,7 +59,8 @@ def detect_encoding(filename):
 
 def parse_file(filename):
     data = {
-        "notes": [], # represents rows in the txt file
+        "notes": [],
+        "passages": [], # represents rows in the txt file
         "lyrics_map_list": [] # a list of maps, each map contains a full word lyric and a start beat
                               # (lyrics spread over multiple beats are grouped by the starting beat)
     }
@@ -148,7 +149,8 @@ def merge_intervals(intervals):
     return merged
 
 def map_data(us_data, song_duration, pitch_corr, input_file_name, ignore_medley=False):
-    sing_it = {"text": [], "notes": [], "pages": [], "structure": []}
+    sing_it = {"text": [], "notes": [],
+        "passages": [], "pages": [], "structure": []}
     bpm = float(us_data["BPM"].replace(',', '.'))
     if "GAP" in us_data:
         gap = float(us_data["GAP"].replace(',', '.')) / 1000
@@ -210,10 +212,10 @@ def map_data(us_data, song_duration, pitch_corr, input_file_name, ignore_medley=
 
             pitch = int(note[3])
             note_type = note[0]
-            if note_type in ["R", "F"]: full_note = f"#p1#.{final_lyric}"
-            elif note_type == "G": full_note = f"#p1#.{final_lyric}#g5"
-            elif note_type == "*": full_note = f"#p{pitch + pitch_corr}#.{final_lyric}#g5"
-            else: full_note = f"#p{pitch + pitch_corr}#.{final_lyric}"
+            if note_type in ["R", "F"]: full_note = f"#p1#.{final_lyric.strip()}"
+            elif note_type == "G": full_note = f"#p1#.{final_lyric.strip()}#g5"
+            elif note_type == "*": full_note = f"#p{pitch + pitch_corr}#.{final_lyric.strip()}#g5"
+            else: full_note = f"#p{pitch + pitch_corr}#.{final_lyric.strip()}"
             
             sing_it["notes"].append({"t1": start, "t2": end, "value": full_note})
 
@@ -282,6 +284,15 @@ def map_data(us_data, song_duration, pitch_corr, input_file_name, ignore_medley=
                 if section["t1"] <= note_midpoint <= section["t2"]:
                     note["value"] += "#g5"
                     break
+
+
+    # FINAL PASSAGES LOGIC (Captures both manual and Musixmatch/Genius generated golden/rap notes)
+    sing_it["passages"] = []
+    for note in sing_it["notes"]:
+        if "#g5" in note["value"]:
+            sing_it["passages"].append({"t1": note["t1"], "t2": note["t2"], "value": "long"})
+        elif "#p1#." in note["value"]:
+            sing_it["passages"].append({"t1": note["t1"], "t2": note["t2"], "value": "speed"})
 
     return sing_it
 
@@ -599,6 +610,23 @@ def write_vxla_file(sing_it, filename, directory, song_duration, output_type):
     
     doc = ET.SubElement(root, "IntervalLayer", datatype="STRING", name="pages")
     write_intervals(sing_it["pages"], doc)
+    if sing_it["passages"]:
+        doc = ET.SubElement(root, "IntervalLayer", datatype="STRING", name="passages")
+        
+        # Merge contiguous passages of the same type
+        merged_passages = []
+        for p in sing_it["passages"]:
+            if not merged_passages:
+                merged_passages.append(p)
+            else:
+                last_p = merged_passages[-1]
+                if last_p["value"] == p["value"] and (p["t1"] - last_p["t2"]) < 0.2:
+                    last_p["t2"] = p["t2"]
+                else:
+                    merged_passages.append(p)
+                    
+        write_intervals(merged_passages, doc)
+        
     doc = ET.SubElement(root, "IntervalLayer", datatype="STRING", name="lyrics")
     write_intervals(sing_it["text"], doc)
     doc = ET.SubElement(root, "IntervalLayer", datatype="STRING", name="notes_full")

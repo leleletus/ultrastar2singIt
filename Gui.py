@@ -490,10 +490,17 @@ class MainWindow(QMainWindow):
         # Search bar
         search_layout = QHBoxLayout()
         search_label = QLabel("🔍 Search:")
+        
+        self.search_combo = QComboBox()
+        self.search_combo.addItems(["Todo (Artista + Título)", "Solo Artista", "Solo Título"])
+        self.search_combo.currentIndexChanged.connect(lambda: self.on_search_changed(self.search_input.text()))
+        
         self.search_input = QLineEdit()
-        self.search_input.setPlaceholderText("Type to filter songs by name...")
+        self.search_input.setPlaceholderText("Escribe para filtrar...")
         self.search_input.textChanged.connect(self.on_search_changed)
+        
         search_layout.addWidget(search_label)
+        search_layout.addWidget(self.search_combo)
         search_layout.addWidget(self.search_input)
         preview_layout.addLayout(search_layout)
 
@@ -1048,14 +1055,31 @@ class MainWindow(QMainWindow):
 
     def on_search_changed(self, text: str) -> None:
         search_term = text.lower()
+        mode = self.search_combo.currentIndex() # 0 = Todo, 1 = Artista, 2 = Titulo
+        
         for row in range(self.preview_table.rowCount()):
             item = self.preview_table.item(row, 1)
             if item is None:
                 continue
-            if search_term in item.text().lower():
-                self.preview_table.setRowHidden(row, False)
+                
+            full_text = item.text().lower()
+            
+            # Las carpetas suelen llamarse "Artista - Titulo"
+            parts = full_text.split(' - ', 1)
+            if len(parts) == 2:
+                artist, title = parts[0], parts[1]
             else:
-                self.preview_table.setRowHidden(row, True)
+                artist, title = full_text, full_text
+                
+            match = False
+            if mode == 0:
+                match = search_term in full_text
+            elif mode == 1:
+                match = search_term in artist
+            elif mode == 2:
+                match = search_term in title
+                
+            self.preview_table.setRowHidden(row, not match)
 
     def refresh_preview(self) -> None:
         self.log("Input folder preview refreshed.")

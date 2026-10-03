@@ -13,5 +13,6 @@ AGENTS.md
 !data/**
 !assets/
 !assets/**
-**/__pycache__/!tools/
+**/__pycache__/
+!tools/
 !tools/**
