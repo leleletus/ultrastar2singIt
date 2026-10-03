@@ -402,6 +402,10 @@ def handle_xml_or_json(dlc_id, core_id, json_file_name, list_in_dir, txt_data,
     artist = txt_data.get('ARTIST', 'artist')
     year = txt_data.get('YEAR', '2000')
     genre = match_genre(txt_data)
+    try:
+        bpm = int(float(txt_data.get('BPM', '120').replace(',', '.')))
+    except:
+        bpm = 120
 
     if output_format == XML_FORMAT:
         uid = add_data_to_songsdlc_tsv(core_id, artist, name_id, title, year, cfg)
@@ -418,7 +422,8 @@ def handle_xml_or_json(dlc_id, core_id, json_file_name, list_in_dir, txt_data,
             "theme": "Love, Deep, Party",
             "difficulty": "VeryEasy",
             "coopfriendly": "Coop",
-            "language": "English"
+            "language": "English",
+            "bpm": bpm
         }
         add_song_to_json(dlc_id, json_file_name, song_data, cfg)
 
