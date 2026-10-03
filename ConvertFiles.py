@@ -463,7 +463,7 @@ def add_song_to_json(dlc_id, json_file_name, song_data, cfg):
             with open(dest_json_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
         else:
-            if include_dlc and source_json and os.path.exists(source_json):
+            if source_json and os.path.exists(source_json): # Checkbox no longer required for JSON merging
                 shutil.copy2(source_json, dest_json_file)
                 with open(dest_json_file, 'r', encoding='utf-8') as f:
                     data = json.load(f)
@@ -487,7 +487,7 @@ def add_data_to_songsdlc_tsv(core_id, artist, name_id, title, year, cfg):
         source_tsv = str(cfg.conversion_tweaks.dlc_songs.songs_dlc_tsv_path) if not _is_blank(
             cfg.conversion_tweaks.dlc_songs.songs_dlc_tsv_path) else None
 
-        if include_dlc and source_tsv and os.path.exists(source_tsv):
+        if source_tsv and os.path.exists(source_tsv):
             shutil.copy2(source_tsv, dest_songs_dlc)
         else:
             with open(dest_songs_dlc, 'w') as outfile:
@@ -552,7 +552,7 @@ def add_data_to_name_txt(dlc_id, name_id, output_format, dlc_json_name, cfg):
     dest_name_txt = os.path.join(dlc_romfs_dir, NAME_TXT_FILE)
 
     if not os.path.exists(dest_name_txt):
-        if include_dlc and source_name_txt and os.path.exists(source_name_txt):
+        if source_name_txt and os.path.exists(source_name_txt):
             shutil.copy2(source_name_txt, dest_name_txt)
         else:
             if output_format == XML_FORMAT:
