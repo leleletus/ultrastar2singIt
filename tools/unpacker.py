@@ -7,6 +7,19 @@ from pathlib import Path
 BPM = 300
 MULTIPLIER = (BPM * 4) / 60.0
 
+def construct_name_id_from_directory_name(dir_long_name) -> str:
+    import unicodedata
+    def strip_accents(s):
+        return ''.join(c for c in unicodedata.normalize('NFD', s) if unicodedata.category(c) != 'Mn')
+    split_dir_name = dir_long_name.split(' - ')
+    if len(split_dir_name) < 2: return dir_long_name
+    artist_dir_name = strip_accents(split_dir_name[0])
+    title_dir_name = strip_accents(split_dir_name[1])
+    artist_caps = [word[0].upper() for word in artist_dir_name.split()]
+    artist_cap = ''.join(artist_caps)
+    title_lower = ''.join(e.lower() for e in title_dir_name if e.isalnum())
+    return artist_cap + title_lower
+
 def seconds_to_beats(sec):
     return int(round(sec * MULTIPLIER))
 
@@ -86,18 +99,21 @@ def convert_vxla_to_txt(vxla_file, song_id, meta, output_folder, songs_dir):
         f.write(f"#BPM:{real_bpm}\n")
         f.write(f"#GAP:0\n")
         
+        folder_name = f"{safe_artist} - {safe_title}"
+        name_id = construct_name_id_from_directory_name(folder_name)
+        
         ogg_src = os.path.join(songs_dir, "audio", f"{song_id}.ogg")
         if os.path.exists(ogg_src):
-            f.write(f"#MP3:{song_id}.ogg\n")
-            try: shutil.copy2(ogg_src, os.path.join(output_folder, f"{song_id}.ogg"))
+            f.write(f"#MP3:{name_id}.ogg\n")
+            try: shutil.copy2(ogg_src, os.path.join(output_folder, f"{name_id}.ogg"))
             except: pass
             
         video_found = False
         for ext in ['.mp4', '.webm', '.bik']:
             vid_src = os.path.join(songs_dir, "videos", f"{song_id}{ext}")
             if os.path.exists(vid_src):
-                f.write(f"#VIDEO:{song_id}{ext}\n")
-                try: shutil.copy2(vid_src, os.path.join(output_folder, f"{song_id}{ext}"))
+                f.write(f"#VIDEO:{name_id}{ext}\n")
+                try: shutil.copy2(vid_src, os.path.join(output_folder, f"{name_id}{ext}"))
                 except: pass
                 video_found = True
                 break
@@ -105,8 +121,8 @@ def convert_vxla_to_txt(vxla_file, song_id, meta, output_folder, songs_dir):
         for ext in ['.jpg', '.png']:
             cov_src = os.path.join(songs_dir, "covers", f"{song_id}{ext}")
             if os.path.exists(cov_src):
-                f.write(f"#COVER:{song_id}{ext}\n")
-                try: shutil.copy2(cov_src, os.path.join(output_folder, f"{song_id}{ext}"))
+                f.write(f"#COVER:{name_id}{ext}\n")
+                try: shutil.copy2(cov_src, os.path.join(output_folder, f"{name_id}{ext}"))
                 except: pass
                 break
             

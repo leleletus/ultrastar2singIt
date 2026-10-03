@@ -11,6 +11,19 @@ EXTRACTED_DIR = os.path.join(WORKSPACE_DIR, "extracted")
 BPM = 300
 MULTIPLIER = (BPM * 4) / 60.0
 
+def construct_name_id_from_directory_name(dir_long_name) -> str:
+    import unicodedata
+    def strip_accents(s):
+        return ''.join(c for c in unicodedata.normalize('NFD', s) if unicodedata.category(c) != 'Mn')
+    split_dir_name = dir_long_name.split(' - ')
+    if len(split_dir_name) < 2: return dir_long_name
+    artist_dir_name = strip_accents(split_dir_name[0])
+    title_dir_name = strip_accents(split_dir_name[1])
+    artist_caps = [word[0].upper() for word in artist_dir_name.split()]
+    artist_cap = ''.join(artist_caps)
+    title_lower = ''.join(e.lower() for e in title_dir_name if e.isalnum())
+    return artist_cap + title_lower
+
 def seconds_to_beats(sec):
     return int(round(sec * MULTIPLIER))
 
