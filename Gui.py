@@ -651,38 +651,27 @@ class MainWindow(QMainWindow):
         return True
 
     def include_dlc_checkbox_refresh(self) -> None:
-        """Enable/disable DLC related fields based on checkbox"""
-        if self.include_dlc_checkbox.isChecked():
-            if self.game_format == XML:
-                set_element_enabled(self.name_txt_label, True)
-                set_element_enabled(self.dlc_name_txt_path, True)
-                set_element_enabled(self.name_txt_browse, True)
-                set_element_enabled(self.songs_dlc_label, True)
-                set_element_enabled(self.dlc_tsv_path, True)
-                set_element_enabled(self.songs_dlc_browse, True)
-                set_element_enabled(self.songs_json_label, False)
-                set_element_enabled(self.dlc_json_path, False)
-                set_element_enabled(self.songs_json_browse, False)
-            elif self.game_format == JSON:
-                set_element_enabled(self.name_txt_label, False)
-                set_element_enabled(self.dlc_name_txt_path, False)
-                set_element_enabled(self.name_txt_browse, False)
-                set_element_enabled(self.songs_dlc_label, False)
-                set_element_enabled(self.dlc_tsv_path, False)
-                set_element_enabled(self.songs_dlc_browse, False)
-                set_element_enabled(self.songs_json_label, True)
-                set_element_enabled(self.dlc_json_path, True)
-                set_element_enabled(self.songs_json_browse, True)
-        else:
+        """Enable/disable DLC related fields based on format (checkbox now only controls media copy)"""
+        if self.game_format == XML:
+            set_element_enabled(self.name_txt_label, True)
+            set_element_enabled(self.dlc_name_txt_path, True)
+            set_element_enabled(self.name_txt_browse, True)
+            set_element_enabled(self.songs_dlc_label, True)
+            set_element_enabled(self.dlc_tsv_path, True)
+            set_element_enabled(self.songs_dlc_browse, True)
+            set_element_enabled(self.songs_json_label, False)
+            set_element_enabled(self.dlc_json_path, False)
+            set_element_enabled(self.songs_json_browse, False)
+        elif self.game_format == JSON:
             set_element_enabled(self.name_txt_label, False)
             set_element_enabled(self.dlc_name_txt_path, False)
             set_element_enabled(self.name_txt_browse, False)
             set_element_enabled(self.songs_dlc_label, False)
             set_element_enabled(self.dlc_tsv_path, False)
             set_element_enabled(self.songs_dlc_browse, False)
-            set_element_enabled(self.songs_json_label, False)
-            set_element_enabled(self.dlc_json_path, False)
-            set_element_enabled(self.songs_json_browse, False)
+            set_element_enabled(self.songs_json_label, True)
+            set_element_enabled(self.dlc_json_path, True)
+            set_element_enabled(self.songs_json_browse, True)
 
     def set_defaults(self) -> None:
         """Set default values for inputs from config"""
@@ -1427,7 +1416,7 @@ class MainWindow(QMainWindow):
         self.preview_table = PreviewTable(checkbox_column=0)
         self.logs_text = QTextEdit()
 
-        self.include_dlc_checkbox = QCheckBox("Add songs presented in songs_xx.json (and copy media files to output)")
+        self.include_dlc_checkbox = QCheckBox("Copy DLC Media Files (audio/video) from base JSON directory to Output")
         self.still_video_checkbox = QCheckBox("Use cover image instead of video (very fast)")
         self.pitch_correction_checkbox = QCheckBox("Analyze song vocals for pitch correction (Includes Vocal Isolation)")
         self.ignore_medley_checkbox = QCheckBox("Ignore the UltraStar medley tags for finding chorus sections")
@@ -1462,7 +1451,7 @@ class MainWindow(QMainWindow):
         self.songs_json_label.setText(tr('songs_xx.json (Keep DLC / Previous):'))
         self.max_video_label.setText(tr('Max video size (MB):'))
         
-        self.include_dlc_checkbox.setText(tr("Add songs presented in songs_xx.json (and copy media files to output)"))
+        self.include_dlc_checkbox.setText(tr("Copiar archivos multimedia (audio/video) del DLC base al directorio Output"))
         self.still_video_checkbox.setText(tr("Use cover image instead of video (very fast)"))
         self.pitch_correction_checkbox.setText(tr("Analyze song vocals for pitch correction (Includes Vocal Isolation)"))
         self.ignore_medley_checkbox.setText(tr("Ignore the UltraStar medley tags for finding chorus sections"))
