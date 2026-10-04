@@ -148,11 +148,11 @@ def convert_vxla_to_txt(vxla_file, song_id, meta, output_folder):
             
         # Check for multiple video extensions
         video_found = False
-        for ext in ['.mp4', '.webm', '.bik']:
+        for ext in ['.mp4', '.webm', '.bk2', '.bik']:
             vid_src = os.path.join(MEGAPACK_DIR, "Songs", "videos", f"{song_id}{ext}")
             if os.path.exists(vid_src):
-                f.write(f"#VIDEO:{song_id}{ext}\n")
-                shutil.copy2(vid_src, os.path.join(output_folder, f"{song_id}{ext}"))
+                f.write(f"#VIDEO:{name_id}{ext}\n")
+                shutil.copy2(vid_src, os.path.join(output_folder, f"{name_id}{ext}"))
                 video_found = True
                 break
         
@@ -189,40 +189,41 @@ def convert_vxla_to_txt(vxla_file, song_id, meta, output_folder):
                 us_pitch = pitch - 36
                 lyric = clean_lyric(lyrics_map.get(t1, "~"))
                 
-                if lyric == "-":
-                    lyric = "~"
-                else:
-                    if check_space_after(t2, lyrics_data): lyric += " "
-                    if check_space_before(t1, lyrics_data): lyric = " " + lyric
+            # Now process spaces for BOTH formats
+            if lyric == "-":
+                lyric = "~"
+            else:
+                if check_space_after(t2, lyrics_data): lyric += " "
+                if check_space_before(t1, lyrics_data): lyric = " " + lyric
                         
-                start_beat = seconds_to_beats(t1)
-                duration = seconds_to_beats(t2) - start_beat
-                if duration <= 0: duration = 1
-                    
-                if pages_layer is not None:
-                    # check if this note's t1 is after the end of the page that last_t2 belonged to
-                    for p in pages_layer.findall('Interval'):
-                        pt2 = float(p.get('t2'))
-                        if last_t2 <= pt2 and t1 >= pt2:
-                            # We crossed a page boundary!
-                            f.write(f"- {seconds_to_beats(pt2)}\n")
-                            break
-                elif start_beat > seconds_to_beats(last_t2) + 20:
-                    # Fallback if no pages layer
-                    f.write(f"- {seconds_to_beats(last_t2)}\n")
-                    
-                is_freestyle = False
-                if passages_layer is not None:
-                    for p in passages_layer.findall('Interval'):
-                        pt1 = float(p.get('t1'))
-                        pt2 = float(p.get('t2'))
-                        pval = p.get('value')
-                        if pval == "speed" and pt1 <= t1 and pt2 >= t2:
-                            is_freestyle = True
-                            
-                note_char = "F" if is_freestyle else ":"
-                f.write(f"{note_char} {start_beat} {duration} {us_pitch} {lyric}\n")
-                last_t2 = t2
+            start_beat = seconds_to_beats(t1)
+            duration = seconds_to_beats(t2) - start_beat
+            if duration <= 0: duration = 1
+                
+            if pages_layer is not None:
+                # check if this note's t1 is after the end of the page that last_t2 belonged to
+                for p in pages_layer.findall('Interval'):
+                    pt2 = float(p.get('t2'))
+                    if last_t2 <= pt2 and t1 >= pt2:
+                        # We crossed a page boundary!
+                        f.write(f"- {seconds_to_beats(pt2)}\n")
+                        break
+            elif start_beat > seconds_to_beats(last_t2) + 20:
+                # Fallback if no pages layer
+                f.write(f"- {seconds_to_beats(last_t2)}\n")
+                
+            is_freestyle = False
+            if passages_layer is not None:
+                for p in passages_layer.findall('Interval'):
+                    pt1 = float(p.get('t1'))
+                    pt2 = float(p.get('t2'))
+                    pval = p.get('value')
+                    if pval == "speed" and pt1 <= t1 and pt2 >= t2:
+                        is_freestyle = True
+                        
+            note_char = "F" if is_freestyle else ":"
+            f.write(f"{note_char} {start_beat} {duration} {us_pitch} {lyric}\n")
+            last_t2 = t2
                 
         f.write("E\n")
     return True
@@ -232,46 +233,44 @@ def main():
     meta_db = build_metadata_db()
     print(f"Loaded metadata for {len(meta_db)} songs.")
     
-    # Fallback to songs_database.json if not found in extracted
-    db_json_path = os.path.join(WORKSPACE_DIR, "songs_database.json")
-    if os.path.exists(db_json_path):
-        with open(db_json_path, 'r', encoding='utf-8') as f:
-            for s in json.load(f):
-                sid = s.get('id')
-                if sid not in meta_db:
-                    # Attempt heuristic artist extraction
-                    title_raw = s.get('title', sid)
-                    parts = title_raw.split(' - ')
-                    if len(parts) == 2:
-                        meta_db[sid] = {'artist': parts[0].strip(), 'title': parts[1].strip(), 'year': ''}
-                    else:
-                        meta_db[sid] = {'artist': 'Unknown Artist', 'title': title_raw, 'year': ''}
+    combined_json_path = os.path.join(MEGAPACK_DIR, "songs_int_combined.json")
+    if os.path.exists(combined_json_path):
+        with open(combined_json_path, 'r', encoding='utf-8') as f:
+            import json
+            data = json.load(f)
+            for s in data.get('songs', []):
+                sid = str(s.get('id'))
+                if sid not in meta_db or meta_db[sid].get('artist') == 'Unknown Artist':
+                    meta_db[sid] = {
+                        'artist': s.get('artist', 'Unknown Artist'),
+                        'title': s.get('title', sid),
+                        'year': str(s.get('year', ''))
+                    }
 
-    json_path = os.path.join(MEGAPACK_DIR, "songs_int_combined.json")
-    with open(json_path, 'r', encoding='utf-8') as f:
-        data = json.load(f)
+    vxla_dir = os.path.join(MEGAPACK_DIR, "Songs", "vxla")
+    if not os.path.exists(vxla_dir):
+        print("No vxla directory found")
+        return
         
-    print(f"Reconstructing {len(data.get('songs', []))} songs...")
+    vxla_files = [f for f in os.listdir(vxla_dir) if f.endswith('.vxla')]
+    print(f"Reconstructing {len(vxla_files)} songs from vxla directory...")
     success_count = 0
     
-    for s_obj in data.get("songs", []):
-        song_id = s_obj.get('id')
-        vxla_file = os.path.join(MEGAPACK_DIR, "Songs", "vxla", f"{song_id}.vxla")
-        if os.path.exists(vxla_file):
-            meta = {
-                'artist': s_obj.get('artist', 'Unknown'),
-                'title': s_obj.get('title', song_id),
-                'year': s_obj.get('year', '')
-            }
+    for vf in vxla_files:
+        song_id = vf.replace('.vxla', '')
+        vxla_file = os.path.join(vxla_dir, vf)
+        
+        meta = meta_db.get(song_id)
+        if not meta:
+            meta = {'artist': 'Unknown Artist', 'title': song_id, 'year': ''}
             
-            safe_artist = "".join(c for c in meta['artist'] if c.isalnum() or c in " -_")
-            safe_title = "".join(c for c in meta['title'] if c.isalnum() or c in " -_")
-            out_folder = os.path.join(OUTPUT_DIR, f"{safe_artist} - {safe_title}")
+        safe_artist = "".join(c for c in meta.get('artist', 'Unknown Artist') if c.isalnum() or c in " -_")
+        safe_title = "".join(c for c in meta.get('title', song_id) if c.isalnum() or c in " -_")
+        out_folder = os.path.join(OUTPUT_DIR, f"{safe_artist} - {safe_title}")
+        
+        if convert_vxla_to_txt(vxla_file, song_id, meta, out_folder):
+            success_count += 1
             
-            success = convert_vxla_to_txt(vxla_file, song_id, meta, out_folder)
-            if success:
-                success_count += 1
-                
     print(f"Done! Reconstructed {success_count} songs into {OUTPUT_DIR}")
 
 if __name__ == '__main__':

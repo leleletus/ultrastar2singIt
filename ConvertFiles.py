@@ -136,9 +136,10 @@ def rename_folders_physically():
 
 
 def construct_name_id_from_directory_name(dir_long_name) -> str:
-    split_dir_name = dir_long_name.split(' - ')
-    artist_dir_name = strip_accents(split_dir_name[0])
-    title_dir_name = strip_accents(split_dir_name[1])
+    parts = dir_long_name.split(' - ')
+    if len(parts) < 2: return strip_accents(dir_long_name).replace(" ", "")
+    artist_dir_name = strip_accents(parts[0]).replace("?", "").replace("!", "").replace(":", "").replace('"', "").replace("/", " ")
+    title_dir_name = strip_accents(parts[1]).replace("?", "").replace("!", "").replace(":", "").replace('"', "").replace("/", " ")
     artist_caps = [word[0].upper() for word in artist_dir_name.split()]
     artist_cap = ''.join(artist_caps)
     title_lower = ''.join(e.lower() for e in title_dir_name if e.isalnum())

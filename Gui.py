@@ -95,9 +95,10 @@ def strip_accents(s):
                    if unicodedata.category(c) != 'Mn')
 
 def construct_name_id_from_directory_name(dir_long_name) -> str:
-    split_dir_name = dir_long_name.split(' - ')
-    artist_dir_name = strip_accents(split_dir_name[0])
-    title_dir_name = strip_accents(split_dir_name[1])
+    parts = dir_long_name.split(' - ')
+    if len(parts) < 2: return strip_accents(dir_long_name).replace(" ", "")
+    artist_dir_name = strip_accents(parts[0]).replace("?", "").replace("!", "").replace(":", "").replace('"', "").replace("/", " ")
+    title_dir_name = strip_accents(parts[1]).replace("?", "").replace("!", "").replace(":", "").replace('"', "").replace("/", " ")
     artist_caps = [word[0].upper() for word in artist_dir_name.split()]
     artist_cap = ''.join(artist_caps)
     title_lower = ''.join(e.lower() for e in title_dir_name if e.isalnum())
@@ -852,7 +853,7 @@ class MainWindow(QMainWindow):
                 cached_video = output_video_name in all_files
                 cached_audio = output_audio_name in all_files
                 cached_image = output_image_name in all_files
-                cached_txt = output_txt_name in all_files
+                cached_txt = output_txt_name in all_files or len(files_txt) > 0 # Trick to show TXT as cached if it exists
 
                 if files_avi or cached_video:
                     has_video = GuiElement.Icon.CHECK.get_icon()
@@ -985,7 +986,7 @@ class MainWindow(QMainWindow):
             us_data = UltrastarToSingit.parse_file(txt_path)
             bpm = float(us_data.get("BPM", "100").replace(',', '.'))
             gap = float(us_data.get("GAP", "0").replace(',', '.'))
-            if gap == 0 or gap < 0: return True
+            if gap < 0: return True
             if bpm > 400 or bpm < 50: return True
             first_beat = -1
             for note in us_data.get("notes", []):
