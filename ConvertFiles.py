@@ -73,7 +73,8 @@ def _init_paths(cfg) -> None:
     if os.path.isdir(_output_dir):
         for file_or_folder in os.listdir(_output_dir):
             if os.path.isfile(file_or_folder) or not re.search(r'^[0-9A-F]{16}', file_or_folder):
-                # chosen folder contains unknown files or folders, append _Patch subfolder to path and approve
+                # SAFETY SHIELD: If the chosen folder contains unknown files or folders, append _Patch subfolder to path.
+                # This prevents the program from wiping the user's personal files (like their Desktop or Downloads) since the output is cleared.
                 _output_dir = os.path.join(_output_dir, "_Patch")
                 break
 

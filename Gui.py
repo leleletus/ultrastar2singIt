@@ -605,7 +605,8 @@ class MainWindow(QMainWindow):
         if os.path.isdir(path):
             for file_or_folder in os.listdir(path):
                 if os.path.isfile(file_or_folder) or not re.search(r'^[0-9A-F]{16}', file_or_folder):
-                    #chosen folder contains unknown files or folders, append _Patch subfolder to path and approve
+                    # SAFETY SHIELD: If the chosen folder contains unknown files or folders, append _Patch subfolder to path.
+                    # This prevents the program from wiping the user's personal files (like their Desktop or Downloads) since the output is cleared.
                     self.output_path.setText(os.path.join(path, DEFAULT_OUTPUT_FOLDER_NAME))
                     break
         mark_field_valid(self.output_path, True)
@@ -1500,7 +1501,7 @@ class MainWindow(QMainWindow):
             "Path to the folder containing the UltraStar song folders."
             "\nSong folders should be named as 'Artist - Song Title' and contain the txt and media files."
             "\n\nNote: The program will cache the converted files in these song folders.")
-        self.output_path.setToolTip("Path to the output folder where the converted files will be saved.")
+        self.output_path.setToolTip("Path to the output folder.\n\nSAFETY FEATURE: If the selected folder is NOT empty, the program will automatically append '_Patch' to prevent accidentally deleting your personal files (since the Output folder is wiped before conversion).")
         self.warning_action.setToolTip("Warning: The selected folder, if it exists, will be deleted prior to starting the conversion.")
         self.include_dlc_checkbox.setToolTip("Une las canciones de tu songs_xx.json al nuevo archivo, Y ADEMÁS, si existe una carpeta 'Songs' al lado de ese json, copiará físicamente todos los archivos de audio/video al Output. ¡No los descarga de internet, los copia de tu PC!")
         self.dlc_name_txt_path.setToolTip(
