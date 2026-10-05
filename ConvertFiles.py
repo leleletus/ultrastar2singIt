@@ -136,20 +136,35 @@ def rename_folders_physically():
                 logger.error(f"Error while trying to rename {old_name}: {e}")
 
 
-def construct_name_id_from_directory_name(dir_long_name) -> str:
-    parts = dir_long_name.split(' - ')
-    if len(parts) < 2: return strip_accents(dir_long_name).replace(" ", "")
-    artist_dir_name = strip_accents(parts[0]).replace("?", "").replace("!", "").replace(":", "").replace('"', "").replace("/", " ")
-    title_dir_name = strip_accents(parts[1]).replace("?", "").replace("!", "").replace(":", "").replace('"', "").replace("/", " ")
-    artist_caps = [word[0].upper() for word in artist_dir_name.split()]
-    artist_cap = ''.join(artist_caps)
-    title_lower = ''.join(e.lower() for e in title_dir_name if e.isalnum())
-    return artist_cap + title_lower
+
 
 
 def strip_accents(s):
-    return ''.join(c for c in unicodedata.normalize('NFD', s)
-                   if unicodedata.category(c) != 'Mn')
+    import unicodedata
+    s = ''.join(c for c in unicodedata.normalize('NFD', s) if unicodedata.category(c) != 'Mn')
+    s = s.replace('ø', 'o').replace('Ø', 'O')
+    s = s.replace('œ', 'oe').replace('Œ', 'OE')
+    s = s.replace('æ', 'ae').replace('Æ', 'AE')
+    s = s.replace('ß', 'ss')
+    s = s.replace('&', 'and')
+    s = s.replace('ñ', 'n').replace('Ñ', 'N')
+    return s
+
+def construct_name_id_from_directory_name(dir_long_name) -> str:
+    parts = dir_long_name.split(' - ')
+    if len(parts) < 2: 
+        s = strip_accents(dir_long_name).replace(" ", "")
+        return ''.join(e for e in s if e.isalnum() and e.isascii())
+    
+    artist_dir_name = strip_accents(parts[0]).replace("?", "").replace("!", "").replace(":", "").replace('"', "").replace("/", " ")
+    title_dir_name = strip_accents(parts[1]).replace("?", "").replace("!", "").replace(":", "").replace('"', "").replace("/", " ")
+    
+    artist_caps = [word[0].upper() for word in artist_dir_name.split()]
+    artist_cap = ''.join(artist_caps)
+    artist_cap = ''.join(e for e in artist_cap if e.isalnum() and e.isascii())
+    
+    title_lower = ''.join(e.lower() for e in title_dir_name if e.isalnum() and e.isascii())
+    return artist_cap + title_lower
 
 
 def find_folders_to_convert():
