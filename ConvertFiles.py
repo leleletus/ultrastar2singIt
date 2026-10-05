@@ -231,6 +231,8 @@ def create_still_video_from_cover_image(files_jpg, files_txt, list_in_dir, outpu
             file = files_jpg[0]
     else:
         file = files_jpg[0]
+        
+    file = get_clean_image_path(file)
     target_size_mb = 10
     target_bitrate_kbps = int((target_size_mb * 8192) / song_duration)
     complex_filter = (
@@ -250,7 +252,7 @@ def create_still_video_from_cover_image(files_jpg, files_txt, list_in_dir, outpu
 
 
 def create_in_game_loading_picture(files_jpg, list_in_dir, png_in_game_file_name):
-    file = files_jpg[0]
+    file = get_clean_image_path(files_jpg[0])
     ffmpeg_cmd = [_ffmpeg_path, '-i', os.fspath(file), '-vf',
                  'scale=512:512:force_original_aspect_ratio=increase,crop=512:512',
                  os.fspath(list_in_dir / png_in_game_file_name)]
@@ -259,7 +261,7 @@ def create_in_game_loading_picture(files_jpg, list_in_dir, png_in_game_file_name
 
 
 def create_cover_long(files_jpg, list_in_dir, png_long_file_name):
-    file = files_jpg[0]
+    file = get_clean_image_path(files_jpg[0])
     ffmpeg_cmd = [_ffmpeg_path, '-i', os.fspath(file), '-vf',
                  'scale=191:396:force_original_aspect_ratio=increase,crop=191:396',
                  os.fspath(list_in_dir / png_long_file_name)]
@@ -267,8 +269,29 @@ def create_cover_long(files_jpg, list_in_dir, png_long_file_name):
     logger.info('created : ' + png_long_file_name)
 
 
+
+def get_clean_image_path(file_path):
+    try:
+        from PIL import Image
+        import tempfile
+        import os
+        temp_image = os.path.join(tempfile.gettempdir(), 'temp_cover_clean.jpg')
+        img = Image.open(file_path)
+        if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
+            img = img.convert('RGBA')
+            background = Image.new('RGB', img.size, (255, 255, 255))
+            background.paste(img, mask=img.split()[3])
+            img = background
+        else:
+            img = img.convert('RGB')
+        img.save(temp_image, 'JPEG', quality=95)
+        return temp_image
+    except Exception as e:
+        logger.warning(f"Could not convert cover to safe JPG: {e}")
+        return file_path
+
 def create_cover(files_jpg, list_in_dir, png_file_name):
-    file = files_jpg[0]
+    file = get_clean_image_path(files_jpg[0])
     ffmpeg_cmd = [_ffmpeg_path, '-i', os.fspath(file), '-vf',
                  'scale=256:256:force_original_aspect_ratio=increase,crop=256:256',
                   os.fspath(list_in_dir / png_file_name)]
@@ -747,13 +770,13 @@ def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None)
                         else:
                             quality = None
                         logger.info(str(file))
-                        temp_mp4_name = name_id + '.mp4'
-                        temp_mp4_file = list_in_dir / temp_mp4_name
+                        temp_video_name = name_id + '.avi'
+                        temp_video_file = list_in_dir / temp_video_name
                         if file.suffix.lower() in ('.avi', '.divx', '.mp4', '.flv', '.mkv', '.webm'):
-                            if not temp_mp4_file.exists():
-                                create_video(file, list_in_dir, temp_mp4_name, target_bitrate_kbps)
+                            if not temp_video_file.exists():
+                                create_video(file, list_in_dir, temp_video_name, target_bitrate_kbps)
 
-                            temp_size_bytes = temp_mp4_file.stat().st_size
+                            temp_size_bytes = temp_video_file.stat().st_size
                             temp_size_mb = temp_size_bytes / (1024 * 1024)
                             if temp_size_mb <= target_size_mb:
                                 compression_percentage = 100
@@ -761,7 +784,7 @@ def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None)
                                 percentage = (target_size_mb / temp_size_mb) * 100
                                 compression_percentage = max(1, min(200, int(round(percentage))))
 
-                            create_video_bink(os.fspath(temp_mp4_file), list_in_dir, output_video_file_name, compression_percentage, quality)
+                            create_video_bink(os.fspath(temp_video_file), list_in_dir, output_video_file_name, compression_percentage, quality)
 
             if ogg_file_name not in files_all:
                 create_audio(files_avi, files_mp3, list_in_dir, ogg_file_name, video_gap)
@@ -793,18 +816,18 @@ def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None)
             if not files_avi or ignore_video or not os.path.exists(os.path.join(list_in_dir / output_video_file_name)):
                 # If no video file was present in the song's directory, or if "RAD" Video Tools failed to convert it,
                 # create a still image video from the cover image
-                output_video_file_name_mp4 = name_id + '_cover.mp4'
-                if not os.path.exists(list_in_dir / output_video_file_name_mp4):
-                    create_still_video_from_cover_image(files_jpg, files_txt, list_in_dir, output_video_file_name_mp4, song_duration, txt_data)
+                output_video_file_name_fallback = name_id + '_cover.avi'
+                if not os.path.exists(list_in_dir / output_video_file_name_fallback):
+                    create_still_video_from_cover_image(files_jpg, files_txt, list_in_dir, output_video_file_name_fallback, song_duration, txt_data)
                 else:
-                    logger.info(f"Static video already exists, skipping generation: {output_video_file_name_mp4}")
+                    logger.info(f"Static video already exists, skipping generation: {output_video_file_name_fallback}")
 
                 if output_format == JSON_FORMAT:
                     if not os.path.exists(list_in_dir / output_video_file_name):
-                        create_video_bink(os.fspath(list_in_dir / output_video_file_name_mp4), list_in_dir, output_video_file_name, None, quality=0.1)
+                        create_video_bink(os.fspath(list_in_dir / output_video_file_name_fallback), list_in_dir, output_video_file_name, None, quality=0.1)
                 elif output_format == XML_FORMAT:
                     if ignore_video or not os.path.exists(list_in_dir / output_video_file_name):
-                        shutil.copy2(list_in_dir / output_video_file_name_mp4, list_in_dir / output_video_file_name)
+                        shutil.copy2(list_in_dir / output_video_file_name_fallback, list_in_dir / output_video_file_name)
 
             # generating vxla file
             vxla_path = list_in_dir / vxla_file_name
