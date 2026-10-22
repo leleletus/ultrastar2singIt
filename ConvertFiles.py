@@ -1,25 +1,24 @@
 from concurrent.futures import ThreadPoolExecutor
 import csv
+import io
 import json
-import threading
-json_lock = threading.Lock()
-
 import logging
 import os
 import re
 import shutil
 import subprocess
+import tempfile
+import threading
 import xml.etree.cElementTree as Et
 from pathlib import Path
 from xml.dom import minidom
 
-import unicodedata
-
+import naming
 import PitchAnalyzer
 import SupportedFormats
 import UltrastarToSingit
 import data.repository.DlcRepository as repository
-from ConfigLoader import load_config, load_default_config
+from ConfigLoader import app_dir, load_config, load_default_config
 
 XML_FORMAT = 'xml'
 JSON_FORMAT = 'json'
@@ -35,48 +34,157 @@ NAME_TXT_FILE = 'name.txt'
 
 MUSIC_GENRE_LIST = ['Pop', 'Rap', 'Rock', 'Ballad', 'Electro']
 
-# File handler — always active, captures ERROR+ to error.log
-_file_handler = logging.FileHandler('error.log', mode='a')
-_file_handler.setLevel(logging.ERROR)
-_file_handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s: %(message)s'))
-logging.getLogger().addHandler(_file_handler)
-logging.getLogger().setLevel(logging.DEBUG)
+# Bump whenever the generated vxla changes, so cached vxla files are regenerated (videos are never touched)
+VXLA_GENERATOR_VERSION = 2
+
+# binkc under Wine sometimes "succeeds" with an empty file of a few hundred bytes
+MIN_VALID_BK2_BYTES = 16 * 1024
+
+# name.txt, SongsDLC.tsv and songs_xx.json are shared by all songs: one writer at a time
+registry_lock = threading.Lock()
 
 logger = logging.getLogger(__name__)
+
+
+def _setup_error_log() -> None:
+    """File handler — always active, captures ERROR+ to error.log next to the program."""
+    root = logging.getLogger()
+    if any(getattr(h, '_converter_error_log', False) for h in root.handlers):
+        return
+    try:
+        handler = logging.FileHandler(os.path.join(app_dir(), 'error.log'), mode='a', encoding='utf-8')
+    except OSError:
+        return
+    handler._converter_error_log = True
+    handler.setLevel(logging.ERROR)
+    handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s: %(message)s'))
+    root.addHandler(handler)
+    root.setLevel(logging.DEBUG)
+    # third party libraries are far too chatty at DEBUG level
+    for noisy in ('urllib3', 'PIL', 'chardet', 'numba', 'requests', 'charset_normalizer'):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
+
+
+_setup_error_log()
 
 _ffmpeg_path = 'ffmpeg'
 _ffprobe_path = 'ffprobe'
 _rad_path = None
+_wine_path = 'wine'
 _output_dir = ''
 _input_dir = ''
+
+# processes started by the conversion, so Stop can terminate them
+_active_processes = set()
+_active_processes_lock = threading.Lock()
+_stop_event = None
+
+
+class ConversionStopped(Exception):
+    pass
+
+
+class SongError(Exception):
+    """A problem with one song that is reported to the user without a traceback."""
+
+
+def _check_stop() -> None:
+    if _stop_event is not None and _stop_event.is_set():
+        raise ConversionStopped()
+
+
+def _run(cmd, timeout=None, capture=False):
+    """subprocess.run that can be cancelled by stop_running_processes()."""
+    _check_stop()
+    proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL,
+                            stdout=subprocess.PIPE if capture else subprocess.DEVNULL,
+                            stderr=subprocess.PIPE if capture else subprocess.DEVNULL,
+                            text=capture, encoding='utf-8' if capture else None,
+                            errors='replace' if capture else None)
+    with _active_processes_lock:
+        _active_processes.add(proc)
+    try:
+        stdout, stderr = proc.communicate(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        stdout, stderr = proc.communicate()
+        logger.error(f"Process timed out after {timeout}s: {os.path.basename(str(cmd[0]))}")
+    finally:
+        with _active_processes_lock:
+            _active_processes.discard(proc)
+    _check_stop()
+    return subprocess.CompletedProcess(cmd, proc.returncode, stdout, stderr)
+
+
+def stop_running_processes() -> None:
+    with _active_processes_lock:
+        processes = list(_active_processes)
+    for proc in processes:
+        try:
+            proc.terminate()
+        except OSError:
+            pass
+
+
+def _ffmpeg(args, output_path) -> bool:
+    """Run ffmpeg writing to a temporary name first: an interrupted run never leaves a
+    truncated file that would later be mistaken for a valid cached conversion."""
+    output_path = Path(output_path)
+    tmp_path = output_path.with_name(output_path.stem + '.tmp' + output_path.suffix)
+    result = _run([_ffmpeg_path, '-y', '-hide_banner', '-loglevel', 'error'] + list(args) + [os.fspath(tmp_path)],
+                  capture=True)
+    if result.returncode == 0 and tmp_path.is_file() and tmp_path.stat().st_size > 0:
+        os.replace(tmp_path, output_path)
+        return True
+    if tmp_path.exists():
+        tmp_path.unlink()
+    error = (result.stderr or '').strip().splitlines()
+    logger.error(f"ffmpeg failed creating {output_path.name}: {error[-1] if error else 'exit code ' + str(result.returncode)}")
+    return False
+
+
+def _find_ffprobe(ffmpeg_path: str) -> str:
+    folder = Path(ffmpeg_path).parent
+    for name in ('ffprobe', 'ffprobe.exe'):
+        candidate = folder / name
+        if candidate.is_file():
+            return str(candidate)
+    return shutil.which('ffprobe') or 'ffprobe'
+
+
+def safe_output_dir(path: str) -> str:
+    """The output folder is wiped before converting. If it holds anything other than TitleID folders,
+    a _Patch subfolder is used instead so personal files (Desktop, Downloads...) are never deleted."""
+    if os.path.basename(os.path.normpath(path)) == '_Patch':
+        return path
+    if os.path.isdir(path):
+        for name in os.listdir(path):
+            full_path = os.path.join(path, name)
+            if not (os.path.isdir(full_path) and re.fullmatch(r'[0-9A-Fa-f]{16}', name)):
+                return os.path.join(path, '_Patch')
+    return path
 
 
 def _init_paths(cfg) -> None:
     """Set module-level tool / folder paths from the resolved config."""
-    global _ffmpeg_path, _ffprobe_path, _rad_path, _output_dir, _input_dir
+    global _ffmpeg_path, _ffprobe_path, _rad_path, _wine_path, _output_dir, _input_dir
 
     # ffmpeg / ffprobe
     if cfg.tools.ffmpeg_path:
         _ffmpeg_path = str(cfg.tools.ffmpeg_path)
-        candidate = str(Path(_ffmpeg_path).parent / 'ffprobe.exe')
-        _ffprobe_path = candidate if os.path.isfile(candidate) else 'ffprobe'
+        _ffprobe_path = _find_ffprobe(_ffmpeg_path)
     else:
         _ffmpeg_path = 'ffmpeg'
         _ffprobe_path = 'ffprobe'
 
-    # RAD Video Tools
+    # RAD Video Tools (through Wine outside Windows)
     _rad_path = str(cfg.tools.rad_path) if cfg.tools.rad_path else None
+    _wine_path = str(getattr(cfg.tools, 'wine_path', None) or 'wine')
 
     # Folders
     _input_dir = str(cfg.folders.input) if cfg.folders.input else os.getcwd()
     _output_dir = str(cfg.folders.output) if cfg.folders.output else os.path.join(os.getcwd(), '_Patch')
-    if os.path.isdir(_output_dir):
-        for file_or_folder in os.listdir(_output_dir):
-            if os.path.isfile(file_or_folder) or not re.search(r'^[0-9A-F]{16}', file_or_folder):
-                # SAFETY SHIELD: If the chosen folder contains unknown files or folders, append _Patch subfolder to path.
-                # This prevents the program from wiping the user's personal files (like their Desktop or Downloads) since the output is cleared.
-                _output_dir = os.path.join(_output_dir, "_Patch")
-                break
+    _output_dir = safe_output_dir(_output_dir)
 
 
 def resolve_config(cfg):
@@ -99,90 +207,75 @@ def _is_blank(value) -> bool:
     return not (value and not str(value).isspace())
 
 
-def sanitize_name(name):
-    name = re.sub(r'\[.*?\]', '', name)
-    name = ''.join(c for c in unicodedata.normalize('NFD', name)
-                  if unicodedata.category(c) != 'Mn')
-    name = name.replace('...', '')
-    name = name.replace('…', '')
-    name = re.sub(r"[!?#$%'\"\u2018\u2019\u00B4`\u201C\u201D()\[\]]", '', name)
-    return ' '.join(name.split()).strip()
-
-
-def rename_folders_physically():
-    logger.info("Sanitizing folder names...")
-    input_path = Path(_input_dir)
-    current_dirs = [x for x in input_path.iterdir() if x.is_dir()]
-
-    for folder in current_dirs:
-        old_name = folder.name
-        if old_name.startswith(('_', '.')):
-                return
-
-        new_name = sanitize_name(old_name)
-
-        if old_name != new_name:
-            try:
-                # Handle directory exists error by appending a number
-                target_path = folder.parent / new_name
-                counter = 1
-                while target_path.exists():
-                    target_path = folder.parent / f"{new_name}_{counter}"
-                    counter += 1
-                
-                folder.rename(target_path)
-                logger.info(f"Folder renamed: '{old_name}' -> '{target_path.name}'")
-            except Exception as e:
-                logger.error(f"Error while trying to rename {old_name}: {e}")
-
-
-
-
-
-def strip_accents(s):
-    import unicodedata
-    s = ''.join(c for c in unicodedata.normalize('NFD', s) if unicodedata.category(c) != 'Mn')
-    s = s.replace('ø', 'o').replace('Ø', 'O')
-    s = s.replace('œ', 'oe').replace('Œ', 'OE')
-    s = s.replace('æ', 'ae').replace('Æ', 'AE')
-    s = s.replace('ß', 'ss')
-    s = s.replace('&', 'and')
-    s = s.replace('ñ', 'n').replace('Ñ', 'N')
-    return s
-
-def construct_name_id_from_directory_name(dir_long_name) -> str:
-    parts = dir_long_name.split(' - ')
-    if len(parts) < 2: 
-        s = strip_accents(dir_long_name).replace(" ", "")
-        return ''.join(e for e in s if e.isalnum() and e.isascii())
-    
-    artist_dir_name = strip_accents(parts[0]).replace("?", "").replace("!", "").replace(":", "").replace('"', "").replace("/", " ")
-    title_dir_name = strip_accents(parts[1]).replace("?", "").replace("!", "").replace(":", "").replace('"', "").replace("/", " ")
-    
-    artist_caps = [word[0].upper() for word in artist_dir_name.split()]
-    artist_cap = ''.join(artist_caps)
-    artist_cap = ''.join(e for e in artist_cap if e.isalnum() and e.isascii())
-    
-    title_lower = ''.join(e.lower() for e in title_dir_name if e.isalnum() and e.isascii())
-    return artist_cap + title_lower
+# kept for scripts importing them from here
+strip_accents = naming.strip_accents
+construct_name_id_from_directory_name = naming.construct_name_id_from_directory_name
 
 
 def find_folders_to_convert():
     input_path = Path(_input_dir)
     dir_to_convert = [x.name for x in input_path.iterdir() if x.is_dir()]
     dir_to_convert = [x for x in dir_to_convert if not x.startswith(('_', '.')) and ' - ' in x]
-    return dir_to_convert
+    return sorted(dir_to_convert, key=str.lower)
 
 
-def delete_output_folder(cfg):
+def _rescue_unbacked_videos(dirs_to_convert, cfg) -> bool:
+    """Before wiping the output folder, make sure every .bk2 in it also exists somewhere else.
+
+    A .bk2 can take hours to encode: copies missing from the song's cache folder are copied back
+    there (or to <input>/_rescued_bk2) first. Returns False if anything could not be saved.
+    """
+    song_dirs = {}
+    for dir_name in dirs_to_convert:
+        for nid in naming.all_name_ids(dir_name):
+            song_dirs.setdefault(nid, Path(_input_dir) / dir_name)
+
+    base_videos = None
+    source_json = cfg.conversion_tweaks.dlc_songs.songs_json_path
+    if not _is_blank(source_json):
+        base_videos = Path(str(source_json)).parent / 'Songs' / 'videos'
+
+    ok = True
+    for video in Path(_output_dir).rglob('*' + naming.VIDEO_BK2_SUFFIX):
+        size = video.stat().st_size
+        song_dir = song_dirs.get(video.stem)
+        candidates = []
+        if song_dir is not None:
+            candidates.append(song_dir / video.name)
+        if base_videos is not None:
+            candidates.append(base_videos / video.name)
+        if any(c.is_file() and c.stat().st_size == size for c in candidates):
+            continue
+
+        if song_dir is not None and not (song_dir / video.name).exists():
+            destination = song_dir / video.name
+        else:
+            destination = Path(_input_dir) / '_rescued_bk2' / video.name
+            if destination.exists():
+                destination = destination.with_name(f"{video.stem}_{size}{video.suffix}")
+        try:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(video, destination)
+            logger.warning(f"Saved {video.name} (only copy was in the output folder) to {destination}")
+        except OSError as e:
+            logger.error(f"Could not save {video} before clearing the output folder: {e}")
+            ok = False
+    return ok
+
+
+def delete_output_folder(cfg, dirs_to_convert):
     if getattr(cfg.conversion_tweaks, "clear_output", True) is False:
         logger.info("Skipping output directory deletion (Clear output unchecked).")
         return
+    if not os.path.exists(_output_dir):
+        return
+    if not _rescue_unbacked_videos(dirs_to_convert, cfg):
+        logger.error("Output folder NOT cleared: some .bk2 videos could not be saved elsewhere first.")
+        return
     try:
-        if os.path.exists(_output_dir):
-            logger.info(f"Removing existing output directory: {_output_dir}")
-            shutil.rmtree(_output_dir)
-            logger.info("Output directory successfully removed")
+        logger.info(f"Removing existing output directory: {_output_dir}")
+        shutil.rmtree(_output_dir)
+        logger.info("Output directory successfully removed")
     except PermissionError:
         logger.error("Error: Could not delete output folder - permission denied")
     except Exception as e:
@@ -190,25 +283,27 @@ def delete_output_folder(cfg):
 
 
 def get_duration(path_to_song):
-    result = subprocess.run(
-        [_ffprobe_path, '-v', 'error', '-show_entries',
-         'format=duration', '-of',
-         'default=noprint_wrappers=1:nokey=1', path_to_song],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL
-    )
-    return float(result.stdout)
+    result = _run([_ffprobe_path, '-v', 'error', '-show_entries', 'format=duration', '-of',
+                   'default=noprint_wrappers=1:nokey=1', os.fspath(path_to_song)], capture=True)
+    try:
+        return float(result.stdout.strip())
+    except (ValueError, AttributeError):
+        raise SongError(f"could not read the duration of {os.path.basename(str(path_to_song))} (ffprobe)")
+
+
+def get_container_format(path) -> str:
+    result = _run([_ffprobe_path, '-v', 'error', '-show_entries', 'format=format_name', '-of',
+                   'default=noprint_wrappers=1:nokey=1', os.fspath(path)], capture=True)
+    return (result.stdout or '').strip()
 
 
 def is_video_still_image(file):
     duration = get_duration(file)
-    cmd = [
-        _ffmpeg_path, '-i', file,
-        '-vf', 'freezedetect=n=0.01:d=0.1',
-        '-map', '0:v:0', '-f', 'null', '-'
-    ]
-    result = subprocess.run(cmd, stderr=subprocess.PIPE, text=True)
-    stderr = result.stderr
+    if duration <= 0:
+        return False
+    result = _run([_ffmpeg_path, '-i', os.fspath(file), '-vf', 'freezedetect=n=0.01:d=0.1',
+                   '-map', '0:v:0', '-f', 'null', '-'], capture=True)
+    stderr = result.stderr or ''
 
     freeze_starts = [float(m.group(1)) for m in re.finditer(r'freeze_start: ([\d.]+)', stderr)]
     freeze_ends = [float(m.group(1)) for m in re.finditer(r'freeze_end: ([\d.]+)', stderr)]
@@ -222,17 +317,49 @@ def is_video_still_image(file):
     return total_freeze / duration > 0.95
 
 
-def create_still_video_from_cover_image(files_jpg, files_txt, list_in_dir, output_mp4_file_name, song_duration, txt_data):
-    logger.info('creating static video: ' + output_mp4_file_name)
-    file = txt_data.get('COVER', None)
-    if file:
-        file = os.path.join(os.path.dirname(os.fspath(files_txt[-1])), file)
-        if not os.path.isfile(file):
-            file = files_jpg[0]
-    else:
-        file = files_jpg[0]
-        
-    file = get_clean_image_path(file)
+class CleanImage:
+    """Cover converted to a plain RGB JPG (no alpha, no broken EXIF) in a temporary file of its own.
+
+    Each song gets its own file: a shared temporary name mixed up covers between threads."""
+
+    def __init__(self, file_path):
+        self.source = Path(file_path)
+        self.path = self.source
+        self._tmp = None
+
+    def __enter__(self):
+        try:
+            from PIL import Image
+            fd, tmp = tempfile.mkstemp(prefix='cover_', suffix='.jpg')
+            os.close(fd)
+            self._tmp = tmp
+            with Image.open(self.source) as img:
+                if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
+                    img = img.convert('RGBA')
+                    background = Image.new('RGB', img.size, (255, 255, 255))
+                    background.paste(img, mask=img.split()[3])
+                    img = background
+                else:
+                    img = img.convert('RGB')
+                img.save(tmp, 'JPEG', quality=95)
+            self.path = Path(tmp)
+        except Exception as e:
+            logger.warning(f"Could not convert cover to safe JPG: {e}")
+            self.path = self.source
+        return self.path
+
+    def __exit__(self, *exc):
+        if self._tmp and os.path.exists(self._tmp):
+            os.remove(self._tmp)
+        return False
+
+
+def create_still_video_from_cover_image(cover_file, list_in_dir, output_file_name, song_duration):
+    logger.info('creating static video: ' + output_file_name)
+    if cover_file is None:
+        raise SongError("no cover image to build a static video from")
+    if song_duration <= 0:
+        raise SongError("audio duration is 0, cannot build a static video")
     target_size_mb = 10
     target_bitrate_kbps = int((target_size_mb * 8192) / song_duration)
     complex_filter = (
@@ -241,105 +368,116 @@ def create_still_video_from_cover_image(files_jpg, files_txt, list_in_dir, outpu
         "[fg]scale='if(gt(iw/ih,1280/720),min(iw,1280),-1)':'if(gt(iw/ih,1280/720),-1,min(ih,720))':force_original_aspect_ratio=decrease[fg_scaled];"
         "[bg_blurred][fg_scaled]overlay=(W-w)/2:(H-h)/2,fps=25"
     )
-    ffmpeg_cmd = [_ffmpeg_path, '-y', '-loop', '1',
-                 '-i', os.fspath(file), '-c:v', 'libx264', '-t', str(song_duration),
-                 '-preset', 'medium', '-tune', 'stillimage',
-                 '-b:v', f'{target_bitrate_kbps}k',
-                 '-vf', complex_filter,
-                 '-pix_fmt', 'yuv420p',
-                 '-an', os.fspath(list_in_dir / output_mp4_file_name)]
-    subprocess.run(ffmpeg_cmd)
+    with CleanImage(cover_file) as image:
+        return _ffmpeg(['-loop', '1', '-i', os.fspath(image), '-c:v', 'libx264', '-t', str(song_duration),
+                        '-preset', 'medium', '-tune', 'stillimage', '-b:v', f'{target_bitrate_kbps}k',
+                        '-vf', complex_filter, '-pix_fmt', 'yuv420p', '-an'],
+                       list_in_dir / output_file_name)
 
 
-def create_in_game_loading_picture(files_jpg, list_in_dir, png_in_game_file_name):
-    file = get_clean_image_path(files_jpg[0])
-    ffmpeg_cmd = [_ffmpeg_path, '-i', os.fspath(file), '-vf',
-                 'scale=512:512:force_original_aspect_ratio=increase,crop=512:512',
-                 os.fspath(list_in_dir / png_in_game_file_name)]
-    subprocess.run(ffmpeg_cmd)
-    logger.info('created : ' + png_in_game_file_name)
+def _create_image(source, list_in_dir, file_name, width, height, from_video=False):
+    scale = f'scale={width}:{height}:force_original_aspect_ratio=increase,crop={width}:{height}'
+    if from_video:
+        for seek in ('15', '0'):
+            if _ffmpeg(['-ss', seek, '-i', os.fspath(source), '-vframes', '1', '-vf', scale], list_in_dir / file_name):
+                logger.info('created from video: ' + file_name)
+                return True
+        return False
+    with CleanImage(source) as image:
+        created = _ffmpeg(['-i', os.fspath(image), '-vf', scale], list_in_dir / file_name)
+    if created:
+        logger.info('created : ' + file_name)
+    return created
 
 
-def create_cover_long(files_jpg, list_in_dir, png_long_file_name):
-    file = get_clean_image_path(files_jpg[0])
-    ffmpeg_cmd = [_ffmpeg_path, '-i', os.fspath(file), '-vf',
-                 'scale=191:396:force_original_aspect_ratio=increase,crop=191:396',
-                 os.fspath(list_in_dir / png_long_file_name)]
-    subprocess.run(ffmpeg_cmd)
-    logger.info('created : ' + png_long_file_name)
-
-
-
-def get_clean_image_path(file_path):
+def create_placeholder_cover(list_in_dir, file_name, artist, title):
+    """Cover for songs that have no image at all (and a video ffmpeg can't read, like .bk2)."""
+    from PIL import Image, ImageDraw, ImageFont
+    size = 512
+    img = Image.new('RGB', (size, size))
+    draw = ImageDraw.Draw(img)
+    for y in range(size):
+        shade = int(40 + 60 * y / size)
+        draw.line([(0, y), (size, y)], fill=(shade // 2, shade // 3, shade))
     try:
-        from PIL import Image
-        import tempfile
-        import os
-        temp_image = os.path.join(tempfile.gettempdir(), 'temp_cover_clean.jpg')
-        img = Image.open(file_path)
-        if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
-            img = img.convert('RGBA')
-            background = Image.new('RGB', img.size, (255, 255, 255))
-            background.paste(img, mask=img.split()[3])
-            img = background
-        else:
-            img = img.convert('RGB')
-        img.save(temp_image, 'JPEG', quality=95)
-        return temp_image
-    except Exception as e:
-        logger.warning(f"Could not convert cover to safe JPG: {e}")
-        return file_path
+        font_big = ImageFont.load_default(size=44)
+        font_small = ImageFont.load_default(size=30)
+    except TypeError:  # Pillow < 10.1
+        font_big = font_small = ImageFont.load_default()
 
-def create_cover(files_jpg, list_in_dir, png_file_name):
-    file = get_clean_image_path(files_jpg[0])
-    ffmpeg_cmd = [_ffmpeg_path, '-i', os.fspath(file), '-vf',
-                 'scale=256:256:force_original_aspect_ratio=increase,crop=256:256',
-                  os.fspath(list_in_dir / png_file_name)]
-    subprocess.run(ffmpeg_cmd)
-    logger.info('created : ' + png_file_name)
+    def wrap(text, font, width):
+        lines, line = [], ''
+        for word in text.split():
+            candidate = (line + ' ' + word).strip()
+            if draw.textlength(candidate, font=font) <= width or not line:
+                line = candidate
+            else:
+                lines.append(line)
+                line = word
+        return lines + ([line] if line else [])
+
+    y = 150
+    for line in wrap(title, font_big, size - 60)[:4]:
+        draw.text((size / 2, y), line, font=font_big, fill=(255, 255, 255), anchor='mm')
+        y += 54
+    y += 20
+    for line in wrap(artist, font_small, size - 60)[:3]:
+        draw.text((size / 2, y), line, font=font_small, fill=(210, 210, 230), anchor='mm')
+        y += 38
+    img.save(list_in_dir / file_name, 'PNG')
+    logger.warning(f"No cover image found, created a placeholder cover: {file_name}")
+    return list_in_dir / file_name
 
 
-def create_audio_preview(files_avi, files_mp3, list_in_dir, ogg_preview_file_name, txt_data):
-    if files_mp3:
-        file = files_mp3[0]
-    else:
-        file = files_avi[0]
+def create_cover(cover_file, list_in_dir, png_file_name, from_video=False):
+    return _create_image(cover_file, list_in_dir, png_file_name, 256, 256, from_video)
+
+
+def create_cover_long(cover_file, list_in_dir, png_long_file_name, from_video=False):
+    return _create_image(cover_file, list_in_dir, png_long_file_name, 191, 396, from_video)
+
+
+def create_in_game_loading_picture(cover_file, list_in_dir, png_in_game_file_name, from_video=False):
+    return _create_image(cover_file, list_in_dir, png_in_game_file_name, 512, 512, from_video)
+
+
+def create_audio_preview(audio_file, list_in_dir, ogg_preview_file_name, txt_data):
     preview_start_time = 60
     preview_duration_time = 30
-    if 'MEDLEYSTARTBEAT' in txt_data and 'MEDLEYENDBEAT' in txt_data:
-        preview_start_beat = int(txt_data['MEDLEYSTARTBEAT'])
-        preview_end_beat = int(txt_data['MEDLEYENDBEAT'])
-        bpm = float(txt_data["BPM"].replace(',', '.'))
-        gap = float(txt_data["GAP"].replace(',', '.')) / 1000
-        preview_start_time = (preview_start_beat * 60 / bpm / 4) + gap
-        preview_duration_time = ((preview_end_beat - preview_start_beat) * 60 / bpm / 4)
-    elif 'PREVIEWSTART' in txt_data:
-        preview_start_time = float(txt_data['PREVIEWSTART'].replace(',', '.'))
-        
-    # Bugfix: prevent preview from exceeding actual song duration
     try:
-        total_duration = get_duration(os.fspath(file))
+        if 'MEDLEYSTARTBEAT' in txt_data and 'MEDLEYENDBEAT' in txt_data:
+            preview_start_beat = int(txt_data['MEDLEYSTARTBEAT'])
+            preview_end_beat = int(txt_data['MEDLEYENDBEAT'])
+            bpm = float(txt_data["BPM"].replace(',', '.'))
+            gap = float(txt_data.get("GAP", "0").replace(',', '.') or 0) / 1000
+            preview_start_time = (preview_start_beat * 60 / bpm / 4) + gap
+            preview_duration_time = ((preview_end_beat - preview_start_beat) * 60 / bpm / 4)
+        elif 'PREVIEWSTART' in txt_data:
+            preview_start_time = float(txt_data['PREVIEWSTART'].replace(',', '.'))
+    except (ValueError, ZeroDivisionError):
+        logger.warning("Invalid medley/preview tags, using the default preview position")
+    if preview_duration_time <= 0:
+        preview_duration_time = 30
+
+    # prevent preview from exceeding actual song duration
+    try:
+        total_duration = get_duration(audio_file)
         if preview_start_time + preview_duration_time > total_duration:
             preview_start_time = max(0.0, total_duration - preview_duration_time)
             if preview_start_time == 0.0:
                 preview_duration_time = total_duration
-    except Exception as e:
+    except SongError as e:
         logger.warning(f"Could not verify duration for preview: {e}")
 
-    ffmpeg_cmd = [_ffmpeg_path, '-ss', str(preview_start_time), '-i', os.fspath(file),
-                 '-vn',
-                 '-t', str(preview_duration_time), '-ar', '48000',
-                 '-af', 'dynaudnorm,volume=-2.5dB',
-                 os.fspath(list_in_dir / ogg_preview_file_name)]
-    subprocess.run(ffmpeg_cmd)
-    logger.info('created : ' + ogg_preview_file_name)
+    created = _ffmpeg(['-ss', str(preview_start_time), '-i', os.fspath(audio_file), '-vn',
+                       '-t', str(preview_duration_time), '-ar', '48000', '-af', 'dynaudnorm,volume=-2.5dB'],
+                      list_in_dir / ogg_preview_file_name)
+    if created:
+        logger.info('created : ' + ogg_preview_file_name)
+    return created
 
 
-def create_audio(files_avi, files_mp3, list_in_dir, ogg_file_name, video_gap):
-    if files_mp3:
-        file = files_mp3[0]
-    else:
-        file = files_avi[0]
+def create_audio(audio_file, list_in_dir, ogg_file_name, video_gap):
     filter_cmd = ''
     if video_gap < 0:
         # Negative gap: trim the beginning of the audio
@@ -349,83 +487,92 @@ def create_audio(files_avi, files_mp3, list_in_dir, ogg_file_name, video_gap):
         # Positive gap: add silence to the beginning
         # Insert video_gap seconds of silence before the audio
         filter_cmd = f'adelay={int(video_gap * 1000)}|{int(video_gap * 1000)},'
-        
-    # Add dynamic normalizer that preserves sync perfectly + volume reduction to match -16 LUFS
+
+    # Dynamic normalizer that preserves sync + volume reduction
     filter_cmd += 'dynaudnorm,volume=-2.5dB'
-        
-    ffmpeg_cmd = [_ffmpeg_path, '-i', os.fspath(file), '-vn', '-ar', '48000', '-af', filter_cmd]
-    ffmpeg_cmd.append(os.fspath(list_in_dir / ogg_file_name))
-    subprocess.run(ffmpeg_cmd)
-    logger.info('created : ' + ogg_file_name)
+
+    created = _ffmpeg(['-i', os.fspath(audio_file), '-vn', '-ar', '48000', '-af', filter_cmd],
+                      list_in_dir / ogg_file_name)
+    if created:
+        logger.info('created : ' + ogg_file_name)
+    return created
 
 
 def create_video(file, list_in_dir, output_video_file_name, target_bitrate_kbps):
     passlog_prefix = os.fspath(list_in_dir / (output_video_file_name + "_passlog"))
-    # First pass to analyze video
-    ffmpeg_cmd = [_ffmpeg_path, '-y', '-i', os.fspath(file),
-                 '-c:v', 'libx264', '-preset', 'medium', '-bf', '0', '-b:v', f'{target_bitrate_kbps}k',
-                 '-pass', '1', '-passlogfile', passlog_prefix, '-an', '-vf',
-                 'scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,fps=25',
-                 '-f', 'null', os.devnull]
-    subprocess.run(ffmpeg_cmd)
-    # Second pass to create final file
-    ffmpeg_cmd = [_ffmpeg_path, '-y', '-i', os.fspath(file),
-                 '-c:v', 'libx264', '-preset', 'medium', '-bf', '0', '-b:v', f'{target_bitrate_kbps}k',
-                 '-pass', '2', '-passlogfile', passlog_prefix, '-an', '-vf',
-                 'scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,fps=25',
-                  os.fspath(list_in_dir / output_video_file_name)]
-    subprocess.run(ffmpeg_cmd)
-    logger.info('created : ' + output_video_file_name)
-    # Clean up FFmpeg passlog files
-    for log_file in list_in_dir.glob(output_video_file_name + "_passlog*"):
-        os.remove(log_file)
+    video_filter = 'scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,fps=25'
+    try:
+        # First pass to analyze video
+        _run([_ffmpeg_path, '-y', '-i', os.fspath(file),
+              '-c:v', 'libx264', '-preset', 'medium', '-bf', '0', '-b:v', f'{target_bitrate_kbps}k',
+              '-pass', '1', '-passlogfile', passlog_prefix, '-an', '-vf', video_filter,
+              '-f', 'null', os.devnull])
+        # Second pass to create final file
+        created = _ffmpeg(['-i', os.fspath(file), '-c:v', 'libx264', '-preset', 'medium', '-bf', '0',
+                           '-b:v', f'{target_bitrate_kbps}k', '-pass', '2', '-passlogfile', passlog_prefix,
+                           '-an', '-vf', video_filter],
+                          list_in_dir / output_video_file_name)
+    finally:
+        # Clean up FFmpeg passlog files
+        for log_file in list_in_dir.glob(output_video_file_name + "_passlog*"):
+            os.remove(log_file)
+    if created:
+        logger.info('created : ' + output_video_file_name)
+    return created
 
 
-def create_video_bink(file, list_in_dir, output_video_file_name, compression_percentage, quality):
+def create_video_bink(file, list_in_dir, output_video_file_name, quality=None, duration=None):
+    """Encode a .bk2 with RAD Video Tools. The result is written to the song folder only when binkc
+    produced a valid file, an existing .bk2 is never replaced by a failed encode."""
     if not _rad_path:
         logger.error("RAD Video Tools path not configured - cannot create .bk2 video")
-        return
-    import shutil
-    import tempfile
+        return False
     import sys
-    
+
     file_format = '/V' + str(200)
     remove_sound = '/L-1'
-    
+    # generous timeout: a hung binkc must not block a worker thread forever
+    timeout = max(1800, int((duration or 300) * 30))
+
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_dir_path = Path(temp_dir)
-        temp_in = temp_dir_path / "input.mp4"
+        temp_in = temp_dir_path / ("input" + Path(file).suffix.lower())
         temp_out = temp_dir_path / "output.bk2"
-        
-        # Copy input to safe temp location
+
+        # Copy input to safe temp location (binkc chokes on special characters in paths)
         shutil.copy2(file, temp_in)
-        
+
         bink_in = str(temp_in)
         bink_out = str(temp_out)
-        
+
         if sys.platform != "win32":
             bink_in = "Z:" + bink_in.replace("/", "\\")
             bink_out = "Z:" + bink_out.replace("/", "\\")
-            bink_args = ['wine', _rad_path, 'binkc', bink_in, bink_out, file_format,
-                        '/(1280', '/)720', remove_sound]
+            bink_args = [_wine_path, _rad_path, 'binkc', bink_in, bink_out, file_format,
+                         '/(1280', '/)720', remove_sound]
         else:
             bink_args = [_rad_path, 'binkc', bink_in, bink_out, file_format,
-                        '/(1280', '/)720', remove_sound]
-                        
+                         '/(1280', '/)720', remove_sound]
+
         if quality:
-            quality_switch = '/Q' + str(quality)
-            bink_args.append(quality_switch)
+            bink_args.append('/Q' + str(quality))
         bink_args.append('/#')
-        
-        logger.info(f"Converting video {file} via temp folder to avoid path issues")
-        subprocess.run(bink_args, capture_output=True, text=True)
-        
+
+        logger.info(f"Converting video {os.path.basename(str(file))} to {output_video_file_name} with binkc...")
+        result = _run(bink_args, timeout=timeout, capture=True)
+
         final_out = list_in_dir / output_video_file_name
-        if temp_out.exists():
+        size = temp_out.stat().st_size if temp_out.exists() else 0
+        if size >= MIN_VALID_BK2_BYTES:
             shutil.copy2(temp_out, final_out)
             logger.info(f"Successfully created {output_video_file_name}")
-        else:
-            logger.error(f"Failed to generate {output_video_file_name} from binkc")
+            return True
+
+        details = ' | '.join(line.strip() for line in ((result.stdout or '') + (result.stderr or '')).splitlines()
+                             if line.strip())[-500:]
+        logger.error(f"Failed to generate {output_video_file_name} from binkc "
+                     f"(exit code {result.returncode}, {size} bytes){': ' + details if details else ''}")
+        return False
 
 
 def match_genre(txt_data):
@@ -436,16 +583,25 @@ def match_genre(txt_data):
     return 'Pop'
 
 
-def handle_xml_or_json(dlc_id, core_id, json_file_name, list_in_dir, txt_data,
-                       name_id, output_format, xml_file_name, cfg):
+def parse_year(txt_data) -> int:
+    match = re.search(r'(\d{4})', str(txt_data.get('YEAR', '')))
+    return int(match.group(1)) if match else 2000
+
+
+def build_song_metadata(txt_data):
     title = txt_data.get('TITLE', 'title')
     artist = txt_data.get('ARTIST', 'artist')
-    year = txt_data.get('YEAR', '2000')
-    genre = match_genre(txt_data)
     try:
         bpm = int(float(txt_data.get('BPM', '120').replace(',', '.')))
-    except:
+    except ValueError:
         bpm = 120
+    return title, artist, parse_year(txt_data), match_genre(txt_data), bpm
+
+
+def handle_xml_or_json(dlc_id, core_id, json_file_name, list_in_dir, txt_data,
+                       name_id, output_format, xml_file_name, cfg):
+    """Creates <id>_meta.xml (XML games); registers the song in SongsDLC.tsv or songs_xx.json."""
+    title, artist, year, genre, bpm = build_song_metadata(txt_data)
 
     if output_format == XML_FORMAT:
         uid = add_data_to_songsdlc_tsv(core_id, artist, name_id, title, year, cfg)
@@ -456,7 +612,7 @@ def handle_xml_or_json(dlc_id, core_id, json_file_name, list_in_dir, txt_data,
             "artist": artist,
             "title": title,
             "gender": "Both",
-            "year": int(year),
+            "year": year,
             "timeless": "",
             "genre": genre,
             "theme": "Love, Deep, Party",
@@ -477,7 +633,7 @@ def create_meta_xml(uid, artist, genre, list_in_dir, name_id, title, xml_file_na
     Et.SubElement(root, "Uid").text = str(uid)
     Et.SubElement(root, "Artist").text = artist
     Et.SubElement(root, "Title").text = title
-    Et.SubElement(root, "Year").text = year
+    Et.SubElement(root, "Year").text = str(year)
     Et.SubElement(root, "Ratio").text = "Ratio_16_9"
     Et.SubElement(root, "Difficulty").text = "Difficulty0"
     Et.SubElement(root, "Feat")
@@ -490,120 +646,138 @@ def create_meta_xml(uid, artist, genre, list_in_dir, name_id, title, xml_file_na
         f.write(xmlbin)
 
 
+def _atomic_write_text(path, text, encoding='utf-8'):
+    """Write to a temporary file and rename it over the target: a crash never leaves half a file."""
+    tmp = str(path) + '.tmp'
+    with open(tmp, 'w', encoding=encoding, newline='') as f:
+        f.write(text)
+    os.replace(tmp, path)
+
+
+def _read_text(path):
+    """Text of a file plus the encoding to write it back with (a BOM is kept only if it had one)."""
+    with open(path, 'rb') as f:
+        raw = f.read()
+    encoding = UltrastarToSingit._detect_encoding_bytes(raw)
+    if encoding == 'utf-8-sig' and not raw.startswith(b'\xef\xbb\xbf'):
+        encoding = 'utf-8'
+    return raw.decode(encoding), encoding
+
+
 def add_song_to_json(dlc_id, json_file_name, song_data, cfg):
-    with json_lock:
-        include_dlc = bool(cfg.conversion_tweaks.dlc_songs.include)
+    with registry_lock:
         source_json = str(cfg.conversion_tweaks.dlc_songs.songs_json_path) if not _is_blank(cfg.conversion_tweaks.dlc_songs.songs_json_path) else None
 
         dlc_romfs_dir = os.path.join(_output_dir, dlc_id, 'romfs')
         os.makedirs(dlc_romfs_dir, exist_ok=True)
         dest_json_file = os.path.join(dlc_romfs_dir, json_file_name)
 
-        if os.path.exists(dest_json_file):
-            with open(dest_json_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
+        # the base JSON is merged even when the "copy DLC media" checkbox is off
+        read_from = dest_json_file if os.path.exists(dest_json_file) else (
+            source_json if source_json and os.path.exists(source_json) else None)
+        if read_from:
+            try:
+                data = json.loads(_read_text(read_from)[0])
+            except json.JSONDecodeError as e:
+                raise SongError(f"{os.path.basename(read_from)} is not valid JSON ({e}); "
+                                f"fix or delete it before converting")
         else:
-            if source_json and os.path.exists(source_json): # Checkbox no longer required for JSON merging
-                shutil.copy2(source_json, dest_json_file)
-                with open(dest_json_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-            else:
-                data = {"name": json_file_name.split('_')[1].split('.')[0], "songs": []}
+            data = {"name": json_file_name.split('_')[1].split('.')[0], "songs": []}
 
         # Remove any existing song with the same ID to replace it
         data['songs'] = [s for s in data.get('songs', []) if str(s.get('id')) != str(song_data.get('id'))]
         data['songs'].append(song_data)
-        with open(dest_json_file, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=4)
+        _atomic_write_text(dest_json_file, json.dumps(data, ensure_ascii=False, indent=4))
+
+
+TSV_HEADER = ("ENABLED\tUID\tID\tARTIST\tTITLE\tYEAR\tDIFFICULTY\tSKU_INT\tSKU_FR\tSKU_SPA\tSKU_GER"
+              "\tDLC_INDEX\tVIDEO_RATIO\tGENRE_POP_UNLOCKED\tGENRE_RAP\tGENRE_BALLAD\tGENRE_ROCK"
+              "\tGENRE_HAPPY_UNLOCKED\tGENRE_FIESTA\tGENRE_LOVE\tGENRE_SAD\tGENRE_OLD_UNLOCKED"
+              "\tGENRE_2000\tGENRE_RECENT\tGENRE_RANDOM_UNLOCKED"
+              "\tGENRE_VO\tGENRE_WOMEN\tGENRE_ENGLISH\tGENRE_MEN\n")
 
 
 def add_data_to_songsdlc_tsv(core_id, artist, name_id, title, year, cfg):
-    core_assets_dir = os.path.join(_output_dir, core_id, 'romfs/Data/StreamingAssets')
-    os.makedirs(core_assets_dir, exist_ok=True)
-    dest_songs_dlc = os.path.join(core_assets_dir, SONG_DLC_FILE)
+    with registry_lock:
+        core_assets_dir = os.path.join(_output_dir, core_id, 'romfs/Data/StreamingAssets')
+        os.makedirs(core_assets_dir, exist_ok=True)
+        dest_songs_dlc = os.path.join(core_assets_dir, SONG_DLC_FILE)
 
-    if not os.path.exists(dest_songs_dlc):
-        include_dlc = bool(cfg.conversion_tweaks.dlc_songs.include)
-        source_tsv = str(cfg.conversion_tweaks.dlc_songs.songs_dlc_tsv_path) if not _is_blank(
-            cfg.conversion_tweaks.dlc_songs.songs_dlc_tsv_path) else None
+        if not os.path.exists(dest_songs_dlc):
+            source_tsv = str(cfg.conversion_tweaks.dlc_songs.songs_dlc_tsv_path) if not _is_blank(
+                cfg.conversion_tweaks.dlc_songs.songs_dlc_tsv_path) else None
+            if source_tsv and os.path.exists(source_tsv):
+                shutil.copy2(source_tsv, dest_songs_dlc)
+            else:
+                _atomic_write_text(dest_songs_dlc, TSV_HEADER)
 
-        if source_tsv and os.path.exists(source_tsv):
-            shutil.copy2(source_tsv, dest_songs_dlc)
-        else:
-            with open(dest_songs_dlc, 'w') as outfile:
-                outfile.write("ENABLED\tUID\tID\tARTIST\tTITLE\tYEAR\tDIFFICULTY\tSKU_INT\tSKU_FR\tSKU_SPA\tSKU_GER"
-                              "\tDLC_INDEX\tVIDEO_RATIO\tGENRE_POP_UNLOCKED\tGENRE_RAP\tGENRE_BALLAD\tGENRE_ROCK"
-                              "\tGENRE_HAPPY_UNLOCKED\tGENRE_FIESTA\tGENRE_LOVE\tGENRE_SAD\tGENRE_OLD_UNLOCKED"
-                              "\tGENRE_2000\tGENRE_RECENT\tGENRE_RANDOM_UNLOCKED"
-                              "\tGENRE_VO\tGENRE_WOMEN\tGENRE_ENGLISH\tGENRE_MEN\n")
-
-    with open(dest_songs_dlc, 'r', newline='') as f:
-        reader = csv.DictReader(f, delimiter='\t')
+        text, encoding = _read_text(dest_songs_dlc)
+        reader = csv.DictReader(io.StringIO(text), delimiter='\t')
         columns = list(reader.fieldnames)
         rows = list(reader)
 
-    if not rows:
-        uid = 200
-        new_row = {col: '' for col in columns}  # fill all columns with ''
+        existing = next((r for r in rows if r.get('ID') == name_id), None)
+        if existing is not None:
+            # converting the same song again: update its row, keep its UID
+            new_row = existing
+            uid = int(existing['UID'])
+        elif not rows:
+            uid = 200
+            new_row = {col: '' for col in columns}  # fill all columns with ''
+            new_row['DIFFICULTY'] = '0'
+            new_row['SKU_INT'] = 'x'
+            new_row['SKU_FR'] = 'x'
+            new_row['SKU_SPA'] = 'x'
+            new_row['SKU_GER'] = 'x'
+            new_row['DLC_INDEX'] = '1'
+            new_row['VIDEO_RATIO'] = 'RATIO_16_9'
+            new_row['GENRE_RANDOM_UNLOCKED'] = 'x'
+            new_row['GENRE_ENGLISH'] = 'x'
+            rows.append(new_row)
+        else:
+            uids = [int(r['UID']) for r in rows if str(r.get('UID', '')).strip().isdigit()]
+            highest_uid = max(uids, default=0)
+            uid = 200 if highest_uid < 200 else highest_uid + 1
+            new_row = dict(rows[-1])
+            rows.append(new_row)
+
         new_row['ENABLED'] = 'x'
         new_row['UID'] = str(uid)
         new_row['ID'] = name_id
         new_row['ARTIST'] = artist
         new_row['TITLE'] = title
-        new_row['YEAR'] = str(int(year))
-        new_row['DIFFICULTY'] = '0'
-        new_row['SKU_INT'] = 'x'
-        new_row['SKU_FR'] = 'x'
-        new_row['SKU_SPA'] = 'x'
-        new_row['SKU_GER'] = 'x'
-        new_row['DLC_INDEX'] = '1'
-        new_row['VIDEO_RATIO'] = 'RATIO_16_9'
-        new_row['GENRE_RANDOM_UNLOCKED'] = 'x'
-        new_row['GENRE_ENGLISH'] = 'x'
-        rows.append(new_row)
-    else:
-        highest_uid = max(int(r['UID']) for r in rows)
-        uid = 200 if highest_uid < 200 else highest_uid + 1
+        new_row['YEAR'] = str(year)
 
-        new_row = dict(rows[-1])
-        new_row['ENABLED'] = 'x'
-        new_row['UID'] = str(uid)
-        new_row['ID'] = name_id
-        new_row['ARTIST'] = artist
-        new_row['TITLE'] = title
-        new_row['YEAR'] = str(int(year))
-        rows.append(new_row)
-
-    with open(dest_songs_dlc, 'w', newline='') as f:
-        writer = csv.DictWriter(f, fieldnames=columns, delimiter='\t',
-                                lineterminator='\n')
+        out = io.StringIO()
+        writer = csv.DictWriter(out, fieldnames=columns, delimiter='\t', lineterminator='\n')
         writer.writeheader()
         writer.writerows(rows)
-
-    return uid
+        _atomic_write_text(dest_songs_dlc, out.getvalue(), encoding)
+        return uid
 
 
 def add_data_to_name_txt(dlc_id, name_id, output_format, dlc_json_name, cfg):
-    include_dlc = bool(cfg.conversion_tweaks.dlc_songs.include)
-    source_name_txt = str(cfg.conversion_tweaks.dlc_songs.name_txt_path) if not _is_blank(cfg.conversion_tweaks.dlc_songs.name_txt_path) else None
+    with registry_lock:
+        source_name_txt = str(cfg.conversion_tweaks.dlc_songs.name_txt_path) if not _is_blank(cfg.conversion_tweaks.dlc_songs.name_txt_path) else None
 
-    dlc_romfs_dir = os.path.join(_output_dir, dlc_id, 'romfs')
-    os.makedirs(dlc_romfs_dir, exist_ok=True)
-    dest_name_txt = os.path.join(dlc_romfs_dir, NAME_TXT_FILE)
+        dlc_romfs_dir = os.path.join(_output_dir, dlc_id, 'romfs')
+        os.makedirs(dlc_romfs_dir, exist_ok=True)
+        dest_name_txt = os.path.join(dlc_romfs_dir, NAME_TXT_FILE)
 
-    if not os.path.exists(dest_name_txt):
-        if source_name_txt and os.path.exists(source_name_txt):
-            shutil.copy2(source_name_txt, dest_name_txt)
-        else:
-            if output_format == XML_FORMAT:
-                open(dest_name_txt, 'w').close()
+        if not os.path.exists(dest_name_txt):
+            if source_name_txt and os.path.exists(source_name_txt):
+                shutil.copy2(source_name_txt, dest_name_txt)
+            elif output_format == XML_FORMAT:
+                _atomic_write_text(dest_name_txt, '')
             elif output_format == JSON_FORMAT:
-                with open(dest_name_txt, 'w') as outfile:
-                    outfile.write(dlc_json_name + '\n')
-    # Append song ID for XML format
-    if output_format == XML_FORMAT:
-        with open(dest_name_txt, 'a') as outfile:
-            outfile.write(name_id + '\n')
+                _atomic_write_text(dest_name_txt, dlc_json_name + '\n')
+        # Append song ID for XML format (once)
+        if output_format == XML_FORMAT:
+            text, encoding = _read_text(dest_name_txt)
+            lines = text.splitlines()
+            if name_id not in (line.strip() for line in lines):
+                lines.append(name_id)
+                _atomic_write_text(dest_name_txt, '\n'.join(lines) + '\n', encoding)
 
 
 def get_required_files(name_id: str, output_format: str, song_dir: Path) -> list:
@@ -630,7 +804,173 @@ def validate_converted_files(required: list) -> list:
     return missing
 
 
+# ---------------------------------------------------------------------------
+# Source files of a song folder
+# ---------------------------------------------------------------------------
+
+def _is_converter_file(file_name, name_ids):
+    if '.tmp.' in file_name or file_name.endswith('.tmp'):
+        return True
+    return naming.is_generated_file(file_name, name_ids)
+
+
+def _find_tagged_file(song_dir: Path, tag_value, files):
+    if not tag_value:
+        return None
+    candidate = song_dir / tag_value
+    if candidate.is_file():
+        return candidate
+    wanted = tag_value.strip().lower()
+    for f in files:
+        if f.name.lower() == wanted:
+            return f
+    return None
+
+
+def _looks_like_ultrastar(path: Path) -> bool:
+    try:
+        with open(path, 'rb') as f:
+            head = f.read(8192).upper()
+    except OSError:
+        return False
+    return b'#BPM' in head and (b'#TITLE' in head or b'#ARTIST' in head)
+
+
+def choose_txt_file(txt_files):
+    """The UltraStar txt of the song: skips non-UltraStar txt files and prefers the
+    single-player version over '[MULTI]'/'[DUET]' files."""
+    candidates = sorted((f for f in txt_files if _looks_like_ultrastar(f)), key=lambda f: f.name.lower())
+    if not candidates:
+        return None
+    single = [f for f in candidates if not re.search(r'\[(multi|duet)\]|\bduet\b', f.name, re.IGNORECASE)]
+    return (single or candidates)[-1]
+
+
+def resolve_song_sources(song_dir: Path, txt_data, name_ids):
+    """Original audio/video/cover of the song: the txt tags first, then the remaining files.
+    Files generated by the converter itself are never treated as sources."""
+    files = sorted((x for x in song_dir.iterdir() if x.is_file() and not _is_converter_file(x.name, name_ids)),
+                   key=lambda f: f.name.lower())
+    videos = [f for f in files if f.suffix.lower() in SupportedFormats.VIDEO_EXTENSIONS]
+    audios = [f for f in files if f.suffix.lower() in SupportedFormats.AUDIO_EXTENSIONS]
+    images = [f for f in files if f.suffix.lower() in SupportedFormats.IMAGE_EXTENSIONS]
+
+    audio = _find_tagged_file(song_dir, txt_data.get('AUDIO'), audios) or \
+        _find_tagged_file(song_dir, txt_data.get('MP3'), audios + videos)
+    if audio is None and audios:
+        preferred = [f for f in audios if not re.search(r'instrumental|karaoke|vocals|voz', f.name, re.IGNORECASE)]
+        audio = (preferred or audios)[0]
+
+    video = _find_tagged_file(song_dir, txt_data.get('VIDEO'), videos)
+    if video is None and videos:
+        video = max(videos, key=lambda f: f.stat().st_size)
+
+    cover = _find_tagged_file(song_dir, txt_data.get('COVER'), images)
+    if cover is None and images:
+        preferred = [f for f in images if re.search(r'cover|\[co\]', f.name, re.IGNORECASE)]
+        background = _find_tagged_file(song_dir, txt_data.get('BACKGROUND'), images)
+        others = [f for f in images if f != background]
+        cover = (preferred or others or images)[0]
+
+    if audio is None and video is not None:
+        audio = video
+    return audio, video, cover
+
+
+def adopt_legacy_cache(song_dir: Path, name_id: str, legacy_ids) -> None:
+    """Older versions named cached files with a different name_id (e.g. '&' kept). Reuse them
+    instead of converting again: they are copied (never moved) to the current name."""
+    for legacy_id in legacy_ids:
+        for suffix in naming.GENERATED_SUFFIXES:
+            if suffix in (naming.VXLA_SUFFIX, naming.VXLA_META_SUFFIX):
+                continue
+            old = song_dir / (legacy_id + suffix)
+            new = song_dir / (name_id + suffix)
+            if old.is_file() and not new.exists():
+                shutil.copy2(old, new)
+                logger.info(f"Reusing cached {old.name} as {new.name}")
+
+
+def _vxla_cache_params(txt_path: Path, output_format, pitch_method, ignore_medley, keep_accents, song_duration,
+                       vocal_isolation):
+    stat = txt_path.stat()
+    return {
+        'version': VXLA_GENERATOR_VERSION,
+        'format': output_format,
+        'pitch_correction': pitch_method,
+        'vocal_isolation': bool(vocal_isolation) if pitch_method == SLOW else False,
+        'no_medley': bool(ignore_medley),
+        'keep_accents': bool(keep_accents),
+        'txt': txt_path.name,
+        'txt_size': stat.st_size,
+        'txt_mtime': int(stat.st_mtime),
+        'duration': round(song_duration, 1),
+    }
+
+
+def _vxla_is_current(vxla_path: Path, meta_path: Path, params) -> bool:
+    if not vxla_path.exists() or not meta_path.exists():
+        return False
+    try:
+        with open(meta_path, 'r', encoding='utf-8') as f:
+            return json.load(f) == params
+    except (OSError, json.JSONDecodeError):
+        return False
+
+
+# ---------------------------------------------------------------------------
+# Conversion
+# ---------------------------------------------------------------------------
+
+def _copy_dlc_base_media(cfg, dlc_id):
+    include_dlc = bool(cfg.conversion_tweaks.dlc_songs.include)
+    source_json = str(cfg.conversion_tweaks.dlc_songs.songs_json_path) if not _is_blank(cfg.conversion_tweaks.dlc_songs.songs_json_path) else None
+    if not (include_dlc and source_json and os.path.exists(source_json)):
+        return
+    source_songs_dir = os.path.join(os.path.dirname(source_json), 'Songs')
+    if not os.path.exists(source_songs_dir):
+        return
+    dest_songs_dir = os.path.join(_output_dir, dlc_id, 'romfs', 'Songs')
+    logger.info(f"Copying DLC media files from {source_songs_dir} to {dest_songs_dir}...")
+    try:
+        os.makedirs(dest_songs_dir, exist_ok=True)
+        copied = 0
+        total_dirs = sum(1 for _ in os.scandir(source_songs_dir) if _.is_dir())
+        logger.info(f"Found {total_dirs} song folders in Base JSON directory. Starting copy (this may take a while)...")
+
+        for item in os.listdir(source_songs_dir):
+            _check_stop()
+            s_item = os.path.join(source_songs_dir, item)
+            d_item = os.path.join(dest_songs_dir, item)
+            if os.path.isdir(s_item):
+                shutil.copytree(s_item, d_item, dirs_exist_ok=True)
+                copied += 1
+                if copied % 10 == 0:
+                    logger.info(f"Copied {copied}/{total_dirs} base DLC songs...")
+
+        logger.info(f"Successfully copied all {copied} DLC media folders.")
+    except ConversionStopped:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to copy DLC media files: {e}")
+
+
+def _find_name_id_collisions(dirs_to_convert):
+    """Two folders with the same name_id would overwrite each other in the patch."""
+    owners = {}
+    duplicates = {}
+    for dir_name in dirs_to_convert:
+        name_id = naming.construct_name_id_from_directory_name(dir_name.rstrip('.'))
+        if name_id in owners:
+            duplicates[dir_name] = owners[name_id]
+        else:
+            owners[name_id] = dir_name
+    return duplicates
+
+
 def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None):
+    """Converts every song folder. Returns a summary {'ok': [...], 'skipped': [(dir, reason)],
+    'failed': [(dir, error)], 'stopped': bool}."""
     dlc_id = str(cfg.dlc.id)
     core_id = str(cfg.core.id) if cfg.core.id else None
     output_format = get_output_format(cfg)
@@ -640,48 +980,42 @@ def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None)
     vocal_isolation = getattr(cfg.conversion_tweaks, "vocal_isolation", False)
     ignore_medley = bool(cfg.conversion_tweaks.no_medley)
     ignore_video = bool(cfg.conversion_tweaks.still_video)
+    keep_accents = bool(getattr(cfg.conversion_tweaks, "keep_accents", True))
+    force_reconvert = bool(getattr(cfg.conversion_tweaks, "force_reconvert", False))
     # Map output_format to UltrastarToSingit OLD/NEW constants
     vxla_output_type = UltrastarToSingit.JSON if output_format == JSON_FORMAT else UltrastarToSingit.XML
 
     json_file_name = (dlc_json_name + '.json') if dlc_json_name else None
-    
-    # Copy DLC media files if requested
-    include_dlc = bool(cfg.conversion_tweaks.dlc_songs.include)
-    source_json = str(cfg.conversion_tweaks.dlc_songs.songs_json_path) if not _is_blank(cfg.conversion_tweaks.dlc_songs.songs_json_path) else None
-    if include_dlc and source_json and os.path.exists(source_json):
-        source_songs_dir = os.path.join(os.path.dirname(source_json), 'Songs')
-        if os.path.exists(source_songs_dir):
-            dest_songs_dir = os.path.join(_output_dir, dlc_id, 'romfs', 'Songs')
-            logger.info(f"Copying DLC media files from {source_songs_dir} to {dest_songs_dir}...")
-            try:
-                os.makedirs(dest_songs_dir, exist_ok=True)
-                copied = 0
-                total_dirs = sum(1 for _ in os.scandir(source_songs_dir) if _.is_dir())
-                logger.info(f"Found {total_dirs} song folders in Base JSON directory. Starting copy (this may take a while)...")
-                
-                for item in os.listdir(source_songs_dir):
-                    s_item = os.path.join(source_songs_dir, item)
-                    d_item = os.path.join(dest_songs_dir, item)
-                    if os.path.isdir(s_item):
-                        shutil.copytree(s_item, d_item, dirs_exist_ok=True)
-                        copied += 1
-                        if copied % 10 == 0:
-                            logger.info(f"Copied {copied}/{total_dirs} base DLC songs...")
-                            
-                logger.info(f"Successfully copied all {copied} DLC media folders.")
-            except Exception as e:
-                logger.error(f"Failed to copy DLC media files: {e}")
 
-    total_song_count = len(dirs_to_convert)
-    
-    import threading
-    completed_songs = 0
+    summary = {'ok': [], 'skipped': [], 'failed': [], 'stopped': False}
+    summary_lock = threading.Lock()
+
+    def report(kind, item):
+        with summary_lock:
+            summary[kind].append(item)
+
+    try:
+        _copy_dlc_base_media(cfg, dlc_id)
+    except ConversionStopped:
+        summary['stopped'] = True
+        return summary
+
+    collisions = _find_name_id_collisions(dirs_to_convert)
+    for dir_name, other in collisions.items():
+        reason = f"same ID as '{other}' (rename one of the folders)"
+        logger.error(f"Skipping '{dir_name}': {reason}")
+        report('skipped', (dir_name, reason))
+    dirs_to_convert = [d for d in dirs_to_convert if d not in collisions]
+
+    total_song_count = len(dirs_to_convert) + len(collisions)
+    completed_songs = len(collisions)
     progress_lock = threading.Lock()
+    if progress_callback and collisions:
+        progress_callback(completed_songs, total_song_count)
 
-    def _process_single_song(song_index, dir_long_name):
+    def _process_single_song(dir_long_name):
         nonlocal completed_songs
         if stop_event and stop_event.is_set():
-            logger.info("Conversion stopped by user.")
             with progress_lock:
                 completed_songs += 1
                 if progress_callback:
@@ -703,195 +1037,18 @@ def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None)
                 needs_rename = False
 
         try:
-            if ' - ' not in dir_long_name:
-                return
-
-            name_id = construct_name_id_from_directory_name(dir_long_name)
-            logger.info(name_id)
-
-            list_in_dir = Path(_input_dir) / dir_long_name
-            files_all = [os.fspath(x.name) for x in list_in_dir.iterdir()]
-            files_txt = [x for x in list_in_dir.iterdir() if x.suffix.lower() == SupportedFormats.TXT_EXTENSIONS]
-            files_avi = [x for x in list_in_dir.iterdir() if x.suffix.lower() in SupportedFormats.VIDEO_EXTENSIONS]
-            files_mp3 = [x for x in list_in_dir.iterdir() if x.suffix.lower() in SupportedFormats.AUDIO_EXTENSIONS]
-            files_jpg = [x for x in list_in_dir.iterdir() if x.suffix.lower() in SupportedFormats.IMAGE_EXTENSIONS]
-
-            output_video_file_name = name_id + '.mp4' if output_format == XML_FORMAT else name_id + '.bk2'
-            png_file_name = name_id + '.png'
-            png_in_game_file_name = name_id + '_InGameLoading.png'
-            png_long_file_name = name_id + '_long.png'
-            png_result_file_name = name_id + '_Result.png'
-            vxla_file_name = name_id + '.vxla'
-            ogg_file_name = name_id + '.ogg'
-            ogg_preview_file_name = name_id + '_preview.ogg'
-            xml_file_name = name_id + '_meta.xml'
-
-            # Getting info from the text file
-            if not files_txt:
-                logger.warning('No ultrastar text file found for ' + dir_long_name + ', skipping')
-                return
-
-            # some songs also have a duet txt file containing '[MULTI]' in its name, alphabetically we want the last one
-            txt_data = UltrastarToSingit.parse_file(files_txt[-1])
-            video_gap = 0
-            if 'VIDEOGAP' in txt_data:
-                # how many seconds the song is out of sync with the video
-                #  positive - video starts before the song
-                #  negative - video starts after the song
-                video_gap = float(txt_data['VIDEOGAP'].replace(',', '.'))
-
-            if files_avi and not ignore_video:
-                video_filename = txt_data.get('VIDEO', None)
-                file = None
-                if video_filename:
-                    video_path = list_in_dir / video_filename
-                    if video_path.exists():
-                        file = video_path
-                if not file:
-                    valid_videos = [f for f in files_avi if not f.name.endswith('_cover.mp4') and f.name != output_video_file_name]
-                    if valid_videos:
-                        valid_videos.sort(key=lambda x: x.stat().st_size, reverse=True)
-                        file = valid_videos[0]
-                    else:
-                        file = files_avi[0]
-                duration = get_duration(os.fspath(file))
-                original_size_bytes = file.stat().st_size
-                original_size_mb = original_size_bytes / (1024 * 1024)
-                target_bitrate_kbps = int((original_size_mb * 8192) / duration)
-
-                if output_video_file_name not in files_all:
-                    if output_format == XML_FORMAT:
-                        if original_size_mb > target_size_mb:
-                            target_bitrate_kbps = int((target_size_mb * 8192) / duration)
-                        create_video(file, list_in_dir, output_video_file_name, target_bitrate_kbps)
-                    elif output_format == JSON_FORMAT:
-                        if is_video_still_image(file):
-                            quality = 0.1
-                        else:
-                            quality = None
-                        logger.info(str(file))
-                        temp_video_name = name_id + '.avi'
-                        temp_video_file = list_in_dir / temp_video_name
-                        if file.suffix.lower() in ('.avi', '.divx', '.mp4', '.flv', '.mkv', '.webm'):
-                            if not temp_video_file.exists():
-                                create_video(file, list_in_dir, temp_video_name, target_bitrate_kbps)
-
-                            temp_size_bytes = temp_video_file.stat().st_size
-                            temp_size_mb = temp_size_bytes / (1024 * 1024)
-                            if temp_size_mb <= target_size_mb:
-                                compression_percentage = 100
-                            else:
-                                percentage = (target_size_mb / temp_size_mb) * 100
-                                compression_percentage = max(1, min(200, int(round(percentage))))
-
-                            create_video_bink(os.fspath(temp_video_file), list_in_dir, output_video_file_name, compression_percentage, quality)
-
-            if ogg_file_name not in files_all:
-                create_audio(files_avi, files_mp3, list_in_dir, ogg_file_name, video_gap)
-
-            if ogg_preview_file_name not in files_all:
-                create_audio_preview(files_avi, files_mp3, list_in_dir, ogg_preview_file_name, txt_data)
-
-            if files_jpg and png_file_name not in files_all:
-                create_cover(files_jpg, list_in_dir, png_file_name)
-            elif files_avi and png_file_name not in files_all:
-                file = files_avi[0]
-                subprocess.run([_ffmpeg_path, '-ss', '00:00:15', '-i', os.fspath(file), '-vframes', '1', '-vf', 'scale=256:256:force_original_aspect_ratio=increase,crop=256:256', os.fspath(list_in_dir / png_file_name)])
-                logger.info('created cover from video: ' + png_file_name)
-
-            if files_jpg and png_long_file_name not in files_all:
-                create_cover_long(files_jpg, list_in_dir, png_long_file_name)
-            elif files_avi and png_long_file_name not in files_all:
-                file = files_avi[0]
-                subprocess.run([_ffmpeg_path, '-ss', '00:00:15', '-i', os.fspath(file), '-vframes', '1', '-vf', 'scale=308:424:force_original_aspect_ratio=increase,crop=308:424', os.fspath(list_in_dir / png_long_file_name)])
-
-            if files_jpg and png_in_game_file_name not in files_all:
-                create_in_game_loading_picture(files_jpg, list_in_dir, png_in_game_file_name)
-            elif files_avi and png_in_game_file_name not in files_all:
-                file = files_avi[0]
-                subprocess.run([_ffmpeg_path, '-ss', '00:00:15', '-i', os.fspath(file), '-vframes', '1', '-vf', 'scale=512:256:force_original_aspect_ratio=increase,crop=512:256', os.fspath(list_in_dir / png_in_game_file_name)])
-
-            song_duration = get_duration(os.fspath(list_in_dir / ogg_file_name))
-
-            if not files_avi or ignore_video or not os.path.exists(os.path.join(list_in_dir / output_video_file_name)):
-                # If no video file was present in the song's directory, or if "RAD" Video Tools failed to convert it,
-                # create a still image video from the cover image
-                output_video_file_name_fallback = name_id + '_cover.avi'
-                if not os.path.exists(list_in_dir / output_video_file_name_fallback):
-                    create_still_video_from_cover_image(files_jpg, files_txt, list_in_dir, output_video_file_name_fallback, song_duration, txt_data)
-                else:
-                    logger.info(f"Static video already exists, skipping generation: {output_video_file_name_fallback}")
-
-                if output_format == JSON_FORMAT:
-                    if not os.path.exists(list_in_dir / output_video_file_name):
-                        create_video_bink(os.fspath(list_in_dir / output_video_file_name_fallback), list_in_dir, output_video_file_name, None, quality=0.1)
-                elif output_format == XML_FORMAT:
-                    if ignore_video or not os.path.exists(list_in_dir / output_video_file_name):
-                        shutil.copy2(list_in_dir / output_video_file_name_fallback, list_in_dir / output_video_file_name)
-
-            # generating vxla file
-            vxla_path = list_in_dir / vxla_file_name
-            txt_path = files_txt[-1]
-            needs_vxla_update = True
-            
-            if vxla_path.exists():
-                force_reconvert = getattr(cfg.conversion_tweaks, "force_reconvert", False)
-                if not force_reconvert and vxla_path.stat().st_mtime > txt_path.stat().st_mtime:
-                    needs_vxla_update = False
-                    
-            if needs_vxla_update:
-                if pitch_correction_method == SLOW:
-                    pitch_corr = PitchAnalyzer.get_pitch_correction_suggestion_slow(txt_data, os.fspath(list_in_dir / ogg_file_name), min_pitch=PITCH_MIN, max_pitch=PITCH_MAX, use_demucs=vocal_isolation)
-                else:
-                    pitch_corr = PitchAnalyzer.get_pitch_correction_suggestion_fast(txt_data, min_pitch=PITCH_MIN, max_pitch=PITCH_MAX)
-                UltrastarToSingit.main(txt_path, song_duration, pitch_corr, s=name_id, directory=list_in_dir, output_type=vxla_output_type, ignore_medley=ignore_medley)
-            else:
-                logger.info(f"Using cached JSON/XML for {dir_long_name} (no changes to .txt detected).")
-
-            # Validate that all required converted files were created successfully
-            required = get_required_files(name_id, output_format, list_in_dir)
-            missing = validate_converted_files(required)
-            if missing:
-                logger.error(f"Skipping '{dir_long_name}': missing converted files: {', '.join(missing)}")
-                return
-
-            # Handle name.txt
-            add_data_to_name_txt(dlc_id, name_id, output_format, dlc_json_name, cfg)
-
-            # Handle SongsDLC.tsv for XML format, or json file for JSON format
-            handle_xml_or_json(dlc_id, core_id, json_file_name, list_in_dir, txt_data,
-                               name_id, output_format, xml_file_name, cfg)
-
-            # creating the folder structure if not already present
-            base_dlc_dir = os.path.join(_output_dir, dlc_id)
-            os.makedirs(os.path.join(base_dlc_dir, 'romfs/Songs/audio'), exist_ok=True)
-            os.makedirs(os.path.join(base_dlc_dir, 'romfs/Songs/audio_preview'), exist_ok=True)
-            os.makedirs(os.path.join(base_dlc_dir, 'romfs/Songs/covers'), exist_ok=True)
-            os.makedirs(os.path.join(base_dlc_dir, 'romfs/Songs/videos'), exist_ok=True)
-            os.makedirs(os.path.join(base_dlc_dir, 'romfs/Songs/vxla'), exist_ok=True)
-
-            # placing all files into the correct folders
-            shutil.copy2(os.fspath(list_in_dir / ogg_file_name), os.path.join(base_dlc_dir, 'romfs/Songs/audio'))
-            shutil.copy2(os.fspath(list_in_dir / ogg_preview_file_name), os.path.join(base_dlc_dir, 'romfs/Songs/audio_preview'))
-            shutil.copy2(os.fspath(list_in_dir / png_file_name), os.path.join(base_dlc_dir, 'romfs/Songs/covers'))
-            shutil.copy2(os.fspath(list_in_dir / vxla_file_name), os.path.join(base_dlc_dir, 'romfs/Songs/vxla'))
-            shutil.copy2(os.fspath(list_in_dir / output_video_file_name), os.path.join(base_dlc_dir, 'romfs/Songs/videos'))
-
-            if output_format == XML_FORMAT:
-                os.makedirs(os.path.join(base_dlc_dir, 'romfs/Songs/backgrounds/InGameLoading'), exist_ok=True)
-                os.makedirs(os.path.join(base_dlc_dir, 'romfs/Songs/backgrounds/Result'), exist_ok=True)
-                os.makedirs(os.path.join(base_dlc_dir, 'romfs/Songs/covers_duet'), exist_ok=True)
-                os.makedirs(os.path.join(base_dlc_dir, 'romfs/Songs/covers_long'), exist_ok=True)
-
-                shutil.copy2(os.fspath(list_in_dir / png_in_game_file_name), os.path.join(base_dlc_dir, 'romfs/Songs/backgrounds/InGameLoading'))
-                shutil.copy2(os.fspath(list_in_dir / png_in_game_file_name), os.path.join(base_dlc_dir, 'romfs/Songs/backgrounds/Result', png_result_file_name))
-                shutil.copy2(os.fspath(list_in_dir / png_long_file_name), os.path.join(base_dlc_dir, 'romfs/Songs/covers_long'))
-                shutil.copy2(os.fspath(list_in_dir / xml_file_name), os.path.join(base_dlc_dir, 'romfs'))
-
+            _convert_song(dir_long_name)
+            report('ok', original_dir_long_name)
+        except ConversionStopped:
+            summary['stopped'] = True
+            logger.info(f"Stopped while converting '{original_dir_long_name}' (finished files are kept in the cache).")
+        except SongError as e:
+            logger.error(f"Skipping '{original_dir_long_name}': {e}")
+            report('skipped', (original_dir_long_name, str(e)))
         except Exception as e:
-            logger.exception(f"Error with directory {dir_long_name}")
-            logger.error(f"Error with directory {dir_long_name}: {e}")
-            return
+            logger.exception(f"Error with directory {original_dir_long_name}")
+            logger.error(f"Error with directory {original_dir_long_name}: {e}")
+            report('failed', (original_dir_long_name, str(e)))
         finally:
             if needs_rename:
                 try:
@@ -901,40 +1058,241 @@ def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None)
                         current_path.rename(original_path)
                 except Exception as e:
                     logger.error(f"Failed to restore original folder name {original_dir_long_name}: {e}")
-            
+
             with progress_lock:
                 completed_songs += 1
                 if progress_callback:
                     progress_callback(completed_songs, total_song_count)
 
+    def _convert_song(dir_long_name):
+        name_id = naming.construct_name_id_from_directory_name(dir_long_name)
+        legacy_ids = naming.legacy_name_ids(dir_long_name)
+        logger.info(f"{dir_long_name} -> {name_id}")
 
+        list_in_dir = Path(_input_dir) / dir_long_name
+        adopt_legacy_cache(list_in_dir, name_id, legacy_ids)
 
-    is_multithreaded = False
-    max_workers = 1
-    
-    # Check if multithreading is enabled in tweaks
-    if hasattr(cfg.conversion_tweaks, "multithreading"):
-        is_multithreaded = bool(cfg.conversion_tweaks.multithreading)
-    elif "multithreading" in cfg.conversion_tweaks:
-        is_multithreaded = bool(cfg.conversion_tweaks["multithreading"])
-        
-    if is_multithreaded:
-        if hasattr(cfg.conversion_tweaks, "multithreading_workers"):
-            max_workers = int(cfg.conversion_tweaks.multithreading_workers)
-        elif "multithreading_workers" in cfg.conversion_tweaks:
-            max_workers = int(cfg.conversion_tweaks["multithreading_workers"])
+        output_video_file_name = name_id + ('.mp4' if output_format == XML_FORMAT else '.bk2')
+        png_file_name = name_id + '.png'
+        png_in_game_file_name = name_id + '_InGameLoading.png'
+        png_long_file_name = name_id + '_long.png'
+        png_result_file_name = name_id + '_Result.png'
+        vxla_file_name = name_id + '.vxla'
+        ogg_file_name = name_id + '.ogg'
+        ogg_preview_file_name = name_id + '_preview.ogg'
+        xml_file_name = name_id + '_meta.xml'
+
+        # Getting info from the text file
+        txt_files = [x for x in list_in_dir.iterdir() if x.is_file() and x.suffix.lower() == SupportedFormats.TXT_EXTENSIONS]
+        txt_path = choose_txt_file(txt_files)
+        if txt_path is None:
+            raise SongError("no UltraStar .txt file found")
+        txt_data = UltrastarToSingit.parse_file(txt_path)
+        if 'BPM' not in txt_data:
+            raise SongError(f"{txt_path.name} has no #BPM tag")
+
+        name_ids = [name_id] + legacy_ids
+        audio_source, video_source, cover_source = resolve_song_sources(list_in_dir, txt_data, name_ids)
+
+        video_gap = 0.0
+        if 'VIDEOGAP' in txt_data:
+            # how many seconds the song is out of sync with the video
+            #  positive - video starts before the song
+            #  negative - video starts after the song
+            try:
+                video_gap = float(txt_data['VIDEOGAP'].replace(',', '.'))
+            except ValueError:
+                logger.warning(f"Ignoring invalid #VIDEOGAP:{txt_data['VIDEOGAP']}")
+
+        # --- audio (needed first: its duration drives the static video and the vxla) ---
+        ogg_path = list_in_dir / ogg_file_name
+        if not ogg_path.exists():
+            if audio_source is None:
+                raise SongError("no audio file found (#MP3/#AUDIO tag or any audio file)")
+            if not create_audio(audio_source, list_in_dir, ogg_file_name, video_gap):
+                raise SongError("audio conversion failed")
+        song_duration = get_duration(ogg_path)
+
+        if not (list_in_dir / ogg_preview_file_name).exists():
+            # the preview is cut from the original audio (the converted one is shifted by VIDEOGAP)
+            create_audio_preview(audio_source or ogg_path, list_in_dir, ogg_preview_file_name, txt_data)
+
+        # no image at all: try a frame of the video, else a placeholder with artist and title
+        if cover_source is None:
+            auto_cover = list_in_dir / (name_id + naming.AUTO_COVER_SUFFIX)
+            if not auto_cover.exists():
+                readable_video = video_source is not None and video_source.suffix.lower() != '.bk2'
+                if not (readable_video and create_cover(video_source, list_in_dir, auto_cover.name, from_video=True)):
+                    title, artist = txt_data.get('TITLE', dir_long_name), txt_data.get('ARTIST', '')
+                    create_placeholder_cover(list_in_dir, auto_cover.name, artist, title)
+            cover_source = auto_cover
+
+        # --- video ---
+        output_video_path = list_in_dir / output_video_file_name
+        video_for_patch = output_video_path
+        real_video = video_source
+        if real_video is not None and output_format == XML_FORMAT and real_video.suffix.lower() == '.bk2':
+            real_video = None  # ffmpeg can't decode Bink 2: XML games get the static video
+
+        if real_video is not None and not ignore_video and not output_video_path.exists():
+            _check_stop()
+            duration = get_duration(real_video)
+            original_size_mb = real_video.stat().st_size / (1024 * 1024)
+            original_bitrate_kbps = int((original_size_mb * 8192) / duration) if duration > 0 else 2000
+            limited_bitrate_kbps = int((target_size_mb * 8192) / duration) if duration > 0 else 2000
+            target_bitrate_kbps = max(200, min(original_bitrate_kbps, limited_bitrate_kbps))
+
+            if output_format == XML_FORMAT:
+                create_video(real_video, list_in_dir, output_video_file_name, target_bitrate_kbps)
+            elif real_video.suffix.lower() == '.bk2':
+                # already in the game's format
+                shutil.copy2(real_video, output_video_path)
+                logger.info(f"Using {real_video.name} as {output_video_file_name}")
+            else:
+                quality = 0.1 if is_video_still_image(real_video) else None
+                temp_video_file = list_in_dir / (name_id + naming.VIDEO_INTERMEDIATE_SUFFIX)
+                if not temp_video_file.exists():
+                    create_video(real_video, list_in_dir, temp_video_file.name, target_bitrate_kbps)
+                if temp_video_file.exists():
+                    create_video_bink(temp_video_file, list_in_dir, output_video_file_name, quality, duration)
+
+        if output_format == XML_FORMAT and output_video_path.exists() and 'avi' in get_container_format(output_video_path):
+            # created by a previous version: an AVI named .mp4 is not played by the game
+            logger.warning(f"{output_video_file_name} is an AVI file, remuxing it to MP4")
+            fixed = list_in_dir / (name_id + '.remux.mp4')
+            if _ffmpeg(['-i', os.fspath(output_video_path), '-c', 'copy', '-movflags', '+faststart'], fixed):
+                os.replace(fixed, output_video_path)
+
+        if output_format == JSON_FORMAT:
+            if ignore_video and output_video_path.exists():
+                logger.info(f"Still video requested but {output_video_file_name} is already cached, using it")
+            elif not output_video_path.exists():
+                # no video, or binkc failed: static video from the cover image
+                still_file = list_in_dir / (name_id + naming.STILL_VIDEO_SUFFIX)
+                if not still_file.exists():
+                    create_still_video_from_cover_image(cover_source, list_in_dir, still_file.name, song_duration)
+                else:
+                    logger.info(f"Static video already exists, skipping generation: {still_file.name}")
+                if still_file.exists():
+                    create_video_bink(still_file, list_in_dir, output_video_file_name, quality=0.1,
+                                      duration=song_duration)
         else:
-            max_workers = 3
-            
+            if ignore_video or not output_video_path.exists():
+                still_file = list_in_dir / (name_id + naming.STILL_VIDEO_MP4_SUFFIX)
+                if still_file.exists() and 'avi' in get_container_format(still_file):
+                    still_file.unlink()  # static video made by a previous version, cheap to rebuild
+                if not still_file.exists():
+                    create_still_video_from_cover_image(cover_source, list_in_dir, still_file.name, song_duration)
+                if still_file.exists():
+                    if not output_video_path.exists():
+                        shutil.copy2(still_file, output_video_path)
+                    # with "still video" the real cached video is kept, only the patch gets the static one
+                    video_for_patch = still_file
+
+        # --- images ---
+        if not (list_in_dir / png_file_name).exists():
+            create_cover(cover_source, list_in_dir, png_file_name)
+        if output_format == XML_FORMAT:
+            if not (list_in_dir / png_long_file_name).exists():
+                create_cover_long(cover_source, list_in_dir, png_long_file_name)
+            if not (list_in_dir / png_in_game_file_name).exists():
+                create_in_game_loading_picture(cover_source, list_in_dir, png_in_game_file_name)
+
+        # --- vxla ---
+        vxla_path = list_in_dir / vxla_file_name
+        meta_path = list_in_dir / (name_id + naming.VXLA_META_SUFFIX)
+        params = _vxla_cache_params(txt_path, output_format, pitch_correction_method, ignore_medley, keep_accents,
+                                    song_duration, vocal_isolation)
+        if force_reconvert or not _vxla_is_current(vxla_path, meta_path, params):
+            _check_stop()
+            if pitch_correction_method == SLOW:
+                pitch_corr = PitchAnalyzer.get_pitch_correction_suggestion_slow(txt_data, os.fspath(ogg_path), min_pitch=PITCH_MIN, max_pitch=PITCH_MAX, use_demucs=vocal_isolation)
+            else:
+                pitch_corr = PitchAnalyzer.get_pitch_correction_suggestion_fast(txt_data, min_pitch=PITCH_MIN, max_pitch=PITCH_MAX)
+            UltrastarToSingit.main(txt_path, song_duration, pitch_corr, s=name_id, directory=list_in_dir,
+                                   output_type=vxla_output_type, ignore_medley=ignore_medley,
+                                   keep_accents=keep_accents)
+            with open(meta_path, 'w', encoding='utf-8') as f:
+                json.dump(params, f, indent=1)
+        else:
+            logger.info(f"Using cached vxla for {dir_long_name} (no changes detected).")
+
+        # Validate that all required converted files were created successfully
+        required = get_required_files(name_id, output_format, list_in_dir)
+        missing = validate_converted_files(required)
+        if missing:
+            raise SongError(f"missing converted files: {', '.join(missing)}")
+
+        # placing all files into the correct folders, BEFORE registering the song: a song listed in
+        # name.txt / the JSON without its files can hang the game
+        base_dlc_dir = os.path.join(_output_dir, dlc_id)
+        songs_dir = os.path.join(base_dlc_dir, 'romfs', 'Songs')
+        copies = [
+            (list_in_dir / ogg_file_name, os.path.join(songs_dir, 'audio', ogg_file_name)),
+            (list_in_dir / ogg_preview_file_name, os.path.join(songs_dir, 'audio_preview', ogg_preview_file_name)),
+            (list_in_dir / png_file_name, os.path.join(songs_dir, 'covers', png_file_name)),
+            (list_in_dir / vxla_file_name, os.path.join(songs_dir, 'vxla', vxla_file_name)),
+            (video_for_patch, os.path.join(songs_dir, 'videos', output_video_file_name)),
+        ]
+        if output_format == XML_FORMAT:
+            os.makedirs(os.path.join(songs_dir, 'covers_duet'), exist_ok=True)
+            copies += [
+                (list_in_dir / png_in_game_file_name, os.path.join(songs_dir, 'backgrounds', 'InGameLoading', png_in_game_file_name)),
+                (list_in_dir / png_in_game_file_name, os.path.join(songs_dir, 'backgrounds', 'Result', png_result_file_name)),
+                (list_in_dir / png_long_file_name, os.path.join(songs_dir, 'covers_long', png_long_file_name)),
+            ]
+        copied = []
+        try:
+            for source, destination in copies:
+                os.makedirs(os.path.dirname(destination), exist_ok=True)
+                shutil.copy2(os.fspath(source), destination)
+                copied.append(destination)
+
+            # Handle name.txt, then SongsDLC.tsv + meta xml (XML format) or the json file (JSON format)
+            handle_xml_or_json(dlc_id, core_id, json_file_name, list_in_dir, txt_data,
+                               name_id, output_format, xml_file_name, cfg)
+            if output_format == XML_FORMAT:
+                shutil.copy2(os.fspath(list_in_dir / xml_file_name), os.path.join(base_dlc_dir, 'romfs'))
+            add_data_to_name_txt(dlc_id, name_id, output_format, dlc_json_name, cfg)
+        except Exception:
+            # don't leave half a song in the patch (these are copies, the cache is untouched)
+            for destination in copied:
+                try:
+                    os.remove(destination)
+                except OSError:
+                    pass
+            raise
+
+    is_multithreaded = bool(getattr(cfg.conversion_tweaks, "multithreading", False))
+    max_workers = 1
+    if is_multithreaded:
+        max_workers = int(getattr(cfg.conversion_tweaks, "multithreading_workers", None) or 3)
+
     if max_workers > 1:
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            for idx, d_name in enumerate(dirs_to_convert):
-                executor.submit(_process_single_song, idx, d_name)
+            for d_name in dirs_to_convert:
+                executor.submit(_process_single_song, d_name)
     else:
-        for idx, d_name in enumerate(dirs_to_convert):
-            _process_single_song(idx, d_name)
+        for d_name in dirs_to_convert:
+            _process_single_song(d_name)
+
+    if stop_event and stop_event.is_set():
+        summary['stopped'] = True
+    return summary
+
+
+def log_summary(summary) -> None:
+    logger.info(f"Converted: {len(summary['ok'])}, skipped: {len(summary['skipped'])}, "
+                f"failed: {len(summary['failed'])}{' (stopped by user)' if summary['stopped'] else ''}")
+    for dir_name, reason in summary['skipped']:
+        logger.info(f"  skipped  {dir_name}: {reason}")
+    for dir_name, error in summary['failed']:
+        logger.info(f"  FAILED   {dir_name}: {error}")
+
 
 def main(cfg=None, stop_event=None, progress_callback=None):
+    global _stop_event
+    _stop_event = stop_event
 
     if cfg is None:
         cfg = load_config()
@@ -950,13 +1308,16 @@ def main(cfg=None, stop_event=None, progress_callback=None):
     ignore_medley = bool(cfg.conversion_tweaks.no_medley)
     ignore_video = bool(cfg.conversion_tweaks.still_video)
 
-    delete_output_folder(cfg)
     dirs_to_convert = find_folders_to_convert()
+    delete_output_folder(cfg, dirs_to_convert)
 
     logger.info('Beginning conversion - format: ' + output_format.upper())
+    logger.info('Output folder: ' + _output_dir)
     logger.info('Pitch correction method: ' + pitch_method)
     if ignore_medley:
         logger.info('MODE: Ignoring Medley tags (forcing Genius/Auto detection)')
     if ignore_video:
         logger.info('MODE: Ignoring original video (forcing still image video)')
-    convert_files(dirs_to_convert, cfg, stop_event=stop_event, progress_callback=progress_callback)
+    summary = convert_files(dirs_to_convert, cfg, stop_event=stop_event, progress_callback=progress_callback)
+    log_summary(summary)
+    return summary
