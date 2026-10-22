@@ -7,26 +7,75 @@ from ConfigLoader import plugins_dir
 
 logger = logging.getLogger(__name__)
 
+# Tag written by the Let's Sing → UltraStar extractors (tools/) with the exact shift that turns the
+# txt pitches back into the game's original ones, e.g. "#LETSSINGPITCHOFFSET:36"
+PITCH_OFFSET_TAG = 'LETSSINGPITCHOFFSET'
+
+# Usual shift for UltraStar files (0 = C4); used to break ties between equally good octaves
+DEFAULT_SHIFT = 48
+
+_HAS_SLOW_DEPS = None
+
+
 def _slow_deps_available() -> bool:
+    """Imported lazily: TensorFlow takes seconds to load and is only needed by the slow method."""
+    global _HAS_SLOW_DEPS
+    if _HAS_SLOW_DEPS is not None:
+        return _HAS_SLOW_DEPS
     plugins = plugins_dir()
     if plugins.is_dir() and str(plugins) not in sys.path:
         sys.path.insert(0, str(plugins))
     try:
         import numpy, librosa, crepe
-        return True
+        _HAS_SLOW_DEPS = True
     except ImportError as ie:
         logger.error(f"Slow pitch correction dependencies not available: {ie}")
-        return False
+        _HAS_SLOW_DEPS = False
+    return _HAS_SLOW_DEPS
 
-_HAS_SLOW_DEPS = _slow_deps_available()
+
+def get_explicit_pitch_offset(txt_data):
+    value = txt_data.get(PITCH_OFFSET_TAG)
+    if value is None:
+        return None
+    try:
+        return int(str(value).strip())
+    except ValueError:
+        logger.warning(f"Ignoring invalid #{PITCH_OFFSET_TAG}:{value}")
+        return None
+
+
+def choose_octave_shift(pitches, min_pitch, max_pitch, preferred_shift):
+    """Multiple of 12 that leaves the fewest notes outside [min_pitch, max_pitch].
+
+    Shifting by whole octaves keeps every note on its real pitch class, so scoring still matches
+    the singer; ties are resolved by the shift closest to preferred_shift.
+    """
+    best_shift, best_key = 0, None
+    for k in range(-4, 9):
+        shift = 12 * k
+        outside = sum(1 for p in pitches if p + shift < min_pitch or p + shift > max_pitch)
+        key = (outside, abs(shift - preferred_shift))
+        if best_key is None or key < best_key:
+            best_shift, best_key = shift, key
+    return best_shift
+
 
 def get_pitch_correction_suggestion_slow(txt_data, audio_file, min_pitch, max_pitch, use_demucs=False):
-    if not _HAS_SLOW_DEPS:
+    explicit = get_explicit_pitch_offset(txt_data)
+    if explicit is not None:
+        logger.info(f"Pitch correction from #{PITCH_OFFSET_TAG}: {explicit}")
+        return explicit
+
+    if not _slow_deps_available():
         logger.warning("Slow pitch correction unavailable (missing numpy/librosa/crepe). "
                        "Falling back to fast method.")
         return get_pitch_correction_suggestion_fast(txt_data, min_pitch, max_pitch)
 
     pitch_from_txt = get_txt_pitch_values(txt_data)
+    if pitch_from_txt['count'] == 0:
+        logger.info("No sung notes found, suggested pitch correction: 0")
+        return 0
 
     if min_pitch < pitch_from_txt['min'] and max_pitch > pitch_from_txt['max']:
         logger.info("Suggested pitch correction: 0")
@@ -38,22 +87,22 @@ def get_pitch_correction_suggestion_slow(txt_data, audio_file, min_pitch, max_pi
             import subprocess
             import os
             from pathlib import Path
-            
+
             audio_path = Path(audio_file)
             out_dir = audio_path.parent / "demucs_out"
-            
+
             # Run demucs with two stems (vocals/no_vocals) on fast model
             cmd = [
-                sys.executable, "-m", "demucs", 
-                "--two-stems", "vocals", 
-                "-n", "htdemucs_ft", 
+                sys.executable, "-m", "demucs",
+                "--two-stems", "vocals",
+                "-n", "htdemucs_ft",
                 "-o", str(out_dir),
                 "-d", "cpu",
                 str(audio_path)
             ]
-            
+
             subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            
+
             # The output will be in demucs_out/htdemucs_ft/<songname>/vocals.wav
             vocal_path = out_dir / "htdemucs_ft" / audio_path.stem / "vocals.wav"
             if vocal_path.exists():
@@ -69,34 +118,36 @@ def get_pitch_correction_suggestion_slow(txt_data, audio_file, min_pitch, max_pi
 
     logger.info(f"Expected pitch range (from .txt): {pitch_from_txt}")
     logger.info(f"Actual pitch range (from audio): {pitch_from_audio}")
-    logger.info(f"Suggested pitch correction: {pitch_from_audio['median'] - pitch_from_txt['median'] if pitch_from_audio else 0}")
+    if not pitch_from_audio:
+        return get_pitch_correction_suggestion_fast(txt_data, min_pitch, max_pitch)
 
-    return pitch_from_audio['median'] - pitch_from_txt['median'] if pitch_from_audio else 0
+    # the measured difference is rounded to whole octaves, a non-octave shift would transpose the song
+    measured = pitch_from_audio['median'] - pitch_from_txt['median']
+    preferred = 12 * round(measured / 12)
+    pitch_corr = choose_octave_shift(pitch_from_txt['all'], min_pitch, max_pitch, preferred)
+    logger.info(f"Suggested pitch correction: {pitch_corr} (measured {measured})")
+    return pitch_corr
+
 
 def get_txt_pitch_values(txt_data):
-    total_pitch = 0
-    note_count = 0
     all_pitches = []
     for note in txt_data["notes"]:
-        if note[0] == ":" or note[0] == "*":
+        if note and (note[0] == ":" or note[0] == "*"):
             try:
-                pitch = int(note[3])
-                total_pitch += pitch
-                note_count += 1
-                all_pitches.append(pitch)
+                all_pitches.append(int(note[3]))
             except (ValueError, IndexError):
                 continue
-    average_pitch = int(round(total_pitch / note_count))
-    median_pitch = int(round(statistics.median_grouped(all_pitches) if all_pitches else 0))
-    min_pitch = min(all_pitches) if all_pitches else 0
-    max_pitch = max(all_pitches) if all_pitches else 0
-    pitch_from_txt = {
-        'average': average_pitch,
-        'min': min_pitch,
-        'max': max_pitch,
-        'median': median_pitch
+    if not all_pitches:
+        return {'average': 0, 'min': 0, 'max': 0, 'median': 0, 'count': 0, 'all': []}
+    return {
+        'average': int(round(statistics.mean(all_pitches))),
+        'min': min(all_pitches),
+        'max': max(all_pitches),
+        'median': int(round(statistics.median_grouped(all_pitches))),
+        'count': len(all_pitches),
+        'all': all_pitches,
     }
-    return pitch_from_txt
+
 
 def get_audio_pitch_values(audio_file):
     pitch_data = analyze_pitch_from_audio(audio_file)
@@ -111,6 +162,7 @@ def get_audio_pitch_values(audio_file):
         'max': int(round(max(valid_notes))),
         'median': int(round(statistics.median_grouped(valid_notes)))
     }
+
 
 def analyze_pitch_from_audio(audio_file):
     import numpy
@@ -129,24 +181,21 @@ def analyze_pitch_from_audio(audio_file):
         'confidence': confidence
     }
 
-def get_pitch_correction_suggestion_fast(txt_data, min_pitch, max_pitch):
-    pitch_from_txt = get_txt_pitch_values(txt_data)
 
-    required_corr = 0
-    if 40 <= pitch_from_txt['average'] <= 80:
-        logger.info("Suggested pitch correction: 0")
+def get_pitch_correction_suggestion_fast(txt_data, min_pitch, max_pitch):
+    explicit = get_explicit_pitch_offset(txt_data)
+    if explicit is not None:
+        logger.info(f"Pitch correction from #{PITCH_OFFSET_TAG}: {explicit}")
+        return explicit
+
+    pitch_from_txt = get_txt_pitch_values(txt_data)
+    if pitch_from_txt['count'] == 0:
+        logger.info("No sung notes found, suggested pitch correction: 0")
         return 0
-    elif pitch_from_txt['max'] > 33:
-        s_max = max_pitch - pitch_from_txt['max']
-        required_corr = max(required_corr, s_max)
-    elif pitch_from_txt['min'] < -5:
-        s_min = min_pitch - pitch_from_txt['min']
-        required_corr = max(required_corr, s_min)
-    if required_corr > 0:
-        pitch_corr = required_corr
-    else:
-        pitch_corr = 48
+
+    # files whose pitches already look like the game's range are left where they are
+    preferred = 0 if 40 <= pitch_from_txt['median'] <= 80 else DEFAULT_SHIFT
+    pitch_corr = choose_octave_shift(pitch_from_txt['all'], min_pitch, max_pitch, preferred)
 
     logger.info(f"Suggested pitch correction: {pitch_corr}")
-
     return pitch_corr
