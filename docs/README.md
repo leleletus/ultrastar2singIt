@@ -1,6 +1,6 @@
 # Documentación técnica — Let's Sing UltraStar Converter
 
-Documentación interna del fork (rama `linux-wine-support`). Estado auditado: commit `4e1cb35` (2026-10-05).
+Documentación interna del fork (rama `linux-wine-support`). Estado auditado: commit `4e1cb35` (2026-10-05). Arreglos posteriores: ver `05_BITACORA.md`.
 Fecha de la auditoría: 2026-10-21.
 
 | Documento | Contenido |
@@ -11,6 +11,7 @@ Fecha de la auditoría: 2026-10-21.
 | [04_REGRESIONES.md](04_REGRESIONES.md) | Regresiones atribuidas a commits concretos (vía `git blame` / comparación con `upstream/main`) |
 | [05_BITACORA.md](05_BITACORA.md) | Bitácora: historia del proyecto por fases según git y entradas de trabajo |
 | [06_BACKLOG_Y_MEJORAS.md](06_BACKLOG_Y_MEJORAS.md) | Backlog priorizado, mejoras de la interfaz gráfica, plan de trabajo por fases |
+| [07_CANCIONES_PROBLEMA.md](07_CANCIONES_PROBLEMA.md) | Canciones reportadas con problemas: causa probable, arreglo que la cubre y qué verificar |
 
 ## Convenciones
 

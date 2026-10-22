@@ -55,6 +55,21 @@
 - Pendiente de decidir con el responsable: orden de ataque (ver plan en `06_BACKLOG_Y_MEJORAS.md`), si se suben los 4 commits locales
   antes de empezar, y qué hacer con los scripts sueltos de la raíz.
 
+### 2026-10-21 (2) — Primera tanda de arreglos
+- Directivas del responsable: **nunca borrar ni invalidar los `.bk2`** (días de codificación); confirmar antes de cualquier
+  borrado; "IA" solo para las funciones de IA del programa (voz, tonos, notas largas).
+- Los 4 commits locales sin subir se conservan (aportan el arreglo de Wine y de los IDs que colgaban la Switch); sus
+  regresiones se corrigen encima.
+- Commits: `cd87f8d` letras/codificación, `8426e7e` tono por octavas, `30669e3` integridad del parche y protección de videos,
+  `7fc2657` interfaz, `27f8a17` herramientas de extracción, `cd77032` .pyc, `b779bc6` Recover cache.
+- Bug nuevo encontrado y cerrado: **B-46** (las letras con acentos se borraban). Explica los problemas del francés.
+- Pruebas de punta a punta en una carpeta temporal con copias: JSON (con Bink real vía Wine) y XML; segunda ejecución sin
+  ninguna recodificación (`.bk2` con el mismo mtime); rescate de `.bk2` huérfanos antes de limpiar la salida; ida y vuelta
+  vxla → txt → vxla con 0 diferencias de tono; prueba de la GUI sin pantalla (validación, Clear cache con y sin
+  confirmación, orden de la tabla, idioma).
+- Pendiente: conectar el disco de canciones (no estaba montado) y revisar las canciones de `07_CANCIONES_PROBLEMA.md`;
+  probar el resultado en la consola; build con PyInstaller.
+
 <!-- Plantilla para nuevas entradas:
 ### AAAA-MM-DD — Título
 - Cambios: …

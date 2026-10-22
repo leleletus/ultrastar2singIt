@@ -6,51 +6,52 @@ Estado al commit `4e1cb35`. "Evidencia" = verificado con prueba, con `error.log`
 
 | ID | Sev. | Área | Título | Estado |
 |---|---|---|---|---|
-| B-01 | CRÍTICO | GUI | La validación de campos antes de convertir está desactivada | ABIERTO |
-| B-02 | ALTO | Conversión | Portadas mezcladas entre canciones con multihilo (archivo temporal compartido) | ABIERTO |
-| B-03 | ALTO | Conversión | JSON del DLC con BOM no se puede leer → canciones descartadas | ABIERTO |
-| B-04 | CRÍTICO | Conversión | Registro en name.txt/JSON/TSV antes de copiar medios; año no numérico rompe a mitad | ABIERTO |
-| B-05 | ALTO | Conversión (XML) | Carrera entre hilos al escribir SongsDLC.tsv y name.txt | ABIERTO |
-| B-06 | ALTO | Tono | Corrección "fast": +48 a canciones agudas y transposiciones que no son octavas | ABIERTO |
-| B-07 | MEDIO | Tono | División por cero en canciones sin notas normales/doradas | ABIERTO |
-| B-08 | ALTO | Conversión | Elección de archivos fuente arbitraria: ignora #MP3/#COVER y toma archivos generados | ABIERTO |
-| B-09 | MEDIO | Caché | Filtro `_cover.mp4` obsoleto: el video estático cacheado cuenta como video fuente | ABIERTO |
-| B-10 | ALTO | Conversión (XML) | En XML se copia un AVI con extensión .mp4 | ABIERTO |
-| B-11 | MEDIO | Video (JSON) | "Max video size" no se aplica a los .bk2 | ABIERTO |
-| B-12 | MEDIO | Caché | "Still video" contamina la caché (XML) o se ignora (JSON) | ABIERTO |
-| B-13 | MEDIO | Caché | El vxla no se regenera al cambiar formato/tono/medley | ABIERTO |
-| B-14 | MEDIO | Video (JSON) | Videos fuente .bk2/.mpeg/.m4v se ignoran → video estático | ABIERTO |
-| B-15 | MEDIO | Conversión | Excepciones opacas sin audio, sin imagen o con ffprobe vacío | ABIERTO |
-| B-16 | BAJO | Rutas | ffprobe se busca como `ffprobe.exe` también en Linux | ABIERTO |
-| B-17 | MEDIO | Salida | Escudo `_Patch`: `isfile` relativo al CWD y doble anidado `_Patch/_Patch` | ABIERTO |
-| B-18 | ALTO | Config | config.yml se guarda en el CWD pero se lee de la carpeta de la app | ABIERTO |
-| B-19 | MEDIO | GUI/Config | Multihilo y nº de hilos no se cargan; al guardar se pisan | ABIERTO |
-| B-20 | MEDIO | GUI/i18n | Idioma no se restaura; textos mezclados; clave española en modo inglés | ABIERTO |
-| B-21 | ALTO | GUI | `self.log_message` no existe → excepción en Fix Sync y Play | ABIERTO |
-| B-22 | BAJO | GUI | Volver al "orden original" ordena por la columna Lyrics | ABIERTO |
-| B-23 | BAJO | GUI | Tras convertir se pierde la selección múltiple | ABIERTO |
-| B-24 | MEDIO | GUI | Stop/error informan "finished successfully"; Stop no detiene ffmpeg; pkill global | ABIERTO |
-| B-25 | ALTO | GUI/Rendimiento | Escaneo completo repetido (parsea todos los txt) incluso durante la conversión | ABIERTO |
-| B-26 | MEDIO | Sync Editor | Audio equivocado, ignora VIDEOGAP, guardado con codificación incorrecta | ABIERTO |
-| B-27 | BAJO | GUI | Play reproduce el primer .ogg (puede ser la preview) | ABIERTO |
-| B-28 | MEDIO | Caché | "Clear cache" no borra los intermedios `.avi` ni `_cover.avi` | ABIERTO |
-| B-29 | MEDIO | Parser | Notas sin sílaba revientan; tags sensibles a mayúsculas; duetos mezclados | ABIERTO |
-| B-30 | MEDIO | IDs | name_id: colisiones, ID vacío, 6 implementaciones divergentes | ABIERTO |
-| B-31 | MEDIO | Tools | Recover cache no encuentra el romfs correcto en XML ni IDs nuevos | ABIERTO |
-| B-32 | ALTO | Tools | Tools → Unpack está roto (NameError) y genera tiempos erróneos | ABIERTO |
-| B-33 | BAJO | Tools | reverse_vxla: NameError `name_id` | ABIERTO |
-| B-34 | BAJO | Tools | ExtractorPro no lee vxla propios; espacios mal detectados | ABIERTO |
+| B-01 | CRÍTICO | GUI | La validación de campos antes de convertir está desactivada | CERRADO (7fc2657) |
+| B-02 | ALTO | Conversión | Portadas mezcladas entre canciones con multihilo (archivo temporal compartido) | CERRADO (30669e3) |
+| B-03 | ALTO | Conversión | JSON del DLC con BOM no se puede leer → canciones descartadas | CERRADO (30669e3) |
+| B-04 | CRÍTICO | Conversión | Registro en name.txt/JSON/TSV antes de copiar medios; año no numérico rompe a mitad | CERRADO (30669e3) |
+| B-05 | ALTO | Conversión (XML) | Carrera entre hilos al escribir SongsDLC.tsv y name.txt | CERRADO (30669e3) |
+| B-06 | ALTO | Tono | Corrección "fast": +48 a canciones agudas y transposiciones que no son octavas | CERRADO (8426e7e) |
+| B-07 | MEDIO | Tono | División por cero en canciones sin notas normales/doradas | CERRADO (8426e7e) |
+| B-08 | ALTO | Conversión | Elección de archivos fuente arbitraria: ignora #MP3/#COVER y toma archivos generados | CERRADO (30669e3) |
+| B-09 | MEDIO | Caché | Filtro `_cover.mp4` obsoleto: el video estático cacheado cuenta como video fuente | CERRADO (30669e3) |
+| B-10 | ALTO | Conversión (XML) | En XML se copia un AVI con extensión .mp4 | CERRADO (30669e3) |
+| B-11 | MEDIO | Video (JSON) | "Max video size" no se aplica a los .bk2 | EN CURSO 30669e3 (bitrate del intermedio limitado; parámetro de binkc pendiente) |
+| B-12 | MEDIO | Caché | "Still video" contamina la caché (XML) o se ignora (JSON) | CERRADO (30669e3) |
+| B-13 | MEDIO | Caché | El vxla no se regenera al cambiar formato/tono/medley | CERRADO (30669e3) |
+| B-14 | MEDIO | Video (JSON) | Videos fuente .bk2/.mpeg/.m4v se ignoran → video estático | CERRADO (30669e3) |
+| B-15 | MEDIO | Conversión | Excepciones opacas sin audio, sin imagen o con ffprobe vacío | CERRADO (30669e3) |
+| B-16 | BAJO | Rutas | ffprobe se busca como `ffprobe.exe` también en Linux | CERRADO (30669e3) |
+| B-17 | MEDIO | Salida | Escudo `_Patch`: `isfile` relativo al CWD y doble anidado `_Patch/_Patch` | CERRADO (30669e3 + 7fc2657) |
+| B-18 | ALTO | Config | config.yml se guarda en el CWD pero se lee de la carpeta de la app | CERRADO (7fc2657) |
+| B-19 | MEDIO | GUI/Config | Multihilo y nº de hilos no se cargan; al guardar se pisan | CERRADO (7fc2657) |
+| B-20 | MEDIO | GUI/i18n | Idioma no se restaura; textos mezclados; clave española en modo inglés | EN CURSO 7fc2657 (idioma restaurado y textos nuevos traducidos; faltan tooltips/tabla) |
+| B-21 | ALTO | GUI | `self.log_message` no existe → excepción en Fix Sync y Play | CERRADO (7fc2657) |
+| B-22 | BAJO | GUI | Volver al "orden original" ordena por la columna Lyrics | CERRADO (7fc2657) |
+| B-23 | BAJO | GUI | Tras convertir se pierde la selección múltiple | CERRADO (7fc2657) |
+| B-24 | MEDIO | GUI | Stop/error informan "finished successfully"; Stop no detiene ffmpeg; pkill global | CERRADO (30669e3 + 7fc2657) |
+| B-25 | ALTO | GUI/Rendimiento | Escaneo completo repetido (parsea todos los txt) incluso durante la conversión | CERRADO (7fc2657) |
+| B-26 | MEDIO | Sync Editor | Audio equivocado, ignora VIDEOGAP, guardado con codificación incorrecta | CERRADO (7fc2657) |
+| B-27 | BAJO | GUI | Play reproduce el primer .ogg (puede ser la preview) | CERRADO (7fc2657) |
+| B-28 | MEDIO | Caché | "Clear cache" no borra los intermedios `.avi` ni `_cover.avi` | CERRADO (7fc2657) |
+| B-29 | MEDIO | Parser | Notas sin sílaba revientan; tags sensibles a mayúsculas; duetos mezclados | CERRADO (cd87f8d) |
+| B-30 | MEDIO | IDs | name_id: colisiones, ID vacío, 6 implementaciones divergentes | EN CURSO 30669e3 (módulo único, colisiones detectadas, ID de respaldo; cálculo sin cambios) |
+| B-31 | MEDIO | Tools | Recover cache no encuentra el romfs correcto en XML ni IDs nuevos | CERRADO (b779bc6) |
+| B-32 | ALTO | Tools | Tools → Unpack está roto (NameError) y genera tiempos erróneos | CERRADO (27f8a17) |
+| B-33 | BAJO | Tools | reverse_vxla: NameError `name_id` | CERRADO (27f8a17) |
+| B-34 | BAJO | Tools | ExtractorPro no lee vxla propios; espacios mal detectados | CERRADO (27f8a17) |
 | B-35 | BAJO | Datos | `DlcRepository.init` falla en BD nueva | ABIERTO |
-| B-36 | BAJO | GUI | Regex de TitleID laxa | ABIERTO |
-| B-37 | MEDIO | Logging | error.log en el CWD; spam DEBUG de librerías; log sin límite | ABIERTO |
-| B-38 | MEDIO | Tono | Importación pesada de TensorFlow al cargar; Demucs no funciona empaquetado | ABIERTO |
-| B-39 | MEDIO | Rendimiento | Genius sin caché negativa: segundos de espera por canción sin conexión | ABIERTO |
-| B-40 | MEDIO | Calidad | Las letras pierden tildes y ñ | A VERIFICAR |
-| B-41 | ALTO | Build | El `.spec` excluye QtMultimedia, que la GUI importa | A VERIFICAR |
-| B-42 | MEDIO | Repo | requirements.txt y build.yml no versionados; requirements inutilizable | ABIERTO |
-| B-43 | BAJO | Código muerto | `rename_folders_physically` con `return` en lugar de `continue` | ABIERTO |
-| B-44 | MEDIO | Wine/Bink | binkc sin timeout ni diagnóstico; `wine` fijo | ABIERTO |
-| B-45 | MEDIO | GUI | Cerrar la ventana con la conversión en marcha deja hilos vivos | ABIERTO |
+| B-36 | BAJO | GUI | Regex de TitleID laxa | CERRADO (7fc2657) |
+| B-37 | MEDIO | Logging | error.log en el CWD; spam DEBUG de librerías; log sin límite | CERRADO (30669e3) |
+| B-38 | MEDIO | Tono | Importación pesada de TensorFlow al cargar; Demucs no funciona empaquetado | CERRADO (8426e7e) |
+| B-39 | MEDIO | Rendimiento | Genius sin caché negativa: segundos de espera por canción sin conexión | CERRADO (cd87f8d) |
+| B-40 | MEDIO | Calidad | Las letras pierden tildes y ñ | CERRADO (cd87f8d) — confirmar en consola |
+| B-41 | ALTO | Build | El `.spec` excluye QtMultimedia, que la GUI importa | EN CURSO (spec corregido en 7fc2657; build sin probar) |
+| B-42 | MEDIO | Repo | requirements.txt y build.yml no versionados; requirements inutilizable | EN CURSO (.pyc fuera de git; requirements pendiente) |
+| B-43 | BAJO | Código muerto | `rename_folders_physically` con `return` en lugar de `continue` | CERRADO (30669e3) |
+| B-44 | MEDIO | Wine/Bink | binkc sin timeout ni diagnóstico; `wine` fijo | CERRADO (30669e3) |
+| B-45 | MEDIO | GUI | Cerrar la ventana con la conversión en marcha deja hilos vivos | CERRADO (7fc2657) |
+| B-46 | CRÍTICO | Letras | Letras con acentos/apóstrofes **borradas** si aparecen después de los primeros 4 KB del txt | CERRADO (cd87f8d) |
 
 ---
 
@@ -323,3 +324,14 @@ Estado al commit `4e1cb35`. "Evidencia" = verificado con prueba, con `error.log`
 - `MainWindow` no tiene `closeEvent`: cerrar la ventana deja el QThread y el pool vivos.
 - **Evidencia**: 5 × `RuntimeError: can't register atexit after shutdown` en `error.log`.
 - **Arreglo**: `closeEvent` que pida confirmación, active `stop_event`, termine los procesos y espere al worker.
+
+### B-46 · CRÍTICO · Letras borradas por la detección de codificación
+- **Dónde**: `UltrastarToSingit.detect_encoding` / `parse_file` (antes de `cd87f8d`).
+- **Causa**: chardet analizaba solo los primeros 4 096 bytes (cabecera + primeras notas, casi siempre ASCII) → devolvía
+  `ascii` → el archivo se abría con `errors='ignore'` → **todo carácter no ASCII se eliminaba sin aviso**.
+- **Evidencia (prueba)**: `J’ai été là garçon` en UTF-8 después de 4 KB → `Jai t l garon`. Si los acentos aparecían antes,
+  chardet acertaba pero `normalize_text` igualmente quitaba las tildes (`ete`, `la`, `garcon`).
+- **Impacto**: canciones en francés/español/alemán con letras rotas ("se ven todo mal"), apóstrofes perdidos.
+- **Arreglo**: lectura del archivo completo, UTF-8 estricto → chardet (no occidental) → cp1252 → latin-1; nunca
+  `errors='ignore'`. Las letras conservan todo lo que admite Windows-1252 (opción "Conservar tildes", activada por defecto).
+  Al cambiar `VXLA_GENERATOR_VERSION` todos los vxla se regeneran solos en la próxima conversión (los videos no).
