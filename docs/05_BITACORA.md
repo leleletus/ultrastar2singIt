@@ -1,0 +1,65 @@
+# 05 — Bitácora
+
+## Estado del repositorio (2026-10-21)
+
+- Rama de trabajo: `linux-wine-support` @ `4e1cb35`, **4 commits sin subir** a `origin` (`362d058`, `b98ea4a`, `0844bc6`, `4e1cb35`).
+- `origin` = fork `leleletus/ultrastar2singIt`; `upstream` = `ratnapatka/ultrastar2singIt` (`main` @ `69f8814`, v1.0.2).
+  No hay commits de `upstream/main` pendientes de integrar. La rama `upstream/18-add-support-for-duets` (duetos) no está fusionada.
+- `main` local = `fd9fe37` (1 commit por delante de upstream).
+- Sin versionar en la raíz: `fix_songs.py`, `clean_output_files.py`, `clean_output_json.py` (scripts puntuales con rutas fijas).
+- `version.py` = 1.1.0, pero existe el tag `v2.0.0` en `9ba81f4` → versión inconsistente.
+- Archivos pesados o ajenos en la carpeta (ignorados por git): `python-installer.exe` (29 MB), `venv/`, `unity_env/`, `build/`, `dist/`,
+  `error.log` (760 KB), `test_dir_`, `test_dir___1`, `recovered_lyrics/` (vacía), `textasset_names.txt` (vacío).
+
+## Historia por fases (según git)
+
+| Fase | Periodo | Autor | Commits clave | Resumen |
+|---|---|---|---|---|
+| 0. Origen | 2025-08 | ratnapatka | `ca85be0`… | scripts `ultrastar2singit.py` + `convertFiles.py` (base de dh4rry/kosei) |
+| 1. Afinado | 2026-01 → 02 | ratnapatka, omnialord | `4df360c`, `da53b6c`, `5b415ce`, `a1a1a72`, `5e3feff`, `9504770` | 2025 por defecto, analizador de tono (slow), fast por defecto, saneado de nombres de carpeta, mejor detección de estribillos, `--no-video` |
+| 2. GUI | 2026-03 | ratnapatka | `403de92` → `ee4e26c` (v1.0.0) | GUI PySide6, BD de DLC, stop event, plugins para slow, compilación |
+| 3. Mantenimiento upstream | 2026-04 → 05 | ratnapatka, omnialord | `7fee587`, `b75a6fa`, `c4c569c`, `78a5b28`, `3e46d42` (v1.0.2) | DLC 2025/2026, `~`→`-`, barra de progreso, no copiar conversiones incompletas, workflow de release, **revertido** el renombrado de archivos |
+| 4. Fork Linux | 2026-09-17 | leleletus | `fd9fe37` | soporte Linux/Wine, bug de idioma del JSON |
+| 5. Gran revisión | 2026-09-29 → 30 | djvemo | `5f0d14e`, `a4779e2`, `eb32bc7`, `4765477` | Sync Editor, multihilo, herramientas, CI Win+Linux, detector de desfase. Origen de R-01 |
+| 6. Pulido y herramientas | 2026-10-02 → 03 | djvemo | `2b47edb`, `4cb04ff`, `8930b27`, `3f60d56`, `8f7a37f`…`2c2beb9`, `fa8c111` (tag v2.0.0), `3f07553`, `77a1358`, `1194ff6`, `37f8212`, `eaa98b7`, `0899b0f`, `1e04eba`, `edddba3` | pasajes/espacios, Play, `-bf 0`, dynaudnorm, i18n, bpm en JSON, JSON base desacoplado de la copia de medios, reverse vxla. Origen de R-03, R-06, R-07, R-09 |
+| 7. Correcciones (sin subir) | 2026-10-03 → 05 | djvemo | `362d058`, `b98ea4a`, `0844bc6`, `4e1cb35` | escudo `_Patch`, ExtractorPro, IDs solo ASCII (cuelgues en Switch), AVI para binkc bajo Wine, limpieza EXIF. Origen de R-02, R-04, R-05 |
+
+## Evidencia de campo (`error.log`, 2026-09-17 → 2026-10-05)
+
+| Fallo | Veces | Bug |
+|---|---|---|
+| `No module named 'tensorflow'` | 362 | B-38 |
+| `Extra data` (JSON destino corrupto) | 119 | B-03 |
+| `Unexpected UTF-8 BOM` | 106 | B-03 |
+| `Failed to generate … from binkc` | 38 | B-44 |
+| `Could not find '<búsqueda>'` (Genius) | 24 | B-39 |
+| `Expecting value` (JSON vacío/corrupto) | 8 | B-03 |
+| `IndexError: list index out of range` (create_audio) | 5 | B-15 |
+| `can't register atexit after shutdown` | 5 | B-45 |
+| `Demucs vocal isolation failed` | 5 | B-38 |
+| `could not convert string to float: b''` (ffprobe) | 1 | B-15 |
+| `module 'ConvertFiles' has no attribute 'main'` | 2 (09-17) | histórico, ya resuelto |
+
+---
+
+## Entradas
+
+### 2026-10-21 — Auditoría completa
+- Lectura completa de los 27 scripts Python (5 734 líneas), configuración, spec, workflows, `.gitignore`, documentación y `error.log`.
+- Pruebas puntuales con el venv del proyecto:
+  - `QThread.finished` se emite aunque se redefina en la subclase → confirma B-24 (mensaje de éxito tras error).
+  - `QLineEdit.setText(None)` no falla (descartado como bug).
+  - Corrección fast: notas 80/85/95 → +48; notas 20/30/40 → +41 → confirma B-06.
+- Lectura con salto de línea universal: los `\r` de archivos CRLF **no** llegan a los valores de los tags (descartado).
+- Creada la documentación en `docs/` (este directorio). Ningún cambio de código todavía.
+- Pendiente de decidir con el responsable: orden de ataque (ver plan en `06_BACKLOG_Y_MEJORAS.md`), si se suben los 4 commits locales
+  antes de empezar, y qué hacer con los scripts sueltos de la raíz.
+
+<!-- Plantilla para nuevas entradas:
+### AAAA-MM-DD — Título
+- Cambios: …
+- Bugs cerrados: B-xx (commit)
+- Regresiones detectadas: …
+- Pruebas realizadas: …
+- Pendiente: …
+-->

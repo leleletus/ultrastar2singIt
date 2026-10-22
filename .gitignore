@@ -7,7 +7,6 @@ error.log
 *.spec
 */
 config.yml
-AGENTS.md
 
 !data/
 !data/**
@@ -21,3 +20,5 @@ AGENTS.md
 !locales/**
 !experimental_tools/
 !experimental_tools/**
+!docs/
+!docs/**

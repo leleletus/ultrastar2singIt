@@ -1,0 +1,325 @@
+# 03 — Registro de bugs
+
+Estado al commit `4e1cb35`. "Evidencia" = verificado con prueba, con `error.log`, o por lectura directa del código.
+
+## Resumen
+
+| ID | Sev. | Área | Título | Estado |
+|---|---|---|---|---|
+| B-01 | CRÍTICO | GUI | La validación de campos antes de convertir está desactivada | ABIERTO |
+| B-02 | ALTO | Conversión | Portadas mezcladas entre canciones con multihilo (archivo temporal compartido) | ABIERTO |
+| B-03 | ALTO | Conversión | JSON del DLC con BOM no se puede leer → canciones descartadas | ABIERTO |
+| B-04 | CRÍTICO | Conversión | Registro en name.txt/JSON/TSV antes de copiar medios; año no numérico rompe a mitad | ABIERTO |
+| B-05 | ALTO | Conversión (XML) | Carrera entre hilos al escribir SongsDLC.tsv y name.txt | ABIERTO |
+| B-06 | ALTO | Tono | Corrección "fast": +48 a canciones agudas y transposiciones que no son octavas | ABIERTO |
+| B-07 | MEDIO | Tono | División por cero en canciones sin notas normales/doradas | ABIERTO |
+| B-08 | ALTO | Conversión | Elección de archivos fuente arbitraria: ignora #MP3/#COVER y toma archivos generados | ABIERTO |
+| B-09 | MEDIO | Caché | Filtro `_cover.mp4` obsoleto: el video estático cacheado cuenta como video fuente | ABIERTO |
+| B-10 | ALTO | Conversión (XML) | En XML se copia un AVI con extensión .mp4 | ABIERTO |
+| B-11 | MEDIO | Video (JSON) | "Max video size" no se aplica a los .bk2 | ABIERTO |
+| B-12 | MEDIO | Caché | "Still video" contamina la caché (XML) o se ignora (JSON) | ABIERTO |
+| B-13 | MEDIO | Caché | El vxla no se regenera al cambiar formato/tono/medley | ABIERTO |
+| B-14 | MEDIO | Video (JSON) | Videos fuente .bk2/.mpeg/.m4v se ignoran → video estático | ABIERTO |
+| B-15 | MEDIO | Conversión | Excepciones opacas sin audio, sin imagen o con ffprobe vacío | ABIERTO |
+| B-16 | BAJO | Rutas | ffprobe se busca como `ffprobe.exe` también en Linux | ABIERTO |
+| B-17 | MEDIO | Salida | Escudo `_Patch`: `isfile` relativo al CWD y doble anidado `_Patch/_Patch` | ABIERTO |
+| B-18 | ALTO | Config | config.yml se guarda en el CWD pero se lee de la carpeta de la app | ABIERTO |
+| B-19 | MEDIO | GUI/Config | Multihilo y nº de hilos no se cargan; al guardar se pisan | ABIERTO |
+| B-20 | MEDIO | GUI/i18n | Idioma no se restaura; textos mezclados; clave española en modo inglés | ABIERTO |
+| B-21 | ALTO | GUI | `self.log_message` no existe → excepción en Fix Sync y Play | ABIERTO |
+| B-22 | BAJO | GUI | Volver al "orden original" ordena por la columna Lyrics | ABIERTO |
+| B-23 | BAJO | GUI | Tras convertir se pierde la selección múltiple | ABIERTO |
+| B-24 | MEDIO | GUI | Stop/error informan "finished successfully"; Stop no detiene ffmpeg; pkill global | ABIERTO |
+| B-25 | ALTO | GUI/Rendimiento | Escaneo completo repetido (parsea todos los txt) incluso durante la conversión | ABIERTO |
+| B-26 | MEDIO | Sync Editor | Audio equivocado, ignora VIDEOGAP, guardado con codificación incorrecta | ABIERTO |
+| B-27 | BAJO | GUI | Play reproduce el primer .ogg (puede ser la preview) | ABIERTO |
+| B-28 | MEDIO | Caché | "Clear cache" no borra los intermedios `.avi` ni `_cover.avi` | ABIERTO |
+| B-29 | MEDIO | Parser | Notas sin sílaba revientan; tags sensibles a mayúsculas; duetos mezclados | ABIERTO |
+| B-30 | MEDIO | IDs | name_id: colisiones, ID vacío, 6 implementaciones divergentes | ABIERTO |
+| B-31 | MEDIO | Tools | Recover cache no encuentra el romfs correcto en XML ni IDs nuevos | ABIERTO |
+| B-32 | ALTO | Tools | Tools → Unpack está roto (NameError) y genera tiempos erróneos | ABIERTO |
+| B-33 | BAJO | Tools | reverse_vxla: NameError `name_id` | ABIERTO |
+| B-34 | BAJO | Tools | ExtractorPro no lee vxla propios; espacios mal detectados | ABIERTO |
+| B-35 | BAJO | Datos | `DlcRepository.init` falla en BD nueva | ABIERTO |
+| B-36 | BAJO | GUI | Regex de TitleID laxa | ABIERTO |
+| B-37 | MEDIO | Logging | error.log en el CWD; spam DEBUG de librerías; log sin límite | ABIERTO |
+| B-38 | MEDIO | Tono | Importación pesada de TensorFlow al cargar; Demucs no funciona empaquetado | ABIERTO |
+| B-39 | MEDIO | Rendimiento | Genius sin caché negativa: segundos de espera por canción sin conexión | ABIERTO |
+| B-40 | MEDIO | Calidad | Las letras pierden tildes y ñ | A VERIFICAR |
+| B-41 | ALTO | Build | El `.spec` excluye QtMultimedia, que la GUI importa | A VERIFICAR |
+| B-42 | MEDIO | Repo | requirements.txt y build.yml no versionados; requirements inutilizable | ABIERTO |
+| B-43 | BAJO | Código muerto | `rename_folders_physically` con `return` en lugar de `continue` | ABIERTO |
+| B-44 | MEDIO | Wine/Bink | binkc sin timeout ni diagnóstico; `wine` fijo | ABIERTO |
+| B-45 | MEDIO | GUI | Cerrar la ventana con la conversión en marcha deja hilos vivos | ABIERTO |
+
+---
+
+## Detalle
+
+### B-01 · CRÍTICO · Validación desactivada
+- **Dónde**: [Gui.py:1178-1188](../Gui.py#L1178-L1188) `required_fields_missing.req`
+- **Causa**: el `return` quedó fuera del `if not line_edit.isEnabled():` → la función sale siempre en la primera línea.
+- **Impacto**: se puede iniciar la conversión con FFmpeg/RAD/entrada/salida vacíos o inválidos; el fallo aparece más tarde y peor
+  (p. ej. salida vacía → `_Patch` en el CWD).
+- **Origen**: regresión de `5f0d14e` (en `upstream/main` está bien indentado). Ver R-01.
+- **Arreglo**: indentar el `return` dentro del `if`.
+
+### B-02 · ALTO · Portadas mezcladas con multihilo
+- **Dónde**: [ConvertFiles.py:273-291](../ConvertFiles.py#L273-L291) `get_clean_image_path`
+- **Causa**: todas las llamadas escriben `tempfile.gettempdir()/temp_cover_clean.jpg`. Con 5 hilos (config actual), el hilo A
+  escribe su portada, el hilo B la sobrescribe antes de que ffmpeg de A la lea.
+- **Impacto**: portadas, `_long`, `_InGameLoading` y videos estáticos de **otra canción**. Además quedan en caché y se repiten.
+- **Origen**: `4e1cb35` (R-02).
+- **Arreglo**: archivo temporal único por llamada (`NamedTemporaryFile(delete=False)` o `mkstemp`) y borrarlo tras ffmpeg;
+  mejor aún, generar la portada limpia una sola vez por canción y reutilizarla.
+- **Relacionados**: B-08 (qué imagen se elige).
+
+### B-03 · ALTO · JSON con BOM
+- **Dónde**: [ConvertFiles.py:503](../ConvertFiles.py#L503), [ConvertFiles.py:508](../ConvertFiles.py#L508)
+- **Evidencia**: 106 × `Unexpected UTF-8 BOM (decode using utf-8-sig)` en `error.log`; 119 × `Extra data` (JSON destino corrupto
+  de ejecuciones anteriores con `clear_output: false`).
+- **Arreglo**: leer con `encoding='utf-8-sig'`; si el JSON destino es inválido, registrar un error claro y no seguir añadiendo
+  canciones (hoy cada canción falla por separado). Escribir de forma atómica (archivo temporal + `os.replace`).
+
+### B-04 · CRÍTICO · Registro antes de copiar; año no numérico
+- **Dónde**: [ConvertFiles.py:858-889](../ConvertFiles.py#L858-L889); `int(year)` en [ConvertFiles.py:459](../ConvertFiles.py#L459) y [ConvertFiles.py:553](../ConvertFiles.py#L553)
+- **Causa**: primero se añade el ID a `name.txt`, luego al JSON/TSV y **después** se copian los medios. Si algo falla entre medio
+  (p. ej. `#YEAR:1985-03`, `#YEAR:` vacío, copia sin espacio), la canción queda registrada sin archivos o en `name.txt` sin metadatos.
+- **Impacto**: el juego encuentra un ID sin medios → riesgo de cuelgue de la consola al abrir el menú.
+- **Arreglo**: parsear el año con tolerancia (`re.search(r'\d{4}')`, por defecto 2000); copiar primero los medios y registrar
+  al final; si el registro falla, eliminar los medios copiados de esa canción.
+
+### B-05 · ALTO · Carreras en TSV y name.txt (formato XML)
+- **Dónde**: [ConvertFiles.py:520](../ConvertFiles.py#L520), [ConvertFiles.py:586](../ConvertFiles.py#L586)
+- **Causa**: solo `add_song_to_json` usa `json_lock`. Con multihilo, dos hilos leen el TSV, calculan el mismo UID y uno pisa al otro.
+- **Impacto**: UIDs duplicados, canciones perdidas en el TSV, líneas de `name.txt` intercaladas. Además el TSV se abre sin
+  `encoding` (en Windows cp1252 → error con caracteres no latinos) y `name.txt` no se deduplica.
+- **Arreglo**: un único lock de registro para JSON/TSV/name.txt; `encoding='utf-8'`; deduplicar IDs.
+
+### B-06 · ALTO · Corrección de tono "fast"
+- **Dónde**: [PitchAnalyzer.py:132-152](../PitchAnalyzer.py#L132-L152) (heredado de upstream)
+- **Evidencia (prueba)**: notas 80/85/95 → corrección **+48** (quedan en 128–143, fuera de MIDI); notas 20/30/40 → **+41**
+  (no es múltiplo de 12: cambia la tonalidad).
+- **Arreglo**: elegir `k·12` que lleve la mediana del txt al centro del rango `[43, 81]` (≈62) y, si sobra, ajustar para que
+  `min/max` entren; nunca desplazamientos fuera de octava. Opcional: aplicar la misma regla de octavas al modo slow.
+
+### B-07 · MEDIO · División por cero en el tono
+- **Dónde**: [PitchAnalyzer.py:89](../PitchAnalyzer.py#L89) — `total_pitch / note_count` con 0 notas `:`/`*` (canciones solo rap/freestyle).
+- **Arreglo**: devolver valores neutros y corrección 0 si no hay notas cantadas.
+
+### B-08 · ALTO · Archivos fuente equivocados
+- **Dónde**: [ConvertFiles.py:713-717](../ConvertFiles.py#L713-L717), [ConvertFiles.py:735](../ConvertFiles.py#L735), [ConvertFiles.py:303-306](../ConvertFiles.py#L303-L306), [ConvertFiles.py:339-342](../ConvertFiles.py#L339-L342)
+- **Causa**: `iterdir()` no está ordenado (el comentario "alfabéticamente el último" no se cumple); no se usan `#MP3`/`#AUDIO`,
+  `#COVER`, `#VIDEO` salvo en un caso; las listas incluyen archivos generados (`<id>.ogg`, `<id>_preview.ogg`, `<id>.png`,
+  `<id>_long.png`, `<id>.avi`, `_cover.avi`…).
+- **Impacto**: la preview puede generarse desde el `.ogg` ya desplazado o desde la propia preview; portada desde `_InGameLoading.png`;
+  txt de dueto o un txt ajeno (licencia, notas) tomado como letra.
+- **Arreglo**: función única `resolve_sources(song_dir, txt_data)` que: elige el txt (ordenado, prefiere el que no sea `[MULTI]`/dueto
+  y que tenga `#TITLE`), usa las etiquetas `#AUDIO`→`#MP3`, `#VIDEO`, `#COVER`, excluye todos los nombres generados y solo después
+  cae a heurísticas. Reutilizarla en Gui (iconos, Play, Fix Sync).
+
+### B-09 · MEDIO · Filtro `_cover.mp4` obsoleto
+- **Dónde**: [ConvertFiles.py:751](../ConvertFiles.py#L751), [Gui.py:865](../Gui.py#L865)
+- **Causa**: `4e1cb35` cambió el fallback a `_cover.avi` y el intermedio JSON a `<id>.avi`, pero los filtros siguen buscando `_cover.mp4`.
+- **Impacto**: en ejecuciones posteriores el video estático o el intermedio cuentan como "video fuente" (icono ✓ falso, conversión del
+  estático como si fuera video real). Ver R-02.
+
+### B-10 · ALTO · AVI con extensión .mp4 en formato XML
+- **Dónde**: [ConvertFiles.py:819-830](../ConvertFiles.py#L819-L830)
+- **Causa**: el fallback estático es `_cover.avi` y para XML se **copia** tal cual como `<id>.mp4`.
+- **Impacto**: juegos 2018–2023 reciben un contenedor AVI con nombre `.mp4` → video negro o cuelgue. Regresión de `4e1cb35` (R-02).
+- **Arreglo**: generar el fallback en `.mp4` para XML y en `.avi` solo como intermedio para binkc, o remuxear (`-c copy`) a mp4.
+
+### B-11 · MEDIO · Tamaño máximo ignorado en .bk2
+- **Dónde**: [ConvertFiles.py:775-787](../ConvertFiles.py#L775-L787), [ConvertFiles.py:384](../ConvertFiles.py#L384)
+- **Causa**: el AVI intermedio usa el bitrate **original**; `compression_percentage` se calcula pero `create_video_bink` no lo usa.
+- **Arreglo**: limitar el bitrate del intermedio a `target_size_mb` y pasar la tasa de datos a binkc (`/D<bytes/s>` o el
+  parámetro de compresión que corresponda; verificar con la ayuda de `binkc`).
+
+### B-12 · MEDIO · "Still video" y caché
+- **Dónde**: [ConvertFiles.py:816-830](../ConvertFiles.py#L816-L830)
+- **XML**: con still video se **sobrescribe** el `<id>.mp4` real; al desactivarlo, como existe, nunca se vuelve a generar.
+- **JSON**: si ya existe `<id>.bk2` real, still video se ignora.
+- **Arreglo**: nombres de caché distintos por variante (`<id>.mp4` vs `<id>_still.mp4`) y elegir cuál copiar según la opción.
+
+### B-13 · MEDIO · Caché del vxla
+- **Dónde**: [ConvertFiles.py:833-849](../ConvertFiles.py#L833-L849)
+- **Causa**: solo compara mtime del vxla con el del txt.
+- **Impacto**: cambiar XML↔JSON (capas distintas), método de tono, `no_medley` o el audio (duración) no regenera el vxla.
+- **Arreglo**: guardar junto al vxla un sidecar (`<id>.vxla.meta.json`) con hash del txt + parámetros + versión del conversor
+  y regenerar si difiere. Lo mismo, a futuro, para audio/video.
+
+### B-14 · MEDIO · Formatos de video ignorados en JSON
+- **Dónde**: [ConvertFiles.py:775](../ConvertFiles.py#L775) — solo `.avi .divx .mp4 .flv .mkv .webm`.
+- **Impacto**: `.bk2` (p. ej. `test_input/GAYLE - abcdefu/Abc.bk2`), `.mpeg` → no se convierten y se usa el video estático.
+- **Arreglo**: si la fuente ya es `.bk2` 1280×720, copiarla; ampliar a `.mpeg .mpg .m4v .mov`.
+
+### B-15 · MEDIO · Excepciones opacas
+- **Dónde**: `create_audio` [ConvertFiles.py:342](../ConvertFiles.py#L342) (`files_avi[0]` vacío), `get_duration` [ConvertFiles.py:200](../ConvertFiles.py#L200),
+  `create_still_video_from_cover_image` [ConvertFiles.py:231](../ConvertFiles.py#L231) (`files_jpg[0]` vacío), `is_video_still_image` (duración 0).
+- **Evidencia**: `IndexError: list index out of range` (5) y `could not convert string to float: b''` en `error.log`.
+- **Arreglo**: comprobar requisitos al inicio de cada canción y registrar "falta audio/portada" en lugar de un traceback.
+
+### B-16 · BAJO · ffprobe en Linux
+- **Dónde**: [ConvertFiles.py:61](../ConvertFiles.py#L61) — prueba `ffprobe.exe` junto a ffmpeg; en Linux siempre usa el `ffprobe` del PATH.
+- **Arreglo**: probar `ffprobe` y `ffprobe.exe` junto a ffmpeg, luego `shutil.which`.
+
+### B-17 · MEDIO · Escudo `_Patch`
+- **Dónde**: [ConvertFiles.py:73-79](../ConvertFiles.py#L73-L79), [Gui.py:620-626](../Gui.py#L620-L626)
+- **Causa**: `os.path.isfile(file_or_folder)` usa el nombre sin ruta → mira en el CWD. El escudo se aplica en la GUI y otra vez
+  en ConvertFiles: si `X/_Patch` contiene cualquier archivo no-TitleID (p. ej. un log), la salida pasa a `X/_Patch/_Patch`.
+- **Arreglo**: una sola función `safe_output_dir(path)` en ConvertFiles, usada por ambos; `os.path.join(path, name)`;
+  si la carpeta ya se llama `_Patch` no volver a anidar. Mostrar en la GUI la ruta final real.
+
+### B-18 · ALTO · Ruta de config.yml
+- **Dónde**: [Gui.py:1638](../Gui.py#L1638) escribe `Path('.')/config.yml`; [ConfigLoader.py:49](../ConfigLoader.py#L49) lee `app_dir()/config.yml`.
+- **Impacto**: si la app se abre desde otra carpeta (acceso directo, ejecutable con otro CWD), los cambios no se guardan donde se leen
+  y `self.cfg = load_config()` devuelve la config **antigua**, que es la que se usa para convertir.
+- **Origen**: `5f0d14e`.
+- **Arreglo**: `app_dir() / 'config.yml'`; mejor aún, construir el cfg de la conversión directamente desde el formulario.
+
+### B-19 · MEDIO · Multihilo no se carga
+- **Dónde**: [Gui.py:693-745](../Gui.py#L693-L745) no lee `multithreading`/`multithreading_workers`; [Gui.py:1630-1632](../Gui.py#L1630-L1632) sí los guarda.
+- **Impacto**: config.yml dice `multithreading: true, workers: 5`, la GUI muestra desmarcado/3 y al convertir guarda `false`.
+
+### B-20 · MEDIO · Idioma
+- **Dónde**: `set_defaults` no llama a `i18n.load_language(cfg.language)`; [Gui.py:1471](../Gui.py#L1471) usa una clave en español;
+  [Gui.py:1504](../Gui.py#L1504) etiqueta inicial en español; sin `tr()`: tooltips, cabeceras de tabla, leyenda, títulos "Input and Output folders",
+  "Input folder preview", "Logs", acciones del menú Tools, buscador, mensajes del log, diálogos, todo SyncEditor.
+- **Arreglo**: ver G-02 (i18n completo).
+
+### B-21 · ALTO · `log_message` inexistente
+- **Dónde**: [Gui.py:969](../Gui.py#L969), [Gui.py:1026](../Gui.py#L1026), [Gui.py:1031](../Gui.py#L1031), [Gui.py:1033](../Gui.py#L1033)
+- **Impacto**: al cerrar el Sync Editor se lanza `AttributeError`; el `except` vuelve a llamar a `log_message` → excepción no
+  controlada en el slot. Play sin audio igual.
+- **Origen**: `5f0d14e` / `4cb04ff`. **Arreglo**: usar `self.log`.
+
+### B-22 · BAJO · Orden original
+- **Dónde**: [PreviewTable.py:150](../PreviewTable.py#L150) `sortItems(7)` → debe ser 8 (OrigOrder). Origen `4cb04ff`.
+
+### B-23 · BAJO · Selección múltiple perdida
+- **Dónde**: [Gui.py:1222](../Gui.py#L1222) `SingleSelection` → debe restaurar `ExtendedSelection`.
+
+### B-24 · MEDIO · Fin de conversión, Stop
+- **Dónde**: [Gui.py:1279](../Gui.py#L1279), [Gui.py:1317-1352](../Gui.py#L1317-L1352)
+- **Evidencia (prueba)**: `QThread.finished` se emite siempre al terminar `run()`, también después de `error`.
+- **Impacto**: tras un error o un Stop se muestra "Conversion finished successfully"; Stop no mata ffmpeg (las 2 pasadas siguen);
+  `pkill -9 -f radvideo` mata procesos de otras apps; no hay resumen de canciones OK/fallidas.
+- **Arreglo**: el worker emite `done(ok, stopped, resumen)`; registrar los `Popen` activos y terminarlos; resumen final.
+
+### B-25 · ALTO · Escaneo repetido y caro
+- **Dónde**: [Gui.py:825-961](../Gui.py#L825-L961), [Gui.py:994](../Gui.py#L994), [Gui.py:1094-1101](../Gui.py#L1094-L1101), [Gui.py:289](../Gui.py#L289)
+- **Causa**: cada escaneo parsea **todos** los txt (chardet + parse) para el aviso de sync y crea 2 botones por fila; se escanea varias
+  veces al arrancar (cada cambio de combo/validador) y en cada evento del watcher, **incluido durante la conversión**, que escribe
+  constantemente en las carpetas vigiladas. Cada escaneo reconstruye la tabla y pierde marcas, orden y scroll.
+- **Impacto**: con cientos de canciones la ventana se congela segundos de forma repetida.
+- **Arreglo**: escaneo en hilo de fondo con caché por mtime de carpeta; pausar el watcher durante la conversión y refrescar
+  solo la fila afectada al terminar cada canción (señal por canción); modelo/vista (`QAbstractTableModel`) en lugar de widgets por celda.
+
+### B-26 · MEDIO · Sync Editor
+- **Dónde**: [SyncEditor.py:36-44](../SyncEditor.py#L36-L44), [SyncEditor.py:205-252](../SyncEditor.py#L205-L252), [SyncEditor.py:254-275](../SyncEditor.py#L254-L275), [Gui.py:1024-1029](../Gui.py#L1024-L1029)
+- **Problemas**: toma el primer `*.ogg` (puede ser `_preview.ogg` o el original sin desplazar); el `.ogg` convertido sí lleva
+  VIDEOGAP aplicado pero las letras no lo suman → desfase visual = VIDEOGAP; el video se sincroniza 1:1 sin VIDEOGAP; guarda en UTF-8
+  aunque el txt se leyó en otra codificación (falla en silencio con `print`); si no existe `#GAP:` no lo añade; `note[4]` sin control
+  dentro de un timer de 50 ms; Gui usa `glob('*.txt')[0]` y ConvertFiles `files_txt[-1]` (pueden ser distintos); textos solo en español;
+  no hay atajos de teclado ni ajuste fino (10 ms).
+- **Relacionados**: B-08, R-03, G-07.
+
+### B-27 · BAJO · Play
+- **Dónde**: [Gui.py:967](../Gui.py#L967) — primer `*.ogg`/`*.mp3`; debe usar la fuente resuelta (B-08) o el `.ogg` convertido.
+
+### B-28 · MEDIO · Clear cache incompleto
+- **Dónde**: [Gui.py:896-898](../Gui.py#L896-L898) lista `outputs`; [Gui.py:844-846](../Gui.py#L844-L846) nombres de relleno `"yoyoyo"`.
+- **Impacto**: tras limpiar, el `.bk2` se regenera desde el `<id>.avi` viejo y el video estático desde `_cover.avi` viejo
+  (portada antigua). Tampoco borra `_genius_cache.json` ni `demucs_out/`.
+
+### B-29 · MEDIO · Parser UltraStar
+- **Dónde**: [UltrastarToSingit.py:60-78](../UltrastarToSingit.py#L60-L78), [UltrastarToSingit.py:170-174](../UltrastarToSingit.py#L170-L174)
+- **Problemas**: `: 10 4 5` (sin sílaba) → `IndexError` en `note[4]`; `#bpm:` en minúsculas → `KeyError 'BPM'`; espacios dobles entre
+  números rompen `split(" ", 4)`; `#RELATIVE:yes` no soportado; duetos `P1`/`P2` se mezclan en una sola voz;
+  `#VERSION:1.x` (`#AUDIO`, `#START`/`#END`) no contemplado.
+- **Arreglo**: parser tolerante (regex por tipo de línea, claves en mayúsculas, valores `strip()`), soporte de RELATIVE y elegir P1 en duetos.
+
+### B-30 · MEDIO · name_id
+- **Dónde**: [ConvertFiles.py:153](../ConvertFiles.py#L153) y copias.
+- **Problemas**: colisión (`Ana Belén - Hoy` y `Alejandro Bueno - Hoy` → `ABhoy` los dos)
+  → una canción pisa a la otra en caché y en el JSON; ID vacío o casi vacío con artista/título en alfabetos no latinos;
+  `split(' - ')` con más de un separador descarta el resto del título. Las versiones de `tools/` no aplican el filtro ASCII
+  de `0844bc6` → no encuentran los archivos (R-04).
+- **Arreglo**: módulo único `naming.py`; detectar colisiones antes de convertir y añadir sufijo estable; fallback a hash corto
+  si el ID queda vacío; mantener compatibilidad con los IDs ya publicados.
+
+### B-31 · MEDIO · Recover cache
+- **Dónde**: [tools/cache_recovery.py:9-29](../tools/cache_recovery.py#L9-L29) — `os.walk` se queda con el primer `romfs` (puede ser el del core);
+  name_id antiguo; no recupera `_long`, `_InGameLoading`, `meta.xml`.
+
+### B-32 · ALTO · Tools → Unpack roto
+- **Dónde**: [tools/unpacker.py:102](../tools/unpacker.py#L102) usa `safe_artist`/`safe_title` no definidos → `NameError` en la primera canción.
+- **Además**: escribe `#BPM:` con el BPM del JSON pero convierte segundos a beats con BPM 300 → tiempos erróneos;
+  espera notas `sílaba,tono` mientras este conversor escribe `#p<tono>#.<sílaba>`.
+- **Arreglo**: reutilizar la lógica de `LetSing_ExtractorPro`/`reverse_vxla` en un único módulo `vxla_reader.py`.
+
+### B-33 · BAJO · reverse_vxla
+- [tools/reverse_vxla.py:154-155](../tools/reverse_vxla.py#L154-L155) `name_id` no definido cuando hay video. Rutas fijas.
+
+### B-34 · BAJO · LetSing_ExtractorPro
+- [tools/LetSing_ExtractorPro.py:111](../tools/LetSing_ExtractorPro.py#L111) solo busca la capa `notes` (los vxla propios usan `notes_full`);
+  [tools/LetSing_ExtractorPro.py:55-67](../tools/LetSing_ExtractorPro.py#L55-L67) compara `str(t2)` (`12.3`) con el atributo (`12.300`).
+
+### B-35 · BAJO · DlcRepository.init
+- [data/repository/DlcRepository.py:16](../data/repository/DlcRepository.py#L16) `drop table dlc` sin `IF EXISTS`.
+
+### B-36 · BAJO · Regex de TitleID
+- [Gui.py:275](../Gui.py#L275), [Gui.py:281](../Gui.py#L281) `[0-F]{16}` con `search`: acepta `:;<=>?@`, rechaza minúsculas.
+  Usar `re.fullmatch(r'[0-9A-Fa-f]{16}')` y normalizar a mayúsculas.
+
+### B-37 · MEDIO · Logging
+- [ConvertFiles.py:39-43](../ConvertFiles.py#L39-L43): handler a `error.log` relativo al CWD, añadido al importar; root a DEBUG → la GUI
+  recibe los mensajes DEBUG de urllib3/PIL/numba; `QTextEdit` sin límite de bloques (memoria y lentitud en conversiones largas).
+- **Arreglo**: `logging` configurado una vez en el arranque, archivo en `app_dir()/logs/` con rotación, nivel INFO para librerías,
+  `QPlainTextEdit` con `setMaximumBlockCount`.
+
+### B-38 · MEDIO · TensorFlow al cargar
+- [PitchAnalyzer.py:21](../PitchAnalyzer.py#L21): importa crepe/tensorflow al importar el módulo (cada conversión, también en modo fast).
+- **Evidencia**: 362 × `No module named 'tensorflow'` en `error.log`.
+- Demucs se lanza con `sys.executable -m demucs` (no existe en el ejecutable congelado) y deja `demucs_out/` en la carpeta de la canción.
+- **Arreglo**: importación perezosa solo en modo slow; avisar una vez en la GUI si faltan dependencias.
+
+### B-39 · MEDIO · Genius sin caché negativa
+- [UltrastarToSingit.py:379-473](../UltrastarToSingit.py#L379-L473): si falla, no guarda nada → en cada ejecución repite hasta
+  2 URL (5 s) + 3 búsquedas (10 s) + página (10 s) por canción. También se consulta en formato XML, donde la estructura no se escribe.
+- **Arreglo**: cachear también "no encontrado" con fecha; opción "sin conexión"; sesión `requests.Session` reutilizada.
+
+### B-40 · MEDIO · Tildes en las letras — A VERIFICAR
+- [UltrastarToSingit.py:38-42](../UltrastarToSingit.py#L38-L42): `normalize_text` elimina todas las marcas diacríticas
+  (`canción` → `cancion`, `año` → `ano`) aunque el vxla se escribe en Windows-1252, que sí las admite.
+- **Verificar**: abrir un vxla oficial de los DLC en español/francés/alemán; si traen tildes, quitar el filtrado NFD y dejar solo
+  los reemplazos tipográficos (opción configurable por si alguna edición del juego no tiene la fuente).
+
+### B-41 · ALTO · Build sin QtMultimedia — A VERIFICAR
+- `Lets Sing Ultrastar Converter.spec:13` excluye `PySide6.QtMultimedia`; [Gui.py:21](../Gui.py#L21) y SyncEditor la importan
+  (añadida en el fork, `5f0d14e`/`4cb04ff`). El ejecutable generado con ese spec probablemente no arranca. Icono con ruta Windows (`assets\\logo.ico`).
+- **Verificar**: construir con PyInstaller y abrir el binario.
+
+### B-42 · MEDIO · Repo y dependencias
+- `.gitignore` ignora `*.txt` y `*/` → `requirements.txt` y `.github/workflows/build.yml` **no están en git** (el commit `9ba81f4`
+  y `pr_body.txt` dicen haberlo añadido). Sí se versionan `tools/__pycache__/*.pyc`.
+- `requirements.txt` es un `pip freeze` con torch, CUDA, tf-nightly y keras-nightly (varios GB, versiones nightly) → no sirve para
+  instalar la app básica.
+- **Arreglo**: `requirements.txt` mínimo (PySide6, PyYAML, munch, requests, beautifulsoup4, chardet, Levenshtein, Markdown,
+  pillow, pyqtdarktheme) + `requirements-slow.txt` opcional; corregir `.gitignore`.
+
+### B-43 · BAJO · Código muerto con bug
+- [ConvertFiles.py:119-120](../ConvertFiles.py#L119-L120) `return` dentro del bucle. Función sin uso: eliminar.
+
+### B-44 · MEDIO · binkc bajo Wine
+- [ConvertFiles.py:406-428](../ConvertFiles.py#L406-L428): `wine` fijo (sin `WINEPREFIX` ni ruta configurable), sin timeout
+  (un binkc colgado bloquea un hilo para siempre), `capture_output` descartado.
+- **Evidencia**: 38 × `Failed to generate ... from binkc` sin más información.
+- **Arreglo**: registrar stdout/stderr y código de salida; timeout proporcional a la duración; validar tamaño mínimo del `.bk2`
+  (README_Linux menciona `.bk2` vacíos de ~800 bytes); opción `wine_path`/`wine_prefix` en config.
+
+### B-45 · MEDIO · Cierre con conversión activa
+- `MainWindow` no tiene `closeEvent`: cerrar la ventana deja el QThread y el pool vivos.
+- **Evidencia**: 5 × `RuntimeError: can't register atexit after shutdown` en `error.log`.
+- **Arreglo**: `closeEvent` que pida confirmación, active `stop_event`, termine los procesos y espere al worker.
