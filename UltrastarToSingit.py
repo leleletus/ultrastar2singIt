@@ -1,8 +1,8 @@
-import io
 import json
 import logging
 import os
 import re
+import time
 import xml.etree.cElementTree as ET
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -17,7 +17,14 @@ from bs4 import BeautifulSoup
 XML = 'xml'
 JSON = 'json'
 
+VXLA_ENCODING = 'cp1252'  # the game's vxla files are Windows-1252
+
 logger = logging.getLogger(__name__)
+
+# When a Genius lookup finds nothing, don't ask again for this many days
+GENIUS_NOT_FOUND_RETRY_DAYS = 30
+# Set after the first connection error so the rest of the run doesn't wait on timeouts
+_genius_offline = False
 
 GENIUS_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
@@ -29,7 +36,8 @@ replacements = {
     "œ": "oe", "Œ": "OE", "æ": "ae", "Æ": "AE",
     "ﬁ": "fi", "ﬂ": "fl",
     "–": "-", "—": "-", "−": "-",
-    "…": "..."
+    "…": "...",
+    "ł": "l", "Ł": "L", "đ": "d", "Đ": "D", "ı": "i", "ħ": "h"
 }
 
 def log_debug(msg):
@@ -41,6 +49,29 @@ def normalize_text(text):
     return ''.join(c for c in unicodedata.normalize('NFD', text)
                    if unicodedata.category(c) != 'Mn')
 
+def normalize_lyric(text, keep_accents=True):
+    """Lyrics shown in game. The vxla is written in Windows-1252, so every character it can
+    encode (é, à, ñ, ç, ü, ¡, ¿...) is kept; anything else is transliterated or dropped."""
+    if not keep_accents:
+        return normalize_text(text)
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+    result = []
+    for c in text:
+        try:
+            c.encode(VXLA_ENCODING)
+            result.append(c)
+            continue
+        except UnicodeEncodeError:
+            pass
+        base = ''.join(x for x in unicodedata.normalize('NFD', c) if unicodedata.category(x) != 'Mn')
+        try:
+            base.encode(VXLA_ENCODING)
+            result.append(base)
+        except UnicodeEncodeError:
+            pass
+    return ''.join(result)
+
 # handle special characters and feats for genius url
 def normalize_for_url(text):
     text = text.strip().lower()
@@ -51,30 +82,102 @@ def normalize_for_url(text):
     text = text.strip('-')
     return text
 
+# Encodings chardet reports for Western European text: decode those as Windows-1252,
+# which is what UltraStar editors on Windows write
+_WESTERN_ENCODINGS = ('ascii', 'windows-1252', 'iso-8859-1', 'iso8859-1', 'iso-8859-15', 'iso8859-15',
+                      'iso-8859-3', 'iso8859-3', 'iso-8859-9', 'iso8859-9', 'windows-1254', 'macroman', 'mac-roman')
+
 def detect_encoding(filename):
+    """Encoding of the whole file (never a guess based only on the first bytes)."""
     with open(filename, 'rb') as f:
-        rawdata = f.read(4096)
-    result = chardet.detect(rawdata)
-    return result['encoding'] or 'utf-8'
+        raw = f.read()
+    return _detect_encoding_bytes(raw)
+
+def _detect_encoding_bytes(raw):
+    try:
+        raw.decode('utf-8-sig')
+        return 'utf-8-sig'
+    except UnicodeDecodeError:
+        pass
+    detected = (chardet.detect(raw).get('encoding') or '').lower()
+    if detected and detected not in _WESTERN_ENCODINGS:
+        try:
+            raw.decode(detected)
+            return detected
+        except (UnicodeDecodeError, LookupError):
+            pass
+    try:
+        raw.decode('cp1252')
+        return 'cp1252'
+    except UnicodeDecodeError:
+        return 'latin-1'
+
+def read_text_file(filename):
+    with open(filename, 'rb') as f:
+        raw = f.read()
+    return raw.decode(_detect_encoding_bytes(raw))
+
+_NOTE_RE = re.compile(r'^([:*FRG])\s*(-?\d+)\s+(-?\d+)\s+(-?\d+)(?: (.*))?$')
+_PAGE_RE = re.compile(r'^-\s*(-?\d+)(?:\s+(-?\d+))?')
+_PLAYER_RE = re.compile(r'^P\s*(\d+)', re.IGNORECASE)
 
 def parse_file(filename):
+    """Parse an UltraStar txt.
+
+    Tags are stored upper-case with stripped values. Notes are lists of strings:
+    [type, start_beat, length, pitch, lyric] (lyric may be '') and page breaks ['-', beat].
+    RELATIVE files are converted to absolute beats; for duets only player 1 is kept.
+    """
     data = {
         "notes": [],
         "passages": [], # represents rows in the txt file
         "lyrics_map_list": [] # a list of maps, each map contains a full word lyric and a start beat
                               # (lyrics spread over multiple beats are grouped by the starting beat)
     }
-    encoding = detect_encoding(filename)
-    with io.open(filename, "r", encoding=encoding, errors='ignore') as f:
-        for line in f:
-            line = line.replace('\n', '')
-            if line.startswith("#"):
-                p = line.split(":", 1)
-                if len(p) == 2:
-                    data[p[0][1:]] = p[1]
-            else:
-                note_arr = line.split(" ", 4)
-                data["notes"].append(note_arr)
+    text = read_text_file(filename)
+    relative = False
+    offset = 0
+    player = 1
+    for line in text.splitlines():
+        if line.startswith("#"):
+            p = line.split(":", 1)
+            if len(p) == 2:
+                key = p[0][1:].strip().upper()
+                data[key] = p[1].strip()
+                if key == 'RELATIVE':
+                    relative = p[1].strip().lower() in ('yes', 'true', '1')
+            continue
+
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped[0] == 'E':
+            data["notes"].append(['E'])
+            break
+
+        player_match = _PLAYER_RE.match(stripped)
+        if player_match:
+            player = int(player_match.group(1))
+            offset = 0
+            continue
+        if player not in (1, 3):
+            continue
+
+        note_match = _NOTE_RE.match(line.rstrip('\r\n'))
+        if note_match:
+            note_type, start, length, pitch, lyric = note_match.groups()
+            data["notes"].append([note_type, str(int(start) + offset), length, pitch, lyric or ''])
+            continue
+
+        page_match = _PAGE_RE.match(stripped)
+        if page_match:
+            beat = int(page_match.group(1)) + offset
+            data["notes"].append(['-', str(beat)])
+            if relative:
+                offset += int(page_match.group(2) or page_match.group(1))
+
+    if 'MP3' not in data and 'AUDIO' in data:
+        data['MP3'] = data['AUDIO']
     return data
 
 def find_refrains(sing_it):
@@ -148,7 +251,7 @@ def merge_intervals(intervals):
     merged.append(current_interval)
     return merged
 
-def map_data(us_data, song_duration, pitch_corr, input_file_name, ignore_medley=False):
+def map_data(us_data, song_duration, pitch_corr, input_file_name, ignore_medley=False, keep_accents=True):
     sing_it = {"text": [], "notes": [],
         "passages": [], "pages": [], "structure": []}
     bpm = float(us_data["BPM"].replace(',', '.'))
@@ -171,7 +274,7 @@ def map_data(us_data, song_duration, pitch_corr, input_file_name, ignore_medley=
         if note[0] in [':', '*', 'F', 'R', 'G']:
             start = float(note[1]) * 60 / bpm / 4 + gap + video_gap
             end = start + float(note[2]) * 60 / bpm / 4
-            lyric_text = normalize_text(note[4])
+            lyric_text = normalize_lyric(note[4], keep_accents)
             
             if lyric_text.strip() != "~": # if the lyric is just a tilde, don't add it to on-screen lyrics
                 final_lyric = lyric_text.replace('~', '') # tildes in the middle of bottom lyrics are ugly
@@ -319,6 +422,19 @@ def sanitize_for_genius(text):
     text = re.sub(r'\b[xX]\b', '&', text)
     return text.strip()
 
+def _set_genius_offline(error):
+    global _genius_offline
+    if not _genius_offline:
+        logger.warning(f"Genius is not reachable ({error}). Chorus lookup disabled for the rest of this run.")
+    _genius_offline = True
+
+def _write_genius_cache(cache_file, data):
+    try:
+        with open(cache_file, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+    except OSError as e:
+        logger.warning(f"Could not write Genius cache {cache_file}: {e}")
+
 def genius_search_for_correct_path(artist, title):
     artist = sanitize_for_genius(artist)
     title = sanitize_for_genius(title)
@@ -367,10 +483,12 @@ def genius_search_for_correct_path(artist, title):
                                 log_debug(f"Match Confirmed: '{result['full_title']}'")
                                 return "https://genius.com" + result['path']
                                 
+        except requests.exceptions.ConnectionError as e:
+            _set_genius_offline(e)
+            return None
         except Exception as e:
             error_msg = f"Could not find '{query}': {str(e)}"
-            log_debug(error_msg)
-            logging.error(error_msg)
+            logger.warning(error_msg)
             continue
             
     log_debug("No song matches found on Genius.")
@@ -403,8 +521,16 @@ def genius_get_choruses(input_file_name, artist=None, title=None, use_cache=True
         try:
             with open(cache_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
+            if not data.get('not_found'):
                 return data['choruses']
-        except: pass
+            if time.time() - data.get('checked', 0) < GENIUS_NOT_FOUND_RETRY_DAYS * 86400:
+                log_debug("Genius: cached as not found, skipping lookup.")
+                return []
+        except Exception:
+            pass
+
+    if _genius_offline:
+        return []
 
     urls_to_try = []
     
@@ -433,20 +559,27 @@ def genius_get_choruses(input_file_name, artist=None, title=None, use_cache=True
                 final_response = resp
                 found_url = url
                 break
-        except: continue
+        except requests.exceptions.ConnectionError as e:
+            _set_genius_offline(e)
+            return []
+        except Exception:
+            continue
 
     if not final_response or final_response.status_code != 200:
         log_debug("Direct URL failed. Attempting title search...")
         api_url = genius_search_for_correct_path(artist, title)
+        if _genius_offline:
+            return []
         if api_url:
             try:
                 final_response = requests.get(api_url, headers=GENIUS_HEADERS, timeout=10)
                 found_url = api_url
             except Exception as e:
-                logging.error(f"Error connecting to Genius API URL ({api_url}): {e}")
+                logger.error(f"Error connecting to Genius API URL ({api_url}): {e}")
     
     if not final_response or final_response.status_code != 200:
-        logging.warning(f"Genius search failed for '{artist} - {title}'. Chorus data not downloaded")
+        logger.warning(f"Genius search failed for '{artist} - {title}'. Chorus data not downloaded")
+        _write_genius_cache(cache_file, {'not_found': True, 'checked': time.time(), 'choruses': []})
         return []
 
     soup = BeautifulSoup(final_response.content, 'html.parser')
@@ -467,9 +600,7 @@ def genius_get_choruses(input_file_name, artist=None, title=None, use_cache=True
         if len(clean_m) > 10:
             choruses.append(clean_m)
 
-    with open(cache_file, 'w', encoding='utf-8') as f:
-        json.dump({'url': found_url, 'choruses': choruses}, f, indent=2, ensure_ascii=False)
-        
+    _write_genius_cache(cache_file, {'url': found_url, 'choruses': choruses})
     return choruses
 
 def recover_repeats_from_txt(lyrics_map_list, matched_choruses):
@@ -645,16 +776,18 @@ def write_vxla_file(sing_it, filename, directory, song_duration, output_type):
         ET.SubElement(doc, "Interval", t1="0.000", t2="{0:.3f}".format(song_duration), value="english")
 
     xmlstr = minidom.parseString(ET.tostring(root)).toprettyxml(encoding="Windows-1252", indent="\t")
-    xmlstr = xmlstr.decode("Windows-1252")
+    xmlstr = xmlstr.decode(VXLA_ENCODING)
     xmlstr = re.sub(r'(</IntervalLayer>)', r'\1\n', xmlstr)
     xmlstr = re.sub(r'(value="[^"]*")\/>', r'\1 />', xmlstr)
 
     with open(os.path.join(directory, filename), "wb") as f:
-        f.write(xmlstr.encode("Windows-1252", errors='xmlcharrefreplace'))
+        f.write(xmlstr.encode(VXLA_ENCODING, errors='xmlcharrefreplace'))
 
-def main(input_file_name, song_duration, pitch_corr=0, s='', directory='', output_type=JSON, ignore_medley=False):
+def main(input_file_name, song_duration, pitch_corr=0, s='', directory='', output_type=JSON, ignore_medley=False,
+         keep_accents=True):
     us_data = parse_file(input_file_name)
     output_file = s if s else re.sub('[^A-Za-z0-9]+', '', us_data.get("TITLE", "Song"))
     
-    sing_it = map_data(us_data, song_duration, pitch_corr, input_file_name=input_file_name, ignore_medley=ignore_medley)
+    sing_it = map_data(us_data, song_duration, pitch_corr, input_file_name=input_file_name, ignore_medley=ignore_medley,
+                       keep_accents=keep_accents)
     write_vxla_file(sing_it, output_file + '.vxla', directory=directory, song_duration=song_duration, output_type=output_type)
