@@ -140,7 +140,9 @@ def convert_vxla_to_txt(vxla_file, song_id, meta, output_folder):
         f.write(f"#ARTIST:{artist}\n")
         f.write(f"#YEAR:{year}\n")
         f.write(f"#BPM:{BPM}\n")
-        
+        f.write("#LETSSINGPITCHOFFSET:36\n")
+
+        name_id = song_id
         ogg_src = os.path.join(MEGAPACK_DIR, "Songs", "audio", f"{song_id}.ogg")
         if os.path.exists(ogg_src):
             f.write(f"#MP3:{song_id}.ogg\n")

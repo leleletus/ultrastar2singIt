@@ -52,18 +52,35 @@ def seconds_to_beats(seconds, bpm=300):
 def clean_lyric(lyric):
     return lyric.replace("~", "").replace("\n", "").replace("\r", "")
 
+# The game's offset between its note numbers and UltraStar pitches used by this extractor. It is written
+# to the txt as #LETSSINGPITCHOFFSET so the converter restores the original pitches exactly.
+PITCH_OFFSET = 36
+
+def _same_time(a, b):
+    try:
+        return abs(float(a) - float(b)) < 0.005
+    except (TypeError, ValueError):
+        return False
+
+def _lyric_value(interval):
+    return interval.get('value', '')
+
 def check_space_after(t2, lyrics_data):
     for interval in lyrics_data:
-        if interval.get('t1') == str(t2):
-            if interval.get('value') == '~':
-                return True
+        value = _lyric_value(interval)
+        if _same_time(interval.get('t2'), t2) and value.endswith(' '):
+            return True
+        if _same_time(interval.get('t1'), t2) and value == '~':
+            return True
     return False
 
 def check_space_before(t1, lyrics_data):
     for interval in lyrics_data:
-        if interval.get('t2') == str(t1):
-            if interval.get('value') == '~':
-                return True
+        value = _lyric_value(interval)
+        if _same_time(interval.get('t1'), t1) and value.startswith(' '):
+            return True
+        if _same_time(interval.get('t2'), t1) and value == '~':
+            return True
     return False
 
 def build_metadata_from_json(json_path):
@@ -108,13 +125,16 @@ def convert_vxla_to_txt(vxla_file, song_id, meta, output_folder, mega_dir):
 
     for layer in root.findall('IntervalLayer'):
         name = layer.get('name')
-        if name == 'notes': notes_layer = layer
+        if name == 'notes_full': notes_layer = layer
+        elif name == 'notes' and notes_layer is None: notes_layer = layer
         elif name == 'lyrics': lyrics_layer = layer
         elif name == 'pages': pages_layer = layer
         elif name == 'passages': passages_layer = layer
 
-    if notes_layer is None or lyrics_layer is None:
+    if notes_layer is None:
         return False
+    if lyrics_layer is None:
+        lyrics_layer = ET.Element('IntervalLayer')
 
     lyrics_data = lyrics_layer.findall('Interval')
     os.makedirs(output_folder, exist_ok=True)
@@ -134,7 +154,8 @@ def convert_vxla_to_txt(vxla_file, song_id, meta, output_folder, mega_dir):
         f.write(f"#ARTIST:{artist}\n")
         f.write(f"#YEAR:{year}\n")
         f.write(f"#BPM:{BPM}\n")
-        f.write("#GAP:10\n")
+        f.write("#GAP:0\n")
+        f.write(f"#LETSSINGPITCHOFFSET:{PITCH_OFFSET}\n")
         
         # 1. Map Audio
         audio_found = False
@@ -219,15 +240,15 @@ def convert_vxla_to_txt(vxla_file, song_id, meta, output_folder, mega_dir):
                 pitch_str, lyric = val.split("#.", 1)
                 try: pitch = int(pitch_str[2:])
                 except ValueError: continue
-                us_pitch = pitch - 36
+                us_pitch = pitch - PITCH_OFFSET
                 lyric = clean_lyric(lyric)
             else:
                 try: pitch = int(val)
                 except: continue
-                us_pitch = pitch - 36
-                lyric = clean_lyric(lyrics_map.get(t1, "~"))
+                us_pitch = pitch - PITCH_OFFSET
+                lyric = clean_lyric(next((v for k, v in lyrics_map.items() if abs(k - t1) < 0.005), "~"))
                 
-            if lyric == "-": lyric = "~"
+            if lyric in ("-", ""): lyric = "~"
             else:
                 if check_space_after(t2, lyrics_data): lyric += " "
                 if check_space_before(t1, lyrics_data): lyric = " " + lyric
