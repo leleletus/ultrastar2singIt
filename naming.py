@@ -84,13 +84,14 @@ VIDEO_BK2_SUFFIX = '.bk2'               # final video for JSON games (very slow 
 VIDEO_INTERMEDIATE_SUFFIX = '.avi'      # x264 intermediate fed to binkc
 STILL_VIDEO_SUFFIX = '_cover.avi'       # still video made from the cover (bink input)
 STILL_VIDEO_MP4_SUFFIX = '_cover.mp4'   # still video made from the cover (XML games / legacy)
+META_XML_SUFFIX = '_meta.xml'           # song metadata for XML games
 AUTO_COVER_SUFFIX = '_autocover.png'     # placeholder cover (artist + title) for songs without any image
 
 GENERATED_SUFFIXES = (
     AUDIO_PREVIEW_SUFFIX, AUDIO_SUFFIX,
     COVER_LONG_SUFFIX, IN_GAME_LOADING_SUFFIX, RESULT_SUFFIX, COVER_SUFFIX,
     VXLA_META_SUFFIX, VXLA_SUFFIX,
-    STILL_VIDEO_SUFFIX, STILL_VIDEO_MP4_SUFFIX, AUTO_COVER_SUFFIX,
+    STILL_VIDEO_SUFFIX, STILL_VIDEO_MP4_SUFFIX, AUTO_COVER_SUFFIX, META_XML_SUFFIX,
     VIDEO_MP4_SUFFIX, VIDEO_BK2_SUFFIX, VIDEO_INTERMEDIATE_SUFFIX,
 )
 

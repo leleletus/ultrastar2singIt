@@ -147,7 +147,7 @@ class PreviewTable(QTableWidget):
             self.sortItems(logicalIndex, Qt.DescendingOrder)
             self.horizontalHeader().setSortIndicator(logicalIndex, Qt.DescendingOrder)
         else:
-            self.sortItems(7, Qt.AscendingOrder)
+            self.sortItems(8, Qt.AscendingOrder)  # hidden OrigOrder column
             self.horizontalHeader().setSortIndicator(-1, Qt.AscendingOrder)
 
     def selected_rows(self) -> list[int]:

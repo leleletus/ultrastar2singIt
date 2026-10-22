@@ -6,6 +6,7 @@ core:
 tools:
     ffmpeg_path:
     rad_path:
+    wine_path:
 folders:
     input:
     output:
@@ -20,3 +21,10 @@ conversion_tweaks:
     max_video_size: 80
     no_medley: False
     still_video: False
+    clear_output: True
+    force_reconvert: False
+    keep_accents: True
+    multithreading: False
+    multithreading_workers: 3
+    vocal_isolation: False
+language: en

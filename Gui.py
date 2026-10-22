@@ -23,11 +23,12 @@ from PySide6.QtCore import QUrl
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                                QHBoxLayout, QLabel, QLineEdit, QPushButton,
                                QCheckBox, QTextEdit, QTableWidgetItem, QFileDialog, QGroupBox,
-                               QGridLayout, QAbstractItemView, QProgressBar,
+                               QGridLayout, QAbstractItemView, QProgressBar, QMessageBox,
                                QAbstractButton, QDialog, QTextBrowser, QDialogButtonBox, QComboBox, QSpinBox)
 
 import GuiElement
 import SupportedFormats
+import naming
 import data.repository.DlcRepository as repository
 from PreviewTable import PreviewTable
 from ConfigLoader import load_config, app_dir, bundle_dir
@@ -58,7 +59,7 @@ class QtLogHandler(logging.Handler):
 class ConversionWorker(QThread):
     log_message = Signal(str)
     progress = Signal(int, int)  # (current, total)
-    finished = Signal()
+    done = Signal(object)  # summary dict from ConvertFiles.main
     error = Signal(str)
 
     def __init__(self, cfg, stop_event):
@@ -81,42 +82,19 @@ class ConversionWorker(QThread):
         handler.setFormatter(logging.Formatter('%(message)s'))
         logging.getLogger().addHandler(handler)
         try:
-            ConvertFiles.main(self.cfg, stop_event=self.stop_event,
-                              progress_callback=self.on_progress)
+            summary = ConvertFiles.main(self.cfg, stop_event=self.stop_event,
+                                        progress_callback=self.on_progress)
         except Exception as e:
+            logger.exception("Conversion failed")
             self.error.emit(str(e))
             return
         finally:
             logging.getLogger().removeHandler(handler)
+        self.done.emit(summary)
 
 
-def strip_accents(s):
-    import unicodedata
-    s = ''.join(c for c in unicodedata.normalize('NFD', s) if unicodedata.category(c) != 'Mn')
-    s = s.replace('ø', 'o').replace('Ø', 'O')
-    s = s.replace('œ', 'oe').replace('Œ', 'OE')
-    s = s.replace('æ', 'ae').replace('Æ', 'AE')
-    s = s.replace('ß', 'ss')
-    s = s.replace('&', 'and')
-    s = s.replace('ñ', 'n').replace('Ñ', 'N')
-    return s
-
-def construct_name_id_from_directory_name(dir_long_name) -> str:
-    parts = dir_long_name.split(' - ')
-    if len(parts) < 2: 
-        s = strip_accents(dir_long_name).replace(" ", "")
-        return ''.join(e for e in s if e.isalnum() and e.isascii())
-    
-    artist_dir_name = strip_accents(parts[0]).replace("?", "").replace("!", "").replace(":", "").replace('"', "").replace("/", " ")
-    title_dir_name = strip_accents(parts[1]).replace("?", "").replace("!", "").replace(":", "").replace('"', "").replace("/", " ")
-    
-    artist_caps = [word[0].upper() for word in artist_dir_name.split()]
-    artist_cap = ''.join(artist_caps)
-    artist_cap = ''.join(e for e in artist_cap if e.isalnum() and e.isascii())
-    
-    title_lower = ''.join(e.lower() for e in title_dir_name if e.isalnum() and e.isascii())
-    return artist_cap + title_lower
-
+strip_accents = naming.strip_accents
+construct_name_id_from_directory_name = naming.construct_name_id_from_directory_name
 
 
 def set_element_enabled(element, is_enabled: bool) -> None:
@@ -186,6 +164,8 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.game_format = JSON
+        self._loading_defaults = True
+        self._sync_cache = {}  # txt path -> (mtime, doubtful)
         self.init_elements()
         self.setStyleSheet(f"""
             QLineEdit {{ height: 18px; }}
@@ -268,17 +248,25 @@ class MainWindow(QMainWindow):
         self.media_player.mediaStatusChanged.connect(self.on_media_status_changed)
 
         self.cfg = load_config()
+        lang = getattr(self.cfg, 'language', None) or 'en'
+        if lang != 'en':
+            i18n.load_language(lang)
+        self._loading_defaults = True
         self.set_defaults()
+        self._loading_defaults = False
+        self.scan_input_folder()
+        if lang != 'en':
+            self.update_ui_language()
 
     def core_id_input_fv(self) -> bool:
         text = self.core_id_input.text().strip()
-        valid = text and re.search(r'[0-F]{16}', text) is not None
+        valid = bool(text) and re.fullmatch(r'[0-9A-Fa-f]{16}', text) is not None
         mark_field_valid(self.core_id_input, valid)
         return valid
 
     def dlc_id_input_fv(self) -> bool:
         text = self.dlc_id_input.text().strip()
-        valid = text and re.search(r'[0-F]{16}', text) is not None
+        valid = bool(text) and re.fullmatch(r'[0-9A-Fa-f]{16}', text) is not None
         mark_field_valid(self.dlc_id_input, valid)
         return valid
 
@@ -286,7 +274,8 @@ class MainWindow(QMainWindow):
         mark_field_valid(self.dlc_json_name_input, True)
         self.game_format = JSON if self.dlc_json_name_input.text() != '' else XML
         self.include_dlc_checkbox_refresh()
-        self.scan_input_folder()
+        if not self._loading_defaults:
+            self.scan_input_folder()
         set_element_enabled(self.rad_label, True if self.game_format == JSON else False)
         set_element_enabled(self.rad_path, True if self.game_format == JSON else False)
         set_element_enabled(self.rad_browse, True if self.game_format == JSON else False)
@@ -466,6 +455,9 @@ class MainWindow(QMainWindow):
         # Force reconvert checkbox
         tweaks_layout.addWidget(self.force_reconvert_checkbox)
 
+        # Keep accents in lyrics
+        tweaks_layout.addWidget(self.keep_accents_checkbox)
+
         tweaks_content = QWidget()
         tweaks_content.setLayout(tweaks_layout)
         tweaks_outer_layout = QVBoxLayout()
@@ -617,13 +609,12 @@ class MainWindow(QMainWindow):
         if not path:
             mark_field_valid(self.output_path, False)
             return False
-        if os.path.isdir(path):
-            for file_or_folder in os.listdir(path):
-                if os.path.isfile(file_or_folder) or not re.search(r'^[0-9A-F]{16}', file_or_folder):
-                    # SAFETY SHIELD: If the chosen folder contains unknown files or folders, append _Patch subfolder to path.
-                    # This prevents the program from wiping the user's personal files (like their Desktop or Downloads) since the output is cleared.
-                    self.output_path.setText(os.path.join(path, DEFAULT_OUTPUT_FOLDER_NAME))
-                    break
+        # SAFETY SHIELD: the output folder is wiped before converting, so if the chosen folder contains
+        # anything other than TitleID folders a _Patch subfolder is used (same rule as the converter)
+        import ConvertFiles
+        safe_path = ConvertFiles.safe_output_dir(path)
+        if safe_path != path:
+            self.output_path.setText(safe_path)
         mark_field_valid(self.output_path, True)
         return True
 
@@ -635,7 +626,8 @@ class MainWindow(QMainWindow):
                 if os.path.isdir(os.path.join(path, folder)) and re.search(r'^((?:.*\S)?)\s-\s(\S(?:.*\S)?)$', folder):
                     mark_field_valid(self.input_path, True)
                     self.sync_watched_folders(path)
-                    self.scan_input_folder()
+                    if not self._loading_defaults:
+                        self.scan_input_folder()
                     return True
         mark_field_valid(self.input_path, False)
         self.clear_preview()
@@ -735,6 +727,10 @@ class MainWindow(QMainWindow):
         force_reconv = getattr(self.cfg.conversion_tweaks, "force_reconvert", False)
         self.force_reconvert_checkbox.setChecked(force_reconv)
         self.clear_output_checkbox.setChecked(getattr(self.cfg.conversion_tweaks, "clear_output", True))
+        self.multithread_checkbox.setChecked(bool(getattr(self.cfg.conversion_tweaks, "multithreading", False)))
+        self.multithread_workers.setValue(int(getattr(self.cfg.conversion_tweaks, "multithreading_workers", None) or 3))
+        self.multithread_workers.setEnabled(self.multithread_checkbox.isChecked())
+        self.keep_accents_checkbox.setChecked(bool(getattr(self.cfg.conversion_tweaks, "keep_accents", True)))
 
         self.still_video_checkbox.clicked.connect(self.still_video_checkbox_fv)
         self.still_video_checkbox.setChecked(self.cfg.conversion_tweaks.still_video)
@@ -811,7 +807,6 @@ class MainWindow(QMainWindow):
 
         self.output_path_fv()
         self.sync_watched_folders(input_path)
-        self.refresh_preview()
 
     def sanitize_name(self, name):
         name = re.sub(r'\[.*?\]', '', name)
@@ -838,20 +833,14 @@ class MainWindow(QMainWindow):
                 if not os.path.isdir(directory_path) or " - " not in directory:
                     continue
 
-                name_id = construct_name_id_from_directory_name(directory)
+                name_id = construct_name_id_from_directory_name(directory.rstrip('.'))
+                name_ids = naming.all_name_ids(directory.rstrip('.'))
                 if not is_blank(self.dlc_json_name_input.text()):
                     output_video_name = name_id + '.bk2'
-                    png_in_game_file_name = "yoyoyo"
-                    png_long_file_name = "yoyoyo"
-                    png_result_file_name = "yoyoyo"
-                else :
-                    png_in_game_file_name = name_id + '_InGameLoading.png'
-                    png_long_file_name = name_id + '_long.png'
-                    png_result_file_name = name_id + '_Result.png'
+                else:
                     output_video_name = name_id + '.mp4'
                 output_image_name = name_id + '.png'
                 output_audio_name = name_id + '.ogg'
-                output_audio_preview_name = name_id + '_preview.ogg'
                 output_txt_name = name_id + '.vxla'
 
                 has_video = GuiElement.Icon.X.get_icon()
@@ -861,10 +850,11 @@ class MainWindow(QMainWindow):
 
                 all_files = os.listdir(directory_path)
 
-                files_txt = [x for x in all_files if x.lower().endswith(SupportedFormats.TXT_EXTENSIONS) and x != output_txt_name]
-                files_avi = [x for x in all_files if x.lower().endswith(SupportedFormats.VIDEO_EXTENSIONS) and not x.endswith('_cover.mp4') and x != output_video_name]
-                files_mp3 = [x for x in all_files if x.lower().endswith(SupportedFormats.AUDIO_EXTENSIONS) and x != output_audio_name and x != output_audio_preview_name]
-                files_jpg = [x for x in all_files if x.lower().endswith(SupportedFormats.IMAGE_EXTENSIONS) and x not in (output_image_name, png_in_game_file_name, png_long_file_name, png_result_file_name)]
+                source_files = [x for x in all_files if not naming.is_generated_file(x, name_ids) and '.tmp.' not in x]
+                files_txt = [x for x in source_files if x.lower().endswith(SupportedFormats.TXT_EXTENSIONS)]
+                files_avi = [x for x in source_files if x.lower().endswith(SupportedFormats.VIDEO_EXTENSIONS)]
+                files_mp3 = [x for x in source_files if x.lower().endswith(SupportedFormats.AUDIO_EXTENSIONS)]
+                files_jpg = [x for x in source_files if x.lower().endswith(SupportedFormats.IMAGE_EXTENSIONS)]
 
                 cached_video = output_video_name in all_files
                 cached_audio = output_audio_name in all_files
@@ -893,9 +883,7 @@ class MainWindow(QMainWindow):
                     "directory": directory,
                     "directory_path": directory_path,
                     "icons": [has_video, has_audio, has_image, has_txt],
-                    "outputs": [output_video_name, output_audio_name, output_audio_preview_name,
-                                output_image_name, png_in_game_file_name, png_long_file_name,
-                                png_result_file_name, output_txt_name],
+                    "name_ids": name_ids,
                     "is_cached": cached_video or cached_audio or cached_image or cached_txt,
                 })
 
@@ -918,7 +906,7 @@ class MainWindow(QMainWindow):
                 checkbox_item.setCheckState(Qt.Unchecked)
                 checkbox_item.setTextAlignment(Qt.AlignCenter)
                 # Store deletion info on the checkbox item
-                checkbox_item.setData(Qt.UserRole, {"directory_path": song["directory_path"], "outputs": song["outputs"]})
+                checkbox_item.setData(Qt.UserRole, {"directory_path": song["directory_path"], "name_ids": song["name_ids"]})
                 self.preview_table.setItem(row, 0, checkbox_item)
 
                                 # Play Button (1)
@@ -961,12 +949,10 @@ class MainWindow(QMainWindow):
             self.update_clear_cache_enabled()
 
     def play_song_audio(self, directory_path, btn):
-        import glob
-        import os
         from PySide6.QtMultimedia import QMediaPlayer
-        audio_files = glob.glob(os.path.join(directory_path, "*.ogg")) + glob.glob(os.path.join(directory_path, "*.mp3"))
+        audio_files = self.song_audio_files(directory_path)
         if not audio_files:
-            self.log_message(f"No audio file found in {directory_path}!")
+            self.log(f"No audio file found in {directory_path}!")
             return
             
         # If clicking the currently playing button, pause it
@@ -991,46 +977,74 @@ class MainWindow(QMainWindow):
             self.current_playing_btn.setText("▶")
             self.current_playing_btn = None
 
-    def is_doubtful_sync(self, directory_path: str) -> bool:
-        import SupportedFormats
+    def song_txt_file(self, directory_path: str):
+        import ConvertFiles
+        txt_files = [Path(directory_path) / x for x in os.listdir(directory_path)
+                     if x.lower().endswith(SupportedFormats.TXT_EXTENSIONS)]
+        return ConvertFiles.choose_txt_file(txt_files)
+
+    def song_audio_files(self, directory_path: str) -> list:
+        """The converted audio (what the game plays) if it exists, else the song's original audio."""
+        import ConvertFiles
         import UltrastarToSingit
-        import os
-        txt_files = [x for x in os.listdir(directory_path) if x.lower().endswith(SupportedFormats.TXT_EXTENSIONS) and not x.endswith('.vxla')]
-        if not txt_files: return False
-        txt_path = os.path.join(directory_path, txt_files[-1])
+        name = os.path.basename(directory_path).rstrip('.')
+        converted = os.path.join(directory_path, construct_name_id_from_directory_name(name) + naming.AUDIO_SUFFIX)
+        if os.path.isfile(converted):
+            return [converted]
+        txt_path = self.song_txt_file(directory_path)
+        if txt_path is None:
+            return []
         try:
+            audio, _, _ = ConvertFiles.resolve_song_sources(Path(directory_path), UltrastarToSingit.parse_file(txt_path),
+                                                            naming.all_name_ids(name))
+        except Exception:
+            return []
+        return [str(audio)] if audio else []
+
+    def is_doubtful_sync(self, directory_path: str) -> bool:
+        import UltrastarToSingit
+        try:
+            txt_path = self.song_txt_file(directory_path)
+            if txt_path is None:
+                return False
+            mtime = txt_path.stat().st_mtime
+            cached = self._sync_cache.get(str(txt_path))
+            if cached and cached[0] == mtime:
+                return cached[1]
+            doubtful = False
             us_data = UltrastarToSingit.parse_file(txt_path)
             bpm = float(us_data.get("BPM", "100").replace(',', '.'))
-            gap = float(us_data.get("GAP", "0").replace(',', '.'))
-            if gap < 0: return True
-            if bpm > 400 or bpm < 50: return True
-            first_beat = -1
-            for note in us_data.get("notes", []):
-                if note[0] in [':', '*', 'F', 'R', 'G']:
-                    first_beat = float(note[1])
-                    break
-            if first_beat != -1:
-                t_lyric = first_beat * 60 / bpm / 4 * 1000 + gap
-                if t_lyric < 500: return True
-            return False
+            gap = float(us_data.get("GAP", "0").replace(',', '.') or 0)
+            if gap < 0 or bpm > 400 or bpm < 50:
+                doubtful = True
+            else:
+                for note in us_data.get("notes", []):
+                    if note[0] in [':', '*', 'F', 'R', 'G']:
+                        t_lyric = float(note[1]) * 60 / bpm / 4 * 1000 + gap
+                        doubtful = t_lyric < 500
+                        break
+            self._sync_cache[str(txt_path)] = (mtime, doubtful)
+            return doubtful
         except Exception:
             return False
 
     def open_sync_editor(self, directory_path):
         try:
             from SyncEditor import SyncEditorDialog
-            import glob
-            
-            txt_files = glob.glob(os.path.join(directory_path, "*.txt"))
-            if not txt_files:
-                self.log_message("No .txt file found to edit sync!")
+
+            txt_path = self.song_txt_file(directory_path)
+            if txt_path is None:
+                self.log("No UltraStar .txt file found to edit sync!")
                 return
-            
-            dialog = SyncEditorDialog(txt_files[0], self)
+
+            dialog = SyncEditorDialog(str(txt_path), self)
             dialog.exec()
-            self.log_message(f"Sync edited for {os.path.basename(directory_path)}")
+            if dialog.saved:
+                self.log(f"Sync saved for {os.path.basename(directory_path)} (its lyrics will be regenerated on the next conversion)")
+                self.scan_input_folder()
         except Exception as e:
-            self.log_message(f"Failed to open Sync Editor: {e}")
+            logger.exception("Sync editor failed")
+            self.log(f"Failed to open Sync Editor: {e}")
 
     def browse_file(self, line_edit, file_filter="All Files (*)") -> None:
         """Open file browser and set the selected file path"""
@@ -1095,7 +1109,8 @@ class MainWindow(QMainWindow):
         self.watcher_debounce.start()
 
     def do_watcher_refresh(self) -> None:
-        if not self.isVisible():
+        # during a conversion the converter writes into every song folder: refresh once at the end
+        if not self.isVisible() or self.conversion_running:
             return
         self.sync_watched_folders(self.input_path.text())
         self.scan_input_folder()
@@ -1126,10 +1141,8 @@ class MainWindow(QMainWindow):
         self.scan_input_folder()
 
     def clear_cache(self) -> None:
-        """Delete cached output files for rows whose checkbox (col 0) is checked."""
-        deleted_files = 0
-        affected_songs = 0
-
+        """Delete converted files for the checked rows. Converted .bk2 videos are protected:
+        they are only deleted if the user explicitly asks for it and confirms twice."""
         checked_rows = []
         for row in range(self.preview_table.rowCount()):
             item = self.preview_table.item(row, 0)
@@ -1140,34 +1153,66 @@ class MainWindow(QMainWindow):
             self.log("Clear cache: no rows checked.")
             return
 
+        targets = []  # (song dir, [files])
+        protected = []
         for row in checked_rows:
-            checkbox_item = self.preview_table.item(row, 0)
-            if checkbox_item is None:
-                continue
-
-            payload = checkbox_item.data(Qt.UserRole) or {}
+            payload = self.preview_table.item(row, 0).data(Qt.UserRole) or {}
             directory_path = payload.get("directory_path")
-            outputs = payload.get("outputs") or []
-
+            name_ids = payload.get("name_ids") or []
             if not directory_path or not os.path.isdir(directory_path):
                 continue
+            files = [f for f in sorted(os.listdir(directory_path))
+                     if naming.is_generated_file(f, name_ids) or ('.tmp.' in f and any(f.startswith(n) for n in name_ids))]
+            files += [f for f in os.listdir(directory_path) if f.endswith('_genius_cache.json')]
+            protected += [os.path.join(directory_path, f) for f in files if f.endswith(naming.PROTECTED_SUFFIXES)]
+            targets.append((directory_path, files))
 
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Warning)
+        box.setWindowTitle(tr("Clear cache"))
+        box.setText(tr("Delete the converted files of {n} song(s)?").format(n=len(targets)))
+        box.setInformativeText(tr("The original song files are not touched. Audio, covers and lyrics are quick to "
+                                  "convert again.") + "\n\n" +
+                               tr("{n} converted .bk2 video(s) are PROTECTED and will be kept: encoding them again can "
+                                  "take hours or days.").format(n=len(protected)))
+        delete_videos = QCheckBox(tr("Also delete the converted .bk2 videos (NOT recommended)"))
+        box.setCheckBox(delete_videos)
+        box.setStandardButtons(QMessageBox.Yes | QMessageBox.Cancel)
+        box.setDefaultButton(QMessageBox.Cancel)
+        if box.exec() != QMessageBox.Yes:
+            self.log("Clear cache cancelled.")
+            return
+
+        include_videos = delete_videos.isChecked() and protected
+        if include_videos:
+            answer = QMessageBox.critical(
+                self, tr("Delete converted videos?"),
+                tr("You are about to DELETE {n} converted .bk2 video(s).\n\nConverting them again can take hours or "
+                   "even days. This cannot be undone.\n\nAre you completely sure?").format(n=len(protected)),
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            include_videos = answer == QMessageBox.Yes
+            if not include_videos:
+                self.log("The converted .bk2 videos will be kept.")
+
+        deleted_files = 0
+        affected_songs = 0
+        for directory_path, files in targets:
             any_deleted = False
-            for name in outputs:
-                file_path = os.path.join(directory_path, name)
-                if not os.path.exists(file_path):
+            for name in files:
+                if name.endswith(naming.PROTECTED_SUFFIXES) and not include_videos:
                     continue
+                file_path = os.path.join(directory_path, name)
                 try:
                     os.remove(file_path)
                     deleted_files += 1
                     any_deleted = True
                 except Exception as e:
                     self.log(f"Failed to delete: {file_path} ({str(e)})")
-
             if any_deleted:
                 affected_songs += 1
 
-        self.log(f"Clear cache done. Deleted files: {deleted_files}, songs affected: {affected_songs}")
+        self.log(f"Clear cache done. Deleted files: {deleted_files}, songs affected: {affected_songs}"
+                 + ("" if include_videos else " (.bk2 videos kept)"))
         self.refresh_preview()
         self.update_clear_cache_enabled()
 
@@ -1175,10 +1220,13 @@ class MainWindow(QMainWindow):
         missing: List[str] = []
         invalid: List[str] = []
 
-        def req(line_edit: QLineEdit, label: str):
+        def req(line_edit: QLineEdit, label: str, optional: bool = False):
             if not line_edit.isEnabled():
                 mark_field_valid(line_edit, True)
-            return
+                return
+            if optional and not line_edit.text().strip():
+                mark_field_valid(line_edit, True)
+                return
             if not line_edit.text().strip():
                 missing.append(label)
                 mark_field_valid(line_edit, False)
@@ -1195,9 +1243,9 @@ class MainWindow(QMainWindow):
         req(self.output_path, "Output folder")
         req(self.input_path, "Input folder")
 
-        req(self.dlc_name_txt_path, "name.txt")
-        req(self.dlc_tsv_path, "SongsDLC.tsv")
-        req(self.dlc_json_path, "songs_xx.json")
+        req(self.dlc_name_txt_path, "name.txt", optional=True)
+        req(self.dlc_tsv_path, "SongsDLC.tsv", optional=True)
+        req(self.dlc_json_path, "songs_xx.json", optional=True)
         req(self.max_video_size, "Max video size")
 
         return missing, invalid
@@ -1219,7 +1267,7 @@ class MainWindow(QMainWindow):
         set_element_enabled(self.tweaks_group, enabled)
 
         if enabled:
-            self.preview_table.setSelectionMode(QAbstractItemView.SingleSelection)
+            self.preview_table.setSelectionMode(QAbstractItemView.ExtendedSelection)
             for row in range(self.preview_table.rowCount()):
                 item = self.preview_table.item(row, 0)
                 if item:
@@ -1254,6 +1302,9 @@ class MainWindow(QMainWindow):
                 self.log("Cannot start conversion. Invalid values for fields:\n- " + "\n- ".join(invalid))
             return
 
+        if not self.confirm_output_clearing():
+            return
+
         self.conversion_running = True
         self.set_controls_enabled(False)
         self.save_config()
@@ -1276,9 +1327,28 @@ class MainWindow(QMainWindow):
         self._worker = ConversionWorker(self.cfg, self._stop_event)
         self._worker.log_message.connect(self.log)
         self._worker.progress.connect(self.on_progress)
-        self._worker.finished.connect(self.on_conversion_finished)
+        self._worker.done.connect(self.on_conversion_finished)
         self._worker.error.connect(self.on_conversion_error)
         self._worker.start()
+
+    def confirm_output_clearing(self) -> bool:
+        """The output folder is wiped before converting: ask first if it has content."""
+        # with advanced settings off the defaults apply, and they clear the output folder
+        will_clear = self.clear_output_checkbox.isChecked() or not self.tweaks_group.isChecked()
+        if not will_clear:
+            return True
+        import ConvertFiles
+        output = ConvertFiles.safe_output_dir(self.output_path.text().strip())
+        if not os.path.isdir(output) or not os.listdir(output):
+            return True
+        answer = QMessageBox.warning(
+            self, tr("Clear output folder?"),
+            tr("The output folder will be deleted before converting:\n{path}\n\n"
+               "Your song folders and their cached conversions (including the .bk2 videos) are NOT touched. "
+               "Any .bk2 that only exists in the output folder is copied back to its song folder first.\n\n"
+               "Converting a large library can take a long time. Continue?").format(path=output),
+            QMessageBox.Yes | QMessageBox.Cancel, QMessageBox.Cancel)
+        return answer == QMessageBox.Yes
 
 
     def on_progress(self, current: int, total: int) -> None:
@@ -1314,18 +1384,38 @@ class MainWindow(QMainWindow):
             return f"{h:d}:{m:02d}:{s:02d}"
         return f"{m:d}:{s:02d}"
 
-    def on_conversion_finished(self) -> None:
+    def on_conversion_finished(self, summary=None) -> None:
         self.tick_timer.stop()
         self.conversion_running = False
         self.set_controls_enabled(True)
+        self.sync_watched_folders(self.input_path.text())
         self.scan_input_folder()
 
         elapsed = time.monotonic() - self.conversion_start_time
         self.elapsed_label.setText(self.format_duration(elapsed))
         self.remaining_label.setText("")
 
-        self.log(f"Conversion finished successfully in {self.format_duration(elapsed)}.")
-        logger.info("Conversion finished successfully.")
+        summary = summary or {'ok': [], 'skipped': [], 'failed': [], 'stopped': False}
+        ok, skipped, failed = len(summary['ok']), len(summary['skipped']), len(summary['failed'])
+        if summary.get('stopped'):
+            title = tr("Conversion stopped")
+            headline = tr("Conversion stopped by the user after {t}.").format(t=self.format_duration(elapsed))
+        elif skipped or failed:
+            title = tr("Conversion finished with problems")
+            headline = tr("Conversion finished in {t}.").format(t=self.format_duration(elapsed))
+        else:
+            title = tr("Conversion finished")
+            headline = tr("Conversion finished successfully in {t}.").format(t=self.format_duration(elapsed))
+        counts = tr("Converted: {ok}   Skipped: {skipped}   Errors: {failed}").format(ok=ok, skipped=skipped, failed=failed)
+        self.log(f"{headline} {counts}")
+
+        details = [f"{tr('Skipped')}: {d} — {r}" for d, r in summary['skipped']] + \
+                  [f"{tr('Error')}: {d} — {e}" for d, e in summary['failed']]
+        box = QMessageBox(QMessageBox.Warning if (skipped or failed) else QMessageBox.Information, title,
+                          f"{headline}\n\n{counts}", QMessageBox.Ok, self)
+        if details:
+            box.setDetailedText("\n".join(details))
+        box.exec()
 
     def on_conversion_error(self, error_msg: str) -> None:
         self.tick_timer.stop()
@@ -1336,20 +1426,34 @@ class MainWindow(QMainWindow):
         logger.error(f"Conversion failed: {error_msg}")
 
     def stop_conversion(self) -> None:
-        if not self.conversion_running:
+        if not self.conversion_running or self._stop_event.is_set():
             return
 
-        self.log("Stopping conversion and killing background processes...")
+        self.log("Stopping conversion... (finished files are kept; an interrupted video is never saved half-done)")
         set_element_enabled(self.stop_button, False)
-        self.conversion_running = False
         self._stop_event.set()
-        
-        # In linux, we forcefully kill any running bink video conversions
+
+        import ConvertFiles
+        ConvertFiles.stop_running_processes()
+        # under Wine, terminating wine does not always stop the Windows process it started
         if sys.platform != "win32":
-            import os
-            os.system("pkill -9 -f binkc")
-            os.system("pkill -9 -f radvideo64.exe")
-            os.system("pkill -9 -f radvideo")
+            import subprocess
+            subprocess.run(["pkill", "-f", "radvideo64.exe binkc"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    def closeEvent(self, event) -> None:
+        if self.conversion_running:
+            answer = QMessageBox.question(
+                self, tr("Conversion running"),
+                tr("A conversion is running. Stop it and close the program?\n\n"
+                   "Files already converted are kept in the cache."),
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            if answer != QMessageBox.Yes:
+                event.ignore()
+                return
+            self.stop_conversion()
+            self._worker.wait(15000)
+        self.media_player.stop()
+        event.accept()
 
 
     def show_help(self) -> None:
@@ -1437,9 +1541,10 @@ class MainWindow(QMainWindow):
         self.still_video_checkbox = QCheckBox("Use cover image instead of video (very fast)")
         self.pitch_correction_checkbox = QCheckBox("Analyze song vocals for pitch correction (Includes Vocal Isolation)")
         self.ignore_medley_checkbox = QCheckBox("Ignore the UltraStar medley tags for finding chorus sections")
-        self.force_reconvert_checkbox = QCheckBox("Force Re-Generate JSON (Ignore Cache)")
+        self.force_reconvert_checkbox = QCheckBox("Force re-generate lyrics/notes (.vxla) — videos are never re-encoded")
         self.multithread_checkbox = QCheckBox("Enable Multithreading (faster conversion)")
         self.clear_output_checkbox = QCheckBox("Clear output folder before converting")
+        self.keep_accents_checkbox = QCheckBox("Keep accents in lyrics (é, ñ, ç...)")
         self.multithread_workers = QSpinBox()
         self.multithread_workers.setRange(1, 16)
         self.multithread_workers.setValue(3)
@@ -1468,11 +1573,12 @@ class MainWindow(QMainWindow):
         self.songs_json_label.setText(tr('songs_xx.json (Keep DLC / Previous):'))
         self.max_video_label.setText(tr('Max video size (MB):'))
         
-        self.include_dlc_checkbox.setText(tr("Copiar archivos multimedia (audio/video) del DLC base al directorio Output"))
+        self.include_dlc_checkbox.setText(tr("Copy DLC Media Files (audio/video) from base JSON directory to Output"))
         self.still_video_checkbox.setText(tr("Use cover image instead of video (very fast)"))
         self.pitch_correction_checkbox.setText(tr("Analyze song vocals for pitch correction (Includes Vocal Isolation)"))
         self.ignore_medley_checkbox.setText(tr("Ignore the UltraStar medley tags for finding chorus sections"))
-        self.force_reconvert_checkbox.setText(tr("Force Re-Generate JSON (Ignore Cache)"))
+        self.force_reconvert_checkbox.setText(tr("Force re-generate lyrics/notes (.vxla) — videos are never re-encoded"))
+        self.keep_accents_checkbox.setText(tr("Keep accents in lyrics (é, ñ, ç...)"))
         self.multithread_checkbox.setText(tr("Enable Multithreading (faster conversion)"))
         self.clear_output_checkbox.setText(tr("Clear output folder before converting"))
         
@@ -1501,7 +1607,7 @@ class MainWindow(QMainWindow):
         self.output_label = QLabel('Output folder:')
         self.name_txt_label = QLabel('name.txt:')
         self.songs_dlc_label = QLabel('SongsDLC.tsv:')
-        self.songs_json_label = QLabel('songs_xx.json (Conservar DLC / Previas):')
+        self.songs_json_label = QLabel('songs_xx.json (Keep DLC / Previous):')
         self.max_video_label = QLabel('Max video size (MB):')
 
     def set_tooltips(self):
@@ -1630,12 +1736,13 @@ class MainWindow(QMainWindow):
             "multithreading": self.multithread_checkbox.isChecked(),
             "clear_output": self.clear_output_checkbox.isChecked(),
             "multithreading_workers": self.multithread_workers.value(),
+            "keep_accents": self.keep_accents_checkbox.isChecked(),
         }
 
         
         config_dict["language"] = getattr(self.cfg, 'language', 'en')
         
-        user_path = Path('.') / 'config.yml'
+        user_path = app_dir() / 'config.yml'
         with open(user_path, 'w', encoding='utf-8') as f:
             yaml.dump(config_dict, f, default_flow_style=False, allow_unicode=True)
         self.cfg = load_config()

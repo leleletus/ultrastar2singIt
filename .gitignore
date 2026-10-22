@@ -12,7 +12,6 @@ config.yml
 !data/**
 !assets/
 !assets/**
-**/__pycache__/
 !tools/
 !tools/**
 
@@ -22,3 +21,7 @@ config.yml
 !experimental_tools/**
 !docs/
 !docs/**
+
+# must stay after the !folder/** exceptions
+**/__pycache__/
+*.pyc
