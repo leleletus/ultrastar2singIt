@@ -389,15 +389,52 @@ def map_data(us_data, song_duration, pitch_corr, input_file_name, ignore_medley=
                     break
 
 
-    # FINAL PASSAGES LOGIC (Captures both manual and Musixmatch/Genius generated golden/rap notes)
-    sing_it["passages"] = []
-    for note in sing_it["notes"]:
-        if "#g5" in note["value"]:
-            sing_it["passages"].append({"t1": note["t1"], "t2": note["t2"], "value": "long"})
-        elif "#p1#." in note["value"]:
-            sing_it["passages"].append({"t1": note["t1"], "t2": note["t2"], "value": "speed"})
-
+    sing_it["passages"] = build_passages(sing_it["notes"])
     return sing_it
+
+# "passages" as in the official Let's Sing 2024 files: a handful of short highlights, not whole sections.
+#  long  = one of the longest held notes of the song (~1 s)
+#  speed = a burst of at least 5 quick syllables (~0.2 s each) lasting about one second
+PASSAGE_LONG_MIN = 0.8
+PASSAGE_SPEED_NOTE_MAX = 0.24
+PASSAGE_SPEED_GAP_MAX = 0.06
+PASSAGE_SPEED_MIN_NOTES = 5
+PASSAGE_SPEED_MAX_LENGTH = 1.4
+PASSAGES_PER_TYPE = 4
+PASSAGE_MIN_DISTANCE = 5.0
+
+def build_passages(notes):
+    sung = [n for n in notes if not n["value"].startswith("#p1#.")]  # rap/freestyle notes have no pitch
+    passages = []
+
+    def far_from(t1, kind):
+        return all(abs(t1 - p["t1"]) >= PASSAGE_MIN_DISTANCE for p in passages if p["value"] == kind)
+
+    # speed: runs of quick consecutive notes
+    i = 0
+    while i < len(sung):
+        j = i
+        while (j + 1 < len(sung) and sung[j]["t2"] - sung[j]["t1"] <= PASSAGE_SPEED_NOTE_MAX
+               and sung[j + 1]["t1"] - sung[j]["t2"] <= PASSAGE_SPEED_GAP_MAX
+               and sung[j + 1]["t2"] - sung[i]["t1"] <= PASSAGE_SPEED_MAX_LENGTH
+               and sung[j + 1]["t2"] - sung[j + 1]["t1"] <= PASSAGE_SPEED_NOTE_MAX):
+            j += 1
+        if j - i + 1 >= PASSAGE_SPEED_MIN_NOTES and far_from(sung[i]["t1"], "speed") \
+                and sum(p["value"] == "speed" for p in passages) < PASSAGES_PER_TYPE:
+            passages.append({"t1": sung[i]["t1"], "t2": sung[j]["t2"], "value": "speed"})
+            i = j + 1
+        else:
+            i += 1
+
+    # long: the longest held notes
+    for n in sorted(sung, key=lambda n: n["t2"] - n["t1"], reverse=True):
+        if n["t2"] - n["t1"] < PASSAGE_LONG_MIN or sum(p["value"] == "long" for p in passages) >= PASSAGES_PER_TYPE:
+            break
+        overlaps = any(n["t1"] < p["t2"] and n["t2"] > p["t1"] for p in passages)
+        if not overlaps and far_from(n["t1"], "long"):
+            passages.append({"t1": n["t1"], "t2": n["t2"], "value": "long"})
+
+    return sorted(passages, key=lambda p: p["t1"])
 
 def get_lyrics_for_beat_range(lyrics_map_list, start_beat, end_beat):
     return ''.join([l['lyrics'] for l in lyrics_map_list if start_beat <= l['start_beat'] <= end_beat])
@@ -751,20 +788,7 @@ def write_vxla_file(sing_it, filename, directory, song_duration, output_type):
     write_intervals(sing_it["pages"], doc)
     if sing_it["passages"]:
         doc = ET.SubElement(root, "IntervalLayer", datatype="STRING", name="passages")
-        
-        # Merge contiguous passages of the same type
-        merged_passages = []
-        for p in sing_it["passages"]:
-            if not merged_passages:
-                merged_passages.append(p)
-            else:
-                last_p = merged_passages[-1]
-                if last_p["value"] == p["value"] and (p["t1"] - last_p["t2"]) < 0.2:
-                    last_p["t2"] = p["t2"]
-                else:
-                    merged_passages.append(p)
-                    
-        write_intervals(merged_passages, doc)
+        write_intervals(sing_it["passages"], doc)
         
     doc = ET.SubElement(root, "IntervalLayer", datatype="STRING", name="lyrics")
     write_intervals(sing_it["text"], doc)
@@ -775,13 +799,15 @@ def write_vxla_file(sing_it, filename, directory, song_duration, output_type):
         doc = ET.SubElement(root, "IntervalLayer", datatype="STRING", name="language")
         ET.SubElement(doc, "Interval", t1="0.000", t2="{0:.3f}".format(song_duration), value="english")
 
-    xmlstr = minidom.parseString(ET.tostring(root)).toprettyxml(encoding="Windows-1252", indent="\t")
-    xmlstr = xmlstr.decode(VXLA_ENCODING)
+    # the official files of Let's Sing 2024+ are UTF-8; older editions use a Western single-byte encoding
+    encoding, declared = ('utf-8', 'UTF-8') if output_type == JSON else (VXLA_ENCODING, 'Windows-1252')
+    xmlstr = minidom.parseString(ET.tostring(root)).toprettyxml(encoding=declared, indent="\t")
+    xmlstr = xmlstr.decode(encoding)
     xmlstr = re.sub(r'(</IntervalLayer>)', r'\1\n', xmlstr)
     xmlstr = re.sub(r'(value="[^"]*")\/>', r'\1 />', xmlstr)
 
     with open(os.path.join(directory, filename), "wb") as f:
-        f.write(xmlstr.encode(VXLA_ENCODING, errors='xmlcharrefreplace'))
+        f.write(xmlstr.encode(encoding, errors='xmlcharrefreplace'))
 
 def main(input_file_name, song_duration, pitch_corr=0, s='', directory='', output_type=JSON, ignore_medley=False,
          keep_accents=True):

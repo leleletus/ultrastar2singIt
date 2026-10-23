@@ -95,6 +95,10 @@ GENERATED_SUFFIXES = (
     VIDEO_MP4_SUFFIX, VIDEO_BK2_SUFFIX, VIDEO_INTERMEDIATE_SUFFIX,
 )
 
+# Official Let's Sing lyrics/notes copied into a song folder (tools/attach_official_vxla.py). It is a source
+# file, not a generated one: it is never deleted by "Clear cache".
+OFFICIAL_VXLA_NAME = 'letssing_original.vxla'
+
 # Never deleted by "Clear cache" unless the user explicitly asks for it
 PROTECTED_SUFFIXES = (VIDEO_BK2_SUFFIX,)
 

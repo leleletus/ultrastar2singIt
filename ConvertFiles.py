@@ -14,6 +14,7 @@ from pathlib import Path
 from xml.dom import minidom
 
 import naming
+import OfficialVxla
 import PitchAnalyzer
 import SupportedFormats
 import UltrastarToSingit
@@ -35,7 +36,7 @@ NAME_TXT_FILE = 'name.txt'
 MUSIC_GENRE_LIST = ['Pop', 'Rap', 'Rock', 'Ballad', 'Electro']
 
 # Bump whenever the generated vxla changes, so cached vxla files are regenerated (videos are never touched)
-VXLA_GENERATOR_VERSION = 2
+VXLA_GENERATOR_VERSION = 3
 
 # binkc under Wine sometimes "succeeds" with an empty file of a few hundred bytes
 MIN_VALID_BK2_BYTES = 16 * 1024
@@ -1218,7 +1219,20 @@ def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None,
         meta_path = list_in_dir / (name_id + naming.VXLA_META_SUFFIX)
         params = _vxla_cache_params(txt_path, output_format, pitch_correction_method, ignore_medley, keep_accents,
                                     song_duration, vocal_isolation, genius_lookup)
-        if force_reconvert or not _vxla_is_current(vxla_path, meta_path, params):
+        official_vxla = list_in_dir / naming.OFFICIAL_VXLA_NAME
+        if official_vxla.is_file():
+            # lyrics/notes of a Let's Sing DLC song: reuse them exactly instead of rebuilding them from the txt
+            params = {'version': VXLA_GENERATOR_VERSION, 'format': output_format, 'official': official_vxla.name,
+                      'official_size': official_vxla.stat().st_size, 'official_mtime': int(official_vxla.stat().st_mtime),
+                      'duration': round(song_duration, 1)}
+            if force_reconvert or not _vxla_is_current(vxla_path, meta_path, params):
+                count = OfficialVxla.convert(official_vxla, vxla_file_name, list_in_dir, song_duration, vxla_output_type)
+                logger.info(f"Using the official Let's Sing lyrics/notes of {dir_long_name} ({count} notes)")
+                with open(meta_path, 'w', encoding='utf-8') as f:
+                    json.dump(params, f, indent=1)
+            else:
+                logger.info(f"Using cached vxla for {dir_long_name} (no changes detected).")
+        elif force_reconvert or not _vxla_is_current(vxla_path, meta_path, params):
             _check_stop()
             if pitch_correction_method == SLOW:
                 pitch_corr = PitchAnalyzer.get_pitch_correction_suggestion_slow(txt_data, os.fspath(ogg_path), min_pitch=PITCH_MIN, max_pitch=PITCH_MAX, use_demucs=vocal_isolation)

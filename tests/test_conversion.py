@@ -228,6 +228,50 @@ class RegistryTest(TempDirTest):
         self.assertEqual(text.split(), ['Song1'])
 
 
+class PassagesTest(unittest.TestCase):
+    @staticmethod
+    def note(t1, length, pitch=60):
+        return {"t1": t1, "t2": t1 + length, "value": f"#p{pitch}#.la"}
+
+    def test_like_official_files(self):
+        notes = [self.note(i * 0.5, 0.4) for i in range(40)]            # normal singing
+        notes += [self.note(30 + i * 0.19, 0.18) for i in range(6)]     # quick burst -> speed
+        notes += [self.note(40, 1.0), self.note(50, 0.9)]               # long held notes -> long
+        notes += [self.note(60 + i * 0.4, 0.35, 1) for i in range(5)]   # normal again
+        passages = UltrastarToSingit.build_passages(sorted(notes, key=lambda n: n["t1"]))
+        self.assertEqual([p["value"] for p in passages], ["speed", "long", "long"])
+        self.assertAlmostEqual(passages[0]["t1"], 30)
+
+    def test_chorus_is_not_one_big_passage(self):
+        # the old logic marked every chorus/golden note as "long"
+        notes = [{"t1": i * 0.5, "t2": i * 0.5 + 0.4, "value": "#p60#.la#g5"} for i in range(100)]
+        self.assertEqual(UltrastarToSingit.build_passages(notes), [])
+
+
+class OfficialVxlaTest(TempDirTest):
+    V2 = """<?xml version="1.0" encoding="ISO-8859-1"?>
+<AnnotationFile version="2.0">
+  <IntervalLayer datatype="STRING" name="structure"><Interval t1="0.0" t2="5.0" value="couplet1"/><Interval t1="5.0" t2="9.0" value="refrain"/></IntervalLayer>
+  <IntervalLayer datatype="STRING" name="lyrics"><Interval t1="1.000" t2="1.400" value="Été "/><Interval t1="1.400" t2="1.900" value="là "/></IntervalLayer>
+  <IntervalLayer datatype="STRING" name="lyrics_cut"><Interval t1="1.020" t2="1.380" value="Été "/><Interval t1="1.400" t2="1.880" value="là "/><Interval t1="1.900" t2="2.900" value="-"/></IntervalLayer>
+  <IntervalLayer datatype="UINT8" name="notes"><Interval t1="1.020" t2="1.380" value="67"/><Interval t1="1.400" t2="1.880" value="65"/><Interval t1="1.900" t2="2.900" value="65"/></IntervalLayer>
+  <IntervalLayer datatype="UINT8" name="notes_golden"><Interval t1="1.400" t2="1.880" value="5"/></IntervalLayer>
+  <IntervalLayer datatype="STRING" name="pages"><Interval t1="0.000" t2="3.000" value=""/></IntervalLayer>
+</AnnotationFile>
+"""
+
+    def test_v2_to_v3_keeps_timing_pitch_and_syllables(self):
+        import OfficialVxla
+        src = write(self.tmp / 'old.vxla', self.V2, 'latin-1')
+        OfficialVxla.convert(src, 'new.vxla', self.tmp, 10.0, UltrastarToSingit.JSON)
+        layers, version = OfficialVxla.read_layers(self.tmp / 'new.vxla')
+        self.assertEqual(version, '3.0')
+        self.assertEqual([v for *_, v in layers['notes_full']], ['#p67#.Été', '#p65#.là#g5', '#p65#.-'])
+        self.assertEqual([round(t1, 3) for t1, *_ in layers['notes_full']], [1.02, 1.4, 1.9])
+        self.assertEqual([v for *_, v in layers['lyrics']], ['Été ', 'là '])  # '-' is not shown
+        self.assertEqual([v for *_, v in layers['segments']], ['feat'])
+
+
 class VxlaRoundTripTest(TempDirTest):
     def test_extracted_song_keeps_pitch_and_accents(self):
         from tools import LetSing_ExtractorPro as extractor
@@ -239,7 +283,9 @@ class VxlaRoundTripTest(TempDirTest):
         corr = PitchAnalyzer.get_pitch_correction_suggestion_fast(data, 43, 81)
         UltrastarToSingit.main(txt, 60.0, corr, s='Zjeveux', directory=song)
         vxla = song / 'Zjeveux.vxla'
-        self.assertIn('été', vxla.read_bytes().decode('cp1252'))
+        content = vxla.read_bytes().decode('utf-8')  # Let's Sing 2024+ files are UTF-8, like the official ones
+        self.assertIn('encoding="UTF-8"', content)
+        self.assertIn('été', content)
 
         out = self.tmp / 'extracted' / 'Zaz - Je veux'
         meta = {'artist': 'Zaz', 'title': 'Je veux'}

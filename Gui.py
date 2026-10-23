@@ -113,6 +113,7 @@ class SongRow:
     has_txt: bool = False
     cached_txt: bool = False
     doubtful_sync: bool = False
+    official_vxla: bool = False
     order: int = 0
     checked: bool = False
     state: str = ''  # '', running, ok, skipped, failed, stopped
@@ -167,6 +168,7 @@ def scan_song_folders(input_path: str, video_suffix: str, sync_cache: dict, only
         row.cached_audio = (name_id + naming.AUDIO_SUFFIX) in all_files
         row.cached_image = (name_id + naming.COVER_SUFFIX) in all_files
         row.cached_txt = (name_id + naming.VXLA_SUFFIX) in all_files
+        row.official_vxla = naming.OFFICIAL_VXLA_NAME in all_files
 
         txt_files = [Path(directory_path) / x for x in source_files if x.lower().endswith('.txt')]
         txt_path = ConvertFiles.choose_txt_file(txt_files) if txt_files else None
@@ -332,6 +334,8 @@ class SongTableModel(QAbstractTableModel):
                  COL_IMAGE: (r.has_image, r.cached_image), COL_LYRICS: (r.has_txt, r.cached_txt)}
         if col in icons and role == Qt.DecorationRole:
             return self._file_icon(*icons[col])
+        if col == COL_LYRICS and role == Qt.ToolTipRole and r.official_vxla:
+            return tr("Official Let's Sing lyrics and notes (exact timing and pitch)")
         if col == COL_SYNC:
             if role == Qt.DecorationRole:
                 return (Icon.SYNC_WARNING if r.doubtful_sync else Icon.SYNC).get_icon()
