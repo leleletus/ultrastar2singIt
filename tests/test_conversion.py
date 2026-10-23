@@ -228,6 +228,33 @@ class RegistryTest(TempDirTest):
         self.assertEqual(text.split(), ['Song1'])
 
 
+class AudioWindowTest(unittest.TestCase):
+    @staticmethod
+    def txt(start=None, end=None, last_beat=4000, bpm='200', gap='10000'):
+        data = {'BPM': bpm, 'GAP': gap, 'notes': [[':', '0', '4', '5', 'a'], [':', str(last_beat), '4', '5', 'b']]}
+        if start is not None:
+            data['START'] = start
+        if end is not None:
+            data['END'] = end
+        return data  # last note ends at last_beat*60/200/4 + 10 = 310 s
+
+    def test_no_tags(self):
+        self.assertEqual(ConvertFiles.audio_window(self.txt(), 320), (0.0, 0.0, None))
+
+    def test_full_audio_is_cut(self):
+        # the audio contains the whole song in absolute time: cut it and move the lyrics
+        self.assertEqual(ConvertFiles.audio_window(self.txt('58.2', '300000'), 320.0), (58.2, 58.2, 300.0))
+
+    def test_audio_already_cut(self):
+        # 'Please Please Please' case: the audio is shorter than the lyrics, it already starts at #START
+        self.assertEqual(ConvertFiles.audio_window(self.txt('58.2', '300000'), 250.0), (58.2, 0.0, None))
+
+    def test_lyrics_move_with_offset(self):
+        data = {'BPM': '240', 'GAP': '77540', 'notes': [[':', '0', '4', '5', 'Hi'], ['E']], 'lyrics_map_list': []}
+        sing_it = UltrastarToSingit.map_data(data, 200.0, 48, 'x.txt', ignore_medley=True, time_offset=58.2)
+        self.assertAlmostEqual(sing_it['notes'][0]['t1'], 77.54 - 58.2, places=3)
+
+
 class PassagesTest(unittest.TestCase):
     @staticmethod
     def note(t1, length, pitch=60):

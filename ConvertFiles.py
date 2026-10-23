@@ -442,7 +442,8 @@ def create_in_game_loading_picture(cover_file, list_in_dir, png_in_game_file_nam
     return _create_image(cover_file, list_in_dir, png_in_game_file_name, 512, 512, from_video)
 
 
-def create_audio_preview(audio_file, list_in_dir, ogg_preview_file_name, txt_data):
+def create_audio_preview(audio_file, list_in_dir, ogg_preview_file_name, txt_data, time_offset=0.0):
+    """time_offset: seconds the txt timing is ahead of audio_file (see audio_window)."""
     preview_start_time = 60
     preview_duration_time = 30
     try:
@@ -459,6 +460,8 @@ def create_audio_preview(audio_file, list_in_dir, ogg_preview_file_name, txt_dat
         logger.warning("Invalid medley/preview tags, using the default preview position")
     if preview_duration_time <= 0:
         preview_duration_time = 30
+    if 'MEDLEYSTARTBEAT' in txt_data or 'PREVIEWSTART' in txt_data:
+        preview_start_time = max(0.0, preview_start_time - time_offset)
 
     # prevent preview from exceeding actual song duration
     try:
@@ -478,16 +481,20 @@ def create_audio_preview(audio_file, list_in_dir, ogg_preview_file_name, txt_dat
     return created
 
 
-def create_audio(audio_file, list_in_dir, ogg_file_name, video_gap):
+def create_audio(audio_file, list_in_dir, ogg_file_name, video_gap, trim_start=0.0, trim_end=None):
     filter_cmd = ''
+    if trim_start > 0 or trim_end:
+        # #START / #END of the txt: play only that part of the audio
+        window = f'start={trim_start}' + (f':end={trim_end}' if trim_end else '')
+        filter_cmd = f'atrim={window},asetpts=PTS-STARTPTS,'
     if video_gap < 0:
         # Negative gap: trim the beginning of the audio
         # Remove the first |video_gap| seconds
-        filter_cmd = f'atrim=start={abs(video_gap)},'
+        filter_cmd += f'atrim=start={abs(video_gap)},asetpts=PTS-STARTPTS,'
     elif video_gap > 0:
         # Positive gap: add silence to the beginning
         # Insert video_gap seconds of silence before the audio
-        filter_cmd = f'adelay={int(video_gap * 1000)}|{int(video_gap * 1000)},'
+        filter_cmd += f'adelay={int(video_gap * 1000)}|{int(video_gap * 1000)},'
 
     # Dynamic normalizer that preserves sync + volume reduction
     filter_cmd += 'dynaudnorm,volume=-2.5dB'
@@ -499,17 +506,18 @@ def create_audio(audio_file, list_in_dir, ogg_file_name, video_gap):
     return created
 
 
-def create_video(file, list_in_dir, output_video_file_name, target_bitrate_kbps):
+def create_video(file, list_in_dir, output_video_file_name, target_bitrate_kbps, trim_start=0.0):
+    seek = ['-ss', str(trim_start)] if trim_start > 0 else []
     passlog_prefix = os.fspath(list_in_dir / (output_video_file_name + "_passlog"))
     video_filter = 'scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,fps=25'
     try:
         # First pass to analyze video
-        _run([_ffmpeg_path, '-y', '-i', os.fspath(file),
+        _run([_ffmpeg_path, '-y'] + seek + ['-i', os.fspath(file),
               '-c:v', 'libx264', '-preset', 'medium', '-bf', '0', '-b:v', f'{target_bitrate_kbps}k',
               '-pass', '1', '-passlogfile', passlog_prefix, '-an', '-vf', video_filter,
               '-f', 'null', os.devnull])
         # Second pass to create final file
-        created = _ffmpeg(['-i', os.fspath(file), '-c:v', 'libx264', '-preset', 'medium', '-bf', '0',
+        created = _ffmpeg(seek + ['-i', os.fspath(file), '-c:v', 'libx264', '-preset', 'medium', '-bf', '0',
                            '-b:v', f'{target_bitrate_kbps}k', '-pass', '2', '-passlogfile', passlog_prefix,
                            '-an', '-vf', video_filter],
                           list_in_dir / output_video_file_name)
@@ -781,6 +789,53 @@ def add_data_to_name_txt(dlc_id, name_id, output_format, dlc_json_name, cfg):
                 _atomic_write_text(dest_name_txt, '\n'.join(lines) + '\n', encoding)
 
 
+def last_note_time(txt_data):
+    """Absolute end time (seconds, from the start of the txt's audio) of the last sung note."""
+    try:
+        bpm = float(txt_data['BPM'].replace(',', '.'))
+        gap = float((txt_data.get('GAP') or '0').replace(',', '.')) / 1000
+    except (KeyError, ValueError):
+        return None
+    notes = [n for n in txt_data['notes'] if n and n[0] in ':*FRG']
+    if not notes or bpm <= 0:
+        return None
+    last = notes[-1]
+    return (int(last[1]) + int(last[2])) * 60 / bpm / 4 + gap
+
+
+def audio_window(txt_data, source_duration):
+    """How to apply #START (seconds) / #END (milliseconds): returns (lyrics_offset, trim_start, trim_end).
+
+    UltraStar plays the audio from #START. Two cases exist in real libraries:
+      - the audio file is the full one the txt was made for: cut it to [START, END] and move the lyrics by START;
+      - the audio was already replaced by a shorter version starting at START (the lyrics run past its end):
+        only the lyrics are moved."""
+    try:
+        start = float((txt_data.get('START') or '0').replace(',', '.'))
+    except ValueError:
+        start = 0.0
+    try:
+        end = float((txt_data.get('END') or '0').replace(',', '.')) / 1000 or None
+    except ValueError:
+        end = None
+    if start <= 0 and not end:
+        return 0.0, 0.0, None
+    if end is not None and end <= start:
+        end = None
+    last = last_note_time(txt_data)
+    if start > 0 and source_duration and last and last > source_duration + 1.0:
+        return start, 0.0, None
+    return start, start, end
+
+
+def _read_json(path):
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return None
+
+
 def get_required_files(name_id: str, output_format: str, song_dir: Path) -> list:
     files = [
         song_dir / (name_id + '.ogg'),
@@ -893,7 +948,7 @@ def adopt_legacy_cache(song_dir: Path, name_id: str, legacy_ids) -> None:
 
 
 def _vxla_cache_params(txt_path: Path, output_format, pitch_method, ignore_medley, keep_accents, song_duration,
-                       vocal_isolation, genius_lookup=True):
+                       vocal_isolation, genius_lookup=True, lyrics_offset=0.0):
     stat = txt_path.stat()
     return {
         'version': VXLA_GENERATOR_VERSION,
@@ -907,6 +962,7 @@ def _vxla_cache_params(txt_path: Path, output_format, pitch_method, ignore_medle
         'txt_size': stat.st_size,
         'txt_mtime': int(stat.st_mtime),
         'duration': round(song_duration, 1),
+        'lyrics_offset': round(lyrics_offset, 3),
     }
 
 
@@ -1122,16 +1178,39 @@ def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None,
 
         # --- audio (needed first: its duration drives the static video and the vxla) ---
         ogg_path = list_in_dir / ogg_file_name
-        if not ogg_path.exists():
+        audio_meta_path = list_in_dir / (name_id + naming.AUDIO_META_SUFFIX)
+        lyrics_offset, trim_start, trim_end = 0.0, 0.0, None
+        if audio_source is not None and ('START' in txt_data or 'END' in txt_data):
+            try:
+                source_duration = get_duration(audio_source)
+            except SongError:
+                source_duration = None
+            lyrics_offset, trim_start, trim_end = audio_window(txt_data, source_duration)
+            if lyrics_offset:
+                logger.info(f"#START:{txt_data.get('START')}: lyrics moved {lyrics_offset:.2f} s"
+                            + (" and audio cut to the same part" if trim_start or trim_end else
+                               " (the audio file already starts there)"))
+        audio_params = {'trim_start': trim_start, 'trim_end': trim_end, 'video_gap': video_gap,
+                        'lyrics_offset': lyrics_offset}
+        cached_params = _read_json(audio_meta_path)
+        if ogg_path.exists() and cached_params is None:
+            # converted by a previous version (no window applied): still valid if no window is needed now
+            cached_params = {'trim_start': 0.0, 'trim_end': None, 'video_gap': video_gap, 'lyrics_offset': 0.0}
+        audio_changed = cached_params != audio_params
+        if not ogg_path.exists() or audio_changed:
             if audio_source is None:
                 raise SongError("no audio file found (#MP3/#AUDIO tag or any audio file)")
-            if not create_audio(audio_source, list_in_dir, ogg_file_name, video_gap):
+            if not create_audio(audio_source, list_in_dir, ogg_file_name, video_gap, trim_start, trim_end):
                 raise SongError("audio conversion failed")
+        if audio_changed or not audio_meta_path.exists():
+            with open(audio_meta_path, 'w', encoding='utf-8') as f:
+                json.dump(audio_params, f)
         song_duration = get_duration(ogg_path)
 
-        if not (list_in_dir / ogg_preview_file_name).exists():
+        if audio_changed or not (list_in_dir / ogg_preview_file_name).exists():
             # the preview is cut from the original audio (the converted one is shifted by VIDEOGAP)
-            create_audio_preview(audio_source or ogg_path, list_in_dir, ogg_preview_file_name, txt_data)
+            create_audio_preview(audio_source or ogg_path, list_in_dir, ogg_preview_file_name, txt_data,
+                                 lyrics_offset - trim_start if audio_source else lyrics_offset)
 
         # no image at all: try a frame of the video, else a placeholder with artist and title
         if cover_source is None:
@@ -1147,6 +1226,11 @@ def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None,
         output_video_path = list_in_dir / output_video_file_name
         video_for_patch = output_video_path
         real_video = video_source
+        if trim_start > 0 and (list_in_dir / output_video_file_name).exists() \
+                and not ignore_video and video_source is not None:
+            logger.warning(f"{output_video_file_name} was converted from the whole clip: the video starts "
+                           f"{trim_start:.1f} s earlier than the song. To fix it, delete only {output_video_file_name}"
+                           f" (and {name_id}.avi) of this song and convert again.")
         if real_video is not None and output_format == XML_FORMAT and real_video.suffix.lower() == '.bk2':
             real_video = None  # ffmpeg can't decode Bink 2: XML games get the static video
 
@@ -1159,7 +1243,7 @@ def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None,
             target_bitrate_kbps = max(200, min(original_bitrate_kbps, limited_bitrate_kbps))
 
             if output_format == XML_FORMAT:
-                create_video(real_video, list_in_dir, output_video_file_name, target_bitrate_kbps)
+                create_video(real_video, list_in_dir, output_video_file_name, target_bitrate_kbps, trim_start)
             elif real_video.suffix.lower() == '.bk2':
                 # already in the game's format
                 shutil.copy2(real_video, output_video_path)
@@ -1168,7 +1252,7 @@ def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None,
                 quality = 0.1 if is_video_still_image(real_video) else None
                 temp_video_file = list_in_dir / (name_id + naming.VIDEO_INTERMEDIATE_SUFFIX)
                 if not temp_video_file.exists():
-                    create_video(real_video, list_in_dir, temp_video_file.name, target_bitrate_kbps)
+                    create_video(real_video, list_in_dir, temp_video_file.name, target_bitrate_kbps, trim_start)
                 if temp_video_file.exists():
                     create_video_bink(temp_video_file, list_in_dir, output_video_file_name, quality, duration)
 
@@ -1218,7 +1302,7 @@ def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None,
         vxla_path = list_in_dir / vxla_file_name
         meta_path = list_in_dir / (name_id + naming.VXLA_META_SUFFIX)
         params = _vxla_cache_params(txt_path, output_format, pitch_correction_method, ignore_medley, keep_accents,
-                                    song_duration, vocal_isolation, genius_lookup)
+                                    song_duration, vocal_isolation, genius_lookup, lyrics_offset)
         official_vxla = list_in_dir / naming.OFFICIAL_VXLA_NAME
         if official_vxla.is_file():
             # lyrics/notes of a Let's Sing DLC song: reuse them exactly instead of rebuilding them from the txt
@@ -1240,7 +1324,7 @@ def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None,
                 pitch_corr = PitchAnalyzer.get_pitch_correction_suggestion_fast(txt_data, min_pitch=PITCH_MIN, max_pitch=PITCH_MAX)
             UltrastarToSingit.main(txt_path, song_duration, pitch_corr, s=name_id, directory=list_in_dir,
                                    output_type=vxla_output_type, ignore_medley=ignore_medley,
-                                   keep_accents=keep_accents)
+                                   keep_accents=keep_accents, time_offset=lyrics_offset)
             with open(meta_path, 'w', encoding='utf-8') as f:
                 json.dump(params, f, indent=1)
         else:

@@ -79,6 +79,7 @@ IN_GAME_LOADING_SUFFIX = '_InGameLoading.png'
 RESULT_SUFFIX = '_Result.png'
 VXLA_SUFFIX = '.vxla'
 VXLA_META_SUFFIX = '.vxla.meta.json'
+AUDIO_META_SUFFIX = '.ogg.meta.json'      # how the audio was cut (#START/#END, VIDEOGAP)
 VIDEO_MP4_SUFFIX = '.mp4'               # final video for XML games, legacy intermediate for JSON games
 VIDEO_BK2_SUFFIX = '.bk2'               # final video for JSON games (very slow to encode!)
 VIDEO_INTERMEDIATE_SUFFIX = '.avi'      # x264 intermediate fed to binkc
@@ -90,7 +91,7 @@ AUTO_COVER_SUFFIX = '_autocover.png'     # placeholder cover (artist + title) fo
 GENERATED_SUFFIXES = (
     AUDIO_PREVIEW_SUFFIX, AUDIO_SUFFIX,
     COVER_LONG_SUFFIX, IN_GAME_LOADING_SUFFIX, RESULT_SUFFIX, COVER_SUFFIX,
-    VXLA_META_SUFFIX, VXLA_SUFFIX,
+    VXLA_META_SUFFIX, VXLA_SUFFIX, AUDIO_META_SUFFIX,
     STILL_VIDEO_SUFFIX, STILL_VIDEO_MP4_SUFFIX, AUTO_COVER_SUFFIX, META_XML_SUFFIX,
     VIDEO_MP4_SUFFIX, VIDEO_BK2_SUFFIX, VIDEO_INTERMEDIATE_SUFFIX,
 )

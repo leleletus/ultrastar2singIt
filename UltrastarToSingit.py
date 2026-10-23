@@ -251,7 +251,9 @@ def merge_intervals(intervals):
     merged.append(current_interval)
     return merged
 
-def map_data(us_data, song_duration, pitch_corr, input_file_name, ignore_medley=False, keep_accents=True):
+def map_data(us_data, song_duration, pitch_corr, input_file_name, ignore_medley=False, keep_accents=True,
+             time_offset=0.0):
+    """time_offset: seconds removed from the start of the audio (#START), every time moves back by it."""
     sing_it = {"text": [], "notes": [],
         "passages": [], "pages": [], "structure": []}
     bpm = float(us_data["BPM"].replace(',', '.'))
@@ -265,6 +267,7 @@ def map_data(us_data, song_duration, pitch_corr, input_file_name, ignore_medley=
         #  positive - video starts before the song, the song will have silence added to the beginning
         #  negative - video starts after the song, the song will be trimmed at the start
         video_gap = float(us_data["VIDEOGAP"].replace(',', '.'))
+    video_gap -= time_offset  # applied together with VIDEOGAP to every time below
 
     last_page = 0.0
     end = 1
@@ -810,10 +813,10 @@ def write_vxla_file(sing_it, filename, directory, song_duration, output_type):
         f.write(xmlstr.encode(encoding, errors='xmlcharrefreplace'))
 
 def main(input_file_name, song_duration, pitch_corr=0, s='', directory='', output_type=JSON, ignore_medley=False,
-         keep_accents=True):
+         keep_accents=True, time_offset=0.0):
     us_data = parse_file(input_file_name)
     output_file = s if s else re.sub('[^A-Za-z0-9]+', '', us_data.get("TITLE", "Song"))
     
     sing_it = map_data(us_data, song_duration, pitch_corr, input_file_name=input_file_name, ignore_medley=ignore_medley,
-                       keep_accents=keep_accents)
+                       keep_accents=keep_accents, time_offset=time_offset)
     write_vxla_file(sing_it, output_file + '.vxla', directory=directory, song_duration=song_duration, output_type=output_type)

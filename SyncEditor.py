@@ -41,6 +41,17 @@ class SyncEditorDialog(QDialog):
         # The converted .ogg is what the game plays: VIDEOGAP is already applied to it, so the lyrics
         # (and not the video) are shifted by VIDEOGAP. With the original audio it is the other way round.
         self.audio_is_converted = os.path.isfile(converted_ogg)
+        # #START handling of the converter: how much the lyrics were moved, and the audio cut
+        self.lyrics_offset_s, self.trim_start_s = 0.0, 0.0
+        meta_path = os.path.join(song_dir, naming.construct_name_id_from_directory_name(folder_name) + naming.AUDIO_META_SUFFIX)
+        try:
+            import json
+            with open(meta_path, 'r', encoding='utf-8') as f:
+                meta = json.load(f)
+            self.lyrics_offset_s = float(meta.get('lyrics_offset') or 0)
+            self.trim_start_s = float(meta.get('trim_start') or 0)
+        except (OSError, ValueError):
+            pass
         if self.audio_is_converted:
             self.audio_file = converted_ogg
         else:
@@ -202,7 +213,10 @@ class SyncEditorDialog(QDialog):
         return 0 if self.audio_is_converted else int(self.video_gap_s * 1000)
 
     def lyrics_offset_s(self):
-        return self.gap_ms / 1000.0 + (self.video_gap_s if self.audio_is_converted else 0.0)
+        if self.audio_is_converted:
+            return self.gap_ms / 1000.0 + self.video_gap_s - self.lyrics_offset_s
+        # original audio: only moved when it is a shorter version that already starts at #START
+        return self.gap_ms / 1000.0 - (self.lyrics_offset_s - self.trim_start_s)
 
     def gap_text(self):
         return tr("Offset (GAP): {gap} ms").format(gap=int(self.gap_ms))
