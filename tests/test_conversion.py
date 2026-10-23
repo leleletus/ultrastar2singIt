@@ -287,6 +287,13 @@ class OfficialVxlaTest(TempDirTest):
 </AnnotationFile>
 """
 
+    def test_wrong_encoding_declaration(self):
+        import OfficialVxla
+        src = write(self.tmp / 'bad.vxla', self.V2.replace('ISO-8859-1', 'utf-16'), 'utf-8')
+        layers, version = OfficialVxla.read_layers(src)
+        self.assertEqual(version, '2.0')
+        self.assertEqual(layers['lyrics_cut'][0][2], 'Été ')
+
     def test_v2_to_v3_keeps_timing_pitch_and_syllables(self):
         import OfficialVxla
         src = write(self.tmp / 'old.vxla', self.V2, 'latin-1')

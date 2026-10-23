@@ -20,7 +20,21 @@ _STRUCTURE_NAMES = {'couplet1': 'couplet', 'couplet2': 'couplet', 'couplet3': 'c
 
 def read_layers(path):
     """{layer name: [(t1, t2, value), ...]} and the file version."""
-    root = ET.parse(path).getroot()
+    with open(path, 'rb') as f:
+        raw = f.read()
+    try:
+        root = ET.fromstring(raw)
+    except ET.ParseError:
+        # some extracted files declare an encoding they are not written in (e.g. "utf-16" for UTF-8 text)
+        text = None
+        for encoding in ('utf-8-sig', 'utf-16', 'cp1252', 'latin-1'):
+            try:
+                text = raw.decode(encoding)
+                if '<AnnotationFile' in text:
+                    break
+            except UnicodeDecodeError:
+                continue
+        root = ET.fromstring(re.sub(r'^<\?xml[^>]*\?>', '', text.lstrip('\ufeff').lstrip()))
     layers = {}
     for layer in root.findall('IntervalLayer'):
         layers[layer.get('name')] = [(float(i.get('t1')), float(i.get('t2')), i.get('value', ''))

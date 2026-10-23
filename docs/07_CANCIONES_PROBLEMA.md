@@ -66,3 +66,9 @@ Herramienta: `python tools/diagnose_library.py <songs_custom> --csv informe.csv`
 2. `python tools/mark_extracted_songs.py <songs_custom> --apply` (las reconstruidas sin vxla oficial)
 3. Revisar y aplicar `python tools/rename_songs.py <songs_custom> docs/correcciones_metadatos.csv --apply`
 4. Convertir: todos los vxla y audios afectados se regeneran solos; los .bk2 se reutilizan.
+
+### Nota sobre los "desync" reportados
+En la Switch, con muchas canciones instaladas, reiniciar una canción desde el menú de pausa a veces desfasa el
+audio del video; saliendo y volviendo a entrar se corrige. Es rendimiento de la consola, no del archivo. Antes de
+tocar el GAP de una canción marcada "desync", confirmar entrando de nuevo a la canción (sin reiniciarla) y comparar con
+el diagnóstico (`audio dura X s, la letra termina a Y s`): solo si el archivo está mal se corrige.
