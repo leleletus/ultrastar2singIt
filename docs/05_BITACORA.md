@@ -70,6 +70,18 @@
 - Pendiente: conectar el disco de canciones (no estaba montado) y revisar las canciones de `07_CANCIONES_PROBLEMA.md`;
   probar el resultado en la consola; build con PyInstaller.
 
+### 2026-10-23 — Rescate del disco, interfaz nueva y diagnóstico de la biblioteca
+- Disco de canciones (exFAT) corrupto por apagados inseguros: rescatados 53 284 archivos (324 GB, verificados
+  uno por uno) a RetroROMs con `~/rescate/rescate_exfat.py`. Windows se clonó al disco de 512 GB y Linux
+  ocupa el disco de 1 TB completo.
+- Interfaz rediseñada (`80b4a59`): tabla rápida, estados por canción, convertir marcadas, traducción completa.
+- Comparación con archivos oficiales de Let's Sing 2024: passages y UTF-8 como el juego; uso directo de los vxla
+  oficiales (`7b5a82a`). Soporte de #START/#END (`b074be4`). Opción para no usar internet (Genius).
+- Diagnóstico de las 678 canciones con solo sus .txt: 404 reconstruidas de DLC, ~50 sin letra, ~8 con letra pegada,
+  355 con tono transpuesto por el método viejo, 31 con #START, 21 con artista/título equivocado.
+- Pendiente: bajar los vxla oficiales del megapack (~25 MB), devolver la biblioteca al disco local con Wi‑Fi y
+  aplicar las herramientas en el orden de `07_CANCIONES_PROBLEMA.md`; probar en la consola.
+
 <!-- Plantilla para nuevas entradas:
 ### AAAA-MM-DD — Título
 - Cambios: …
