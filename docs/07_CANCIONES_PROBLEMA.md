@@ -35,3 +35,34 @@ el código y qué arreglo ya la cubre; la columna "Verificar" es lo que hay que 
 - Para cada una: buscar en Genius con la **primera línea de la letra** del vxla/txt y aceptar solo si el título coincide
   con el ID y la letra coincide (similitud alta); si no, dejarla marcada para revisión manual.
 - Nunca renombrar carpetas automáticamente: el nombre de la carpeta define el ID y la caché (`.bk2`).
+
+## Diagnóstico completo (2026-10-23, con los .txt de las 678 canciones)
+
+Herramienta: `python tools/diagnose_library.py <songs_custom> --csv informe.csv` (solo lee).
+
+| Tipo | Cantidad |
+|---|---|
+| Reconstruidas desde DLC / juego base de ediciones anteriores | 404 |
+| UltraStar reales (USDB u otras) | 274 |
+| Tono que el método viejo transponía (no era octava) | 355 |
+| Sin letra (todas las sílabas `~`) | ~50 |
+| Letra pegada (sin espacios, extractor viejo) | ~8 |
+| Usan `#START` (letra muy tarde si no se aplica) | 31 |
+| Artista/título equivocado (iTunes) | 21, ver `docs/correcciones_metadatos.csv` |
+
+### Causas confirmadas de la lista reportada
+
+| Canción | Causa | Arreglo |
+|---|---|---|
+| Please Please Please | `#START:58.2` ignorado y audio ya recortado | soporte de #START (`b074be4`) |
+| Bitch Better Have My Money | el audio no corresponde al txt (dura 331.9 s, la letra termina a 347.6 s) | ajustar GAP en el Sync Editor o con detección de voz |
+| Because You Loved Me | GAP 60 ms para un audio que no es el del txt | Sync Editor |
+| Be the One, Wolves, Symphony, One Kiss | reconstruidas: tono +43/+38 y sílabas perdidas | vxla oficial (`attach_official_vxla.py`) |
+| Side To Side, Don't Stop the Music, Chantaje | método viejo +51/+52 (fuera de tonalidad) | tono por octavas (`8426e7e`) |
+
+### Orden recomendado cuando la biblioteca vuelva al disco local
+
+1. `python tools/attach_official_vxla.py <songs_custom> <megapack_completo> --apply`
+2. `python tools/mark_extracted_songs.py <songs_custom> --apply` (las reconstruidas sin vxla oficial)
+3. Revisar y aplicar `python tools/rename_songs.py <songs_custom> docs/correcciones_metadatos.csv --apply`
+4. Convertir: todos los vxla y audios afectados se regeneran solos; los .bk2 se reutilizan.
