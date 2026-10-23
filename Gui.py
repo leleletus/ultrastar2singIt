@@ -458,6 +458,9 @@ class MainWindow(QMainWindow):
         # Keep accents in lyrics
         tweaks_layout.addWidget(self.keep_accents_checkbox)
 
+        # Chorus lookup on the internet
+        tweaks_layout.addWidget(self.genius_checkbox)
+
         tweaks_content = QWidget()
         tweaks_content.setLayout(tweaks_layout)
         tweaks_outer_layout = QVBoxLayout()
@@ -731,6 +734,7 @@ class MainWindow(QMainWindow):
         self.multithread_workers.setValue(int(getattr(self.cfg.conversion_tweaks, "multithreading_workers", None) or 3))
         self.multithread_workers.setEnabled(self.multithread_checkbox.isChecked())
         self.keep_accents_checkbox.setChecked(bool(getattr(self.cfg.conversion_tweaks, "keep_accents", True)))
+        self.genius_checkbox.setChecked(bool(getattr(self.cfg.conversion_tweaks, "genius_lookup", True)))
 
         self.still_video_checkbox.clicked.connect(self.still_video_checkbox_fv)
         self.still_video_checkbox.setChecked(self.cfg.conversion_tweaks.still_video)
@@ -1545,6 +1549,10 @@ class MainWindow(QMainWindow):
         self.multithread_checkbox = QCheckBox("Enable Multithreading (faster conversion)")
         self.clear_output_checkbox = QCheckBox("Clear output folder before converting")
         self.keep_accents_checkbox = QCheckBox("Keep accents in lyrics (é, ñ, ç...)")
+        self.genius_checkbox = QCheckBox("Look up choruses on the internet (Genius)")
+        self.genius_checkbox.setToolTip("Downloads each song's lyrics page from genius.com to find the chorus "
+                                        "(a few hundred KB per song, cached afterwards). Turn it off on mobile data: "
+                                        "medley tags or automatic detection are used instead.")
         self.multithread_workers = QSpinBox()
         self.multithread_workers.setRange(1, 16)
         self.multithread_workers.setValue(3)
@@ -1579,6 +1587,7 @@ class MainWindow(QMainWindow):
         self.ignore_medley_checkbox.setText(tr("Ignore the UltraStar medley tags for finding chorus sections"))
         self.force_reconvert_checkbox.setText(tr("Force re-generate lyrics/notes (.vxla) — videos are never re-encoded"))
         self.keep_accents_checkbox.setText(tr("Keep accents in lyrics (é, ñ, ç...)"))
+        self.genius_checkbox.setText(tr("Look up choruses on the internet (Genius)"))
         self.multithread_checkbox.setText(tr("Enable Multithreading (faster conversion)"))
         self.clear_output_checkbox.setText(tr("Clear output folder before converting"))
         
@@ -1737,6 +1746,7 @@ class MainWindow(QMainWindow):
             "clear_output": self.clear_output_checkbox.isChecked(),
             "multithreading_workers": self.multithread_workers.value(),
             "keep_accents": self.keep_accents_checkbox.isChecked(),
+            "genius_lookup": self.genius_checkbox.isChecked(),
         }
 
         

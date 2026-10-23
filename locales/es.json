@@ -67,5 +67,6 @@
   "Unsaved changes": "Cambios sin guardar",
   "Save the sync changes before closing?": "¿Guardar los cambios de sincronización antes de salir?",
   "Offset (GAP): {gap} ms": "Desfase (GAP): {gap} ms",
-  "Could not save the sync changes: {error}": "No se pudieron guardar los cambios de sincronización: {error}"
+  "Could not save the sync changes: {error}": "No se pudieron guardar los cambios de sincronización: {error}",
+  "Look up choruses on the internet (Genius)": "Buscar estribillos en internet (Genius)"
 }

@@ -24,6 +24,7 @@ conversion_tweaks:
     clear_output: True
     force_reconvert: False
     keep_accents: True
+    genius_lookup: True
     multithreading: False
     multithreading_workers: 3
     vocal_isolation: False

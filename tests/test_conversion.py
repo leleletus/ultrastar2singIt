@@ -1,0 +1,256 @@
+"""Regression tests for the converter. Run with:  python -m unittest discover -s tests -v
+
+They don't need ffmpeg, RAD Video Tools nor internet (Genius lookups are disabled)."""
+import json
+import os
+import shutil
+import sys
+import tempfile
+import threading
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+
+import naming  # noqa: E402
+import PitchAnalyzer  # noqa: E402
+import UltrastarToSingit  # noqa: E402
+import ConvertFiles  # noqa: E402
+from munch import munchify  # noqa: E402
+
+UltrastarToSingit._genius_offline = True  # never touch the network in tests
+
+
+def write(path, text, encoding='utf-8'):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(text.encode(encoding))
+    return path
+
+
+class TempDirTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp(prefix='lsconv_test_'))
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+
+class NamingTest(unittest.TestCase):
+    # IDs already used by converted caches (.bk2!): they must never change
+    KNOWN_IDS = {
+        'GAYLE - abcdefu': 'Gabcdefu',
+        'Simon & Garfunkel - The Sound of Silence': 'SAGthesoundofsilence',
+        'Mø - Lean On': 'Mleanon',
+        'Beyoncé - Halo': 'Bhalo',
+        'Shakira feat. Wyclef Jean - Hips Don’t Lie': 'SFWJhipsdontlie',
+        'Anuel AA, Daddy Yankee, Karol G, Ozuna & J Balvin - China': 'AADYKGOAJBchina',
+        'Cutting Crew - (I Just) Died In Your Arms': 'CCijustdiedinyourarms',
+        'AC/DC - T.N.T.': 'ADtnt',
+        'Œdipe - Ça va': 'Ocava',
+        'Sabrina Carpenter - Please Please Please': 'SCpleasepleaseplease',
+    }
+
+    def test_ids_are_stable(self):
+        for folder, expected in self.KNOWN_IDS.items():
+            self.assertEqual(naming.construct_name_id_from_directory_name(folder), expected, folder)
+
+    def test_legacy_ids(self):
+        self.assertIn('S&Gthesoundofsilence', naming.legacy_name_ids('Simon & Garfunkel - The Sound of Silence'))
+        self.assertEqual(naming.legacy_name_ids('GAYLE - abcdefu'), [])
+
+    def test_non_latin_name_gets_an_id(self):
+        name_id = naming.construct_name_id_from_directory_name('九 - 歌')
+        self.assertTrue(name_id.startswith('Song') and len(name_id) == 12)
+        self.assertEqual(name_id, naming.construct_name_id_from_directory_name('九 - 歌'))
+
+    def test_generated_files(self):
+        ids = ['Gabcdefu']
+        for name in ('Gabcdefu.ogg', 'Gabcdefu_preview.ogg', 'Gabcdefu.bk2', 'Gabcdefu_cover.avi',
+                     'Gabcdefu.avi', 'Gabcdefu.vxla', 'Gabcdefu.vxla.meta.json', 'Gabcdefu_meta.xml'):
+            self.assertTrue(naming.is_generated_file(name, ids), name)
+        for name in ('Abc.bk2', 'Abc.ogg', 'GAYLE - abcdefu.txt', 'cover.jpg'):
+            self.assertFalse(naming.is_generated_file(name, ids), name)
+
+
+class ParserTest(TempDirTest):
+    HEADER = "#TITLE:Je veux\n#ARTIST:Zaz\n#BPM:300\n#GAP:1000\n"
+    LYRICS = ": 2000 3 5  J’ai\n: 2004 3 5  été\n: 2008 3 5  là\n: 2012 3 5  garçon\nE\n"
+    FILLER = "".join(f": {i * 4} 3 5  la\n" for i in range(300))
+
+    def lyrics(self, path):
+        data = UltrastarToSingit.parse_file(path)
+        return [n[4].strip() for n in data['notes'] if len(n) > 4 and n[4].strip() not in ('la', '')]
+
+    def test_accents_after_first_4kb_are_kept(self):
+        # used to be read as ASCII with errors='ignore': été -> t
+        p = write(self.tmp / 'a.txt', self.HEADER + self.FILLER + self.LYRICS)
+        self.assertEqual(self.lyrics(p), ['J’ai', 'été', 'là', 'garçon'])
+
+    def test_cp1252_and_bom(self):
+        p = write(self.tmp / 'b.txt', self.HEADER + self.LYRICS.replace('’', "'"), 'cp1252')
+        self.assertEqual(self.lyrics(p), ["J'ai", 'été', 'là', 'garçon'])
+        p = write(self.tmp / 'c.txt', '﻿' + self.HEADER + self.LYRICS)
+        self.assertEqual(UltrastarToSingit.parse_file(p)['TITLE'], 'Je veux')
+
+    def test_tolerant_lines(self):
+        p = write(self.tmp / 'd.txt', "#title: X \n#bpm:200\n: 0 2 5\n:  4  2  5 hola\nE\nbasura\n")
+        data = UltrastarToSingit.parse_file(p)
+        self.assertEqual(data['TITLE'], 'X')
+        self.assertEqual(data['BPM'], '200')
+        self.assertEqual(data['notes'], [[':', '0', '2', '5', ''], [':', '4', '2', '5', 'hola'], ['E']])
+
+    def test_relative_and_duet(self):
+        p = write(self.tmp / 'r.txt', "#TITLE:R\n#BPM:200\n#RELATIVE:yes\n: 0 2 5 a\n- 4 6\n: 0 2 7 b\nE\n")
+        self.assertEqual([n[1] for n in UltrastarToSingit.parse_file(p)['notes'] if n[0] == ':'], ['0', '6'])
+        p = write(self.tmp / 'd.txt', "#TITLE:D\n#BPM:300\nP1\n: 0 2 5 uno\nP2\n: 0 2 9 otra\nE\n")
+        self.assertEqual([n[4] for n in UltrastarToSingit.parse_file(p)['notes'] if n[0] == ':'], ['uno'])
+
+    def test_lyric_normalization(self):
+        self.assertEqual(UltrastarToSingit.normalize_lyric('¿Por qué? canción ñandú'), '¿Por qué? canción ñandú')
+        self.assertEqual(UltrastarToSingit.normalize_lyric('J’ai “bien”…'), 'J\'ai "bien"...')
+        self.assertEqual(UltrastarToSingit.normalize_lyric('Zażółć'), 'Zazólc')
+        self.assertEqual(UltrastarToSingit.normalize_lyric('canción', keep_accents=False), 'cancion')
+
+
+class PitchTest(unittest.TestCase):
+    @staticmethod
+    def song(*pitches, **tags):
+        return dict(notes=[[':', '0', '1', str(p), 'a'] for p in pitches], **tags)
+
+    def fast(self, data):
+        return PitchAnalyzer.get_pitch_correction_suggestion_fast(data, 43, 81)
+
+    def test_only_whole_octaves(self):
+        for pitches in ((0, 5, 12), (20, 30, 40), (80, 85, 95), (-10, 0, 20), (45, 50, 60)):
+            self.assertEqual(self.fast(self.song(*pitches)) % 12, 0, pitches)
+
+    def test_expected_shifts(self):
+        self.assertEqual(self.fast(self.song(0, 5, 12)), 48)      # usual UltraStar file
+        self.assertEqual(self.fast(self.song(45, 50, 60)), 0)     # already in the game's range
+        self.assertEqual(self.fast(self.song(80, 85, 95)), -24)   # used to get +48
+        self.assertEqual(self.fast(self.song(-10, 0, 20)), 60)
+
+    def test_explicit_offset_and_no_notes(self):
+        self.assertEqual(self.fast(self.song(27, 32, LETSSINGPITCHOFFSET='36')), 36)
+        self.assertEqual(self.fast({'notes': [['R', '0', '1', '0', 'yo']]}), 0)
+
+
+class SourcesTest(TempDirTest):
+    def test_tagged_sources_and_generated_files_ignored(self):
+        d = self.tmp / 'A - B'
+        for name in ('song.mp3', 'other.ogg', 'AB.ogg', 'AB_preview.ogg', 'cover.jpg', 'AB.png',
+                     'AB_long.png', 'clip.mp4', 'AB_cover.avi', 'AB.avi'):
+            write(d / name, 'x')
+        txt = {'MP3': 'song.mp3', 'COVER': 'cover.jpg', 'VIDEO': 'clip.mp4'}
+        audio, video, cover = ConvertFiles.resolve_song_sources(d, txt, ['AB'])
+        self.assertEqual((audio.name, video.name, cover.name), ('song.mp3', 'clip.mp4', 'cover.jpg'))
+        audio, video, cover = ConvertFiles.resolve_song_sources(d, {}, ['AB'])
+        self.assertNotIn(audio.name, ('AB.ogg', 'AB_preview.ogg'))
+        self.assertEqual(video.name, 'clip.mp4')
+        self.assertEqual(cover.name, 'cover.jpg')
+
+    def test_choose_txt_prefers_single_player(self):
+        d = self.tmp / 'A - B'
+        write(d / 'A - B [MULTI].txt', '#TITLE:B\n#BPM:300\n')
+        write(d / 'A - B.txt', '#TITLE:B\n#BPM:300\n')
+        write(d / 'license.txt', 'not a song')
+        self.assertEqual(ConvertFiles.choose_txt_file(list(d.iterdir())).name, 'A - B.txt')
+
+
+class OutputDirTest(TempDirTest):
+    def test_safety_shield(self):
+        self.assertEqual(ConvertFiles.safe_output_dir(str(self.tmp)), str(self.tmp))  # empty
+        (self.tmp / '0100EE4020D19003').mkdir()
+        self.assertEqual(ConvertFiles.safe_output_dir(str(self.tmp)), str(self.tmp))  # only TitleIDs
+        write(self.tmp / 'personal.doc', 'x')
+        self.assertEqual(ConvertFiles.safe_output_dir(str(self.tmp)), str(self.tmp / '_Patch'))
+        # never nests _Patch/_Patch
+        patch = self.tmp / '_Patch'
+        write(patch / 'error.log', 'x')
+        self.assertEqual(ConvertFiles.safe_output_dir(str(patch)), str(patch))
+
+
+class RegistryTest(TempDirTest):
+    def config(self, **dlc_songs):
+        base = {'include': False, 'name_txt_path': None, 'songs_json_path': None, 'songs_dlc_tsv_path': None}
+        base.update(dlc_songs)
+        return munchify({'conversion_tweaks': {'dlc_songs': base}})
+
+    def setUp(self):
+        super().setUp()
+        ConvertFiles._output_dir = str(self.tmp / 'out')
+
+    def test_year_parsing(self):
+        self.assertEqual(ConvertFiles.parse_year({'YEAR': '1985-03'}), 1985)
+        self.assertEqual(ConvertFiles.parse_year({'YEAR': ''}), 2000)
+        self.assertEqual(ConvertFiles.parse_year({}), 2000)
+
+    def test_json_with_bom_and_threads(self):
+        base = write(self.tmp / 'base' / 'songs_int.json',
+                     '﻿' + json.dumps({'name': 'int', 'songs': [{'id': 'Original'}]}))
+        cfg = self.config(songs_json_path=str(base))
+        threads = [threading.Thread(target=ConvertFiles.add_song_to_json,
+                                    args=('DLC', 'songs_int.json', {'id': f'S{i}'}, cfg)) for i in range(40)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        data = json.loads((self.tmp / 'out' / 'DLC' / 'romfs' / 'songs_int.json').read_text(encoding='utf-8'))
+        ids = [s['id'] for s in data['songs']]
+        self.assertEqual(len(ids), 41)
+        self.assertEqual(len(set(ids)), 41)
+        self.assertIn('Original', ids)
+
+    def test_tsv_unique_uids_with_threads(self):
+        cfg = self.config()
+        threads = [threading.Thread(target=ConvertFiles.add_data_to_songsdlc_tsv,
+                                    args=('CORE', 'Artist', f'S{i}', 'Title', 2000, cfg)) for i in range(30)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        lines = (self.tmp / 'out' / 'CORE' / 'romfs/Data/StreamingAssets/SongsDLC.tsv').read_text().splitlines()[1:]
+        uids = [line.split('\t')[1] for line in lines]
+        self.assertEqual(len(uids), 30)
+        self.assertEqual(len(set(uids)), 30)
+        # converting the same song again keeps a single row
+        ConvertFiles.add_data_to_songsdlc_tsv('CORE', 'Artist', 'S0', 'Title', 2001, cfg)
+        lines = (self.tmp / 'out' / 'CORE' / 'romfs/Data/StreamingAssets/SongsDLC.tsv').read_text().splitlines()[1:]
+        self.assertEqual(len(lines), 30)
+
+    def test_name_txt_no_duplicates(self):
+        cfg = self.config()
+        for _ in range(3):
+            ConvertFiles.add_data_to_name_txt('DLC', 'Song1', ConvertFiles.XML_FORMAT, None, cfg)
+        text = (self.tmp / 'out' / 'DLC' / 'romfs' / 'name.txt').read_text()
+        self.assertEqual(text.split(), ['Song1'])
+
+
+class VxlaRoundTripTest(TempDirTest):
+    def test_extracted_song_keeps_pitch_and_accents(self):
+        from tools import LetSing_ExtractorPro as extractor
+        song = self.tmp / 'in' / 'Zaz - Je veux'
+        notes = ''.join(f": {i * 8} 6 {i % 7} la\n" for i in range(50))
+        txt = write(song / 'Zaz - Je veux.txt', "#TITLE:Je veux\n#ARTIST:Zaz\n#BPM:300\n#GAP:0\n"
+                    + notes + ": 500 4 5  été\n: 506 4 5  là\nE\n")
+        data = UltrastarToSingit.parse_file(txt)
+        corr = PitchAnalyzer.get_pitch_correction_suggestion_fast(data, 43, 81)
+        UltrastarToSingit.main(txt, 60.0, corr, s='Zjeveux', directory=song)
+        vxla = song / 'Zjeveux.vxla'
+        self.assertIn('été', vxla.read_bytes().decode('cp1252'))
+
+        out = self.tmp / 'extracted' / 'Zaz - Je veux'
+        meta = {'artist': 'Zaz', 'title': 'Je veux'}
+        self.assertTrue(extractor.convert_vxla_to_txt(str(vxla), 'Zjeveux', meta, str(out), str(self.tmp)))
+        back = UltrastarToSingit.parse_file(out / 'Zaz - Je veux.txt')
+        back_corr = PitchAnalyzer.get_pitch_correction_suggestion_fast(back, 43, 81)
+        original = [int(n[3]) + corr for n in data['notes'] if n[0] == ':']
+        restored = [int(n[3]) + back_corr for n in back['notes'] if n[0] in ':F']
+        self.assertEqual(original, restored)
+        self.assertIn('été', [n[4].strip() for n in back['notes'] if len(n) > 4])
+
+
+if __name__ == '__main__':
+    unittest.main()

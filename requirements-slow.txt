@@ -1,0 +1,11 @@
+# Optional: "slow" pitch correction (CREPE neural pitch tracker) and vocal isolation (Demucs).
+# Large downloads (TensorFlow / PyTorch). Install with: pip install -r requirements-slow.txt
+-r requirements.txt
+numpy==2.5.3
+scipy==1.18.1
+librosa==1.0.0
+soundfile==0.14.0
+crepe==0.0.16
+tensorflow
+demucs==4.1.0
+torch==2.14.0

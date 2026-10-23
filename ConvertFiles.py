@@ -892,7 +892,7 @@ def adopt_legacy_cache(song_dir: Path, name_id: str, legacy_ids) -> None:
 
 
 def _vxla_cache_params(txt_path: Path, output_format, pitch_method, ignore_medley, keep_accents, song_duration,
-                       vocal_isolation):
+                       vocal_isolation, genius_lookup=True):
     stat = txt_path.stat()
     return {
         'version': VXLA_GENERATOR_VERSION,
@@ -901,6 +901,7 @@ def _vxla_cache_params(txt_path: Path, output_format, pitch_method, ignore_medle
         'vocal_isolation': bool(vocal_isolation) if pitch_method == SLOW else False,
         'no_medley': bool(ignore_medley),
         'keep_accents': bool(keep_accents),
+        'genius': bool(genius_lookup),
         'txt': txt_path.name,
         'txt_size': stat.st_size,
         'txt_mtime': int(stat.st_mtime),
@@ -982,6 +983,11 @@ def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None)
     ignore_video = bool(cfg.conversion_tweaks.still_video)
     keep_accents = bool(getattr(cfg.conversion_tweaks, "keep_accents", True))
     force_reconvert = bool(getattr(cfg.conversion_tweaks, "force_reconvert", False))
+    genius_lookup = bool(getattr(cfg.conversion_tweaks, "genius_lookup", True))
+    # chorus lookup on genius.com uses internet for every song; also resets the offline flag of a previous run
+    UltrastarToSingit._genius_offline = not genius_lookup
+    if not genius_lookup:
+        logger.info('Genius chorus lookup disabled: using medley tags or automatic detection (no internet).')
     # Map output_format to UltrastarToSingit OLD/NEW constants
     vxla_output_type = UltrastarToSingit.JSON if output_format == JSON_FORMAT else UltrastarToSingit.XML
 
@@ -1202,7 +1208,7 @@ def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None)
         vxla_path = list_in_dir / vxla_file_name
         meta_path = list_in_dir / (name_id + naming.VXLA_META_SUFFIX)
         params = _vxla_cache_params(txt_path, output_format, pitch_correction_method, ignore_medley, keep_accents,
-                                    song_duration, vocal_isolation)
+                                    song_duration, vocal_isolation, genius_lookup)
         if force_reconvert or not _vxla_is_current(vxla_path, meta_path, params):
             _check_stop()
             if pitch_correction_method == SLOW:

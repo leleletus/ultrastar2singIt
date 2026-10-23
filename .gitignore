@@ -22,6 +22,12 @@ config.yml
 !docs/
 !docs/**
 
+!requirements*.txt
+!.github/
+!.github/**
+!tests/
+!tests/**
+
 # must stay after the !folder/** exceptions
 **/__pycache__/
 *.pyc
