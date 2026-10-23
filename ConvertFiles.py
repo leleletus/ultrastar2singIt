@@ -969,9 +969,11 @@ def _find_name_id_collisions(dirs_to_convert):
     return duplicates
 
 
-def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None):
+def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None, song_callback=None):
     """Converts every song folder. Returns a summary {'ok': [...], 'skipped': [(dir, reason)],
-    'failed': [(dir, error)], 'stopped': bool}."""
+    'failed': [(dir, error)], 'stopped': bool}.
+
+    song_callback(dir_name, state, detail) is called with state 'running', 'ok', 'skipped' or 'failed'."""
     dlc_id = str(cfg.dlc.id)
     core_id = str(cfg.core.id) if cfg.core.id else None
     output_format = get_output_format(cfg)
@@ -999,6 +1001,9 @@ def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None)
     def report(kind, item):
         with summary_lock:
             summary[kind].append(item)
+        if song_callback:
+            dir_name, detail = (item, '') if isinstance(item, str) else item
+            song_callback(dir_name, kind, detail)
 
     try:
         _copy_dlc_base_media(cfg, dlc_id)
@@ -1043,11 +1048,15 @@ def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None)
                 needs_rename = False
 
         try:
+            if song_callback:
+                song_callback(original_dir_long_name, 'running', '')
             _convert_song(dir_long_name)
             report('ok', original_dir_long_name)
         except ConversionStopped:
             summary['stopped'] = True
             logger.info(f"Stopped while converting '{original_dir_long_name}' (finished files are kept in the cache).")
+            if song_callback:
+                song_callback(original_dir_long_name, 'stopped', '')
         except SongError as e:
             logger.error(f"Skipping '{original_dir_long_name}': {e}")
             report('skipped', (original_dir_long_name, str(e)))
@@ -1296,7 +1305,9 @@ def log_summary(summary) -> None:
         logger.info(f"  FAILED   {dir_name}: {error}")
 
 
-def main(cfg=None, stop_event=None, progress_callback=None):
+def main(cfg=None, stop_event=None, progress_callback=None, song_callback=None, only_dirs=None):
+    """only_dirs: convert just these song folders and update the existing patch (the output folder
+    is not cleared, songs already in it are kept)."""
     global _stop_event
     _stop_event = stop_event
 
@@ -1315,7 +1326,12 @@ def main(cfg=None, stop_event=None, progress_callback=None):
     ignore_video = bool(cfg.conversion_tweaks.still_video)
 
     dirs_to_convert = find_folders_to_convert()
-    delete_output_folder(cfg, dirs_to_convert)
+    if only_dirs is not None:
+        wanted = set(only_dirs)
+        dirs_to_convert = [d for d in dirs_to_convert if d in wanted]
+        logger.info(f'Converting {len(dirs_to_convert)} selected song(s) and updating the existing patch.')
+    else:
+        delete_output_folder(cfg, dirs_to_convert)
 
     logger.info('Beginning conversion - format: ' + output_format.upper())
     logger.info('Output folder: ' + _output_dir)
@@ -1324,6 +1340,7 @@ def main(cfg=None, stop_event=None, progress_callback=None):
         logger.info('MODE: Ignoring Medley tags (forcing Genius/Auto detection)')
     if ignore_video:
         logger.info('MODE: Ignoring original video (forcing still image video)')
-    summary = convert_files(dirs_to_convert, cfg, stop_event=stop_event, progress_callback=progress_callback)
+    summary = convert_files(dirs_to_convert, cfg, stop_event=stop_event, progress_callback=progress_callback,
+                            song_callback=song_callback)
     log_summary(summary)
     return summary
