@@ -24,12 +24,14 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import naming  # noqa: E402
 import UltrastarToSingit  # noqa: E402
 
-FORBIDDEN = r'[<>:"/\\|?*]'
+# same characters the extractors drop from folder names (plus the ones file systems refuse)
+FORBIDDEN = r'[<>:"/\\|?*!]'
 
 
 def safe_folder_name(artist, title):
-    name = f"{artist} - {title}"
-    return re.sub(FORBIDDEN, '', name).rstrip(' .')
+    """'Artist - Title', the folder structure the converter and the extractors use."""
+    clean = lambda text: ' '.join(re.sub(FORBIDDEN, '', text).replace(' - ', ' ').split())
+    return f"{clean(artist)} - {clean(title)}".rstrip(' .')
 
 
 def retag_txt(path, artist, title, apply):
@@ -83,14 +85,23 @@ def rename_song(songs_dir, folder, artist, title, apply):
                     renames.append((name, target))
                 break
     txt_files = [os.path.join(old_dir, f) for f in os.listdir(old_dir) if f.lower().endswith('.txt')]
+    # the txt follows the folder name ("Artist - Title.txt") when it was named after the old folder
+    txt_renames = [(os.path.basename(t), new_folder + '.txt') for t in txt_files
+                   if os.path.basename(t) == folder + '.txt' and new_folder != folder
+                   and not os.path.exists(os.path.join(old_dir, new_folder + '.txt'))]
+    # chorus data downloaded for the wrong artist/title: dropped, it is fetched again for the right song
+    stale = [f for f in os.listdir(old_dir) if f.endswith('_genius_cache.json')]
 
     report = [f"{folder}  ->  {new_folder}   (ID {old_ids[0]} -> {new_id})"]
-    report += [f"      {a} -> {b}" for a, b in renames]
+    report += [f"      {a} -> {b}" for a, b in renames + txt_renames]
+    report += [f"      {f} (wrong song, removed)" for f in stale]
     if apply:
         for txt in txt_files:
             retag_txt(txt, artist, title, True)
-        for a, b in renames:
+        for a, b in renames + txt_renames:
             os.rename(os.path.join(old_dir, a), os.path.join(old_dir, b))
+        for f in stale:
+            os.remove(os.path.join(old_dir, f))
         if new_folder != folder:
             os.rename(old_dir, new_dir)
     return '\n'.join(report)
