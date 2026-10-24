@@ -251,6 +251,12 @@ def merge_intervals(intervals):
     merged.append(current_interval)
     return merged
 
+def _end_word(text):
+    """Ends the last shown syllable with a space (end of a word or of a line), as the official files do."""
+    if not text[-1]["value"].endswith(" "):
+        text[-1]["value"] += " "
+
+
 def map_data(us_data, song_duration, pitch_corr, input_file_name, ignore_medley=False, keep_accents=True,
              time_offset=0.0):
     """time_offset: seconds removed from the start of the audio (#START), every time moves back by it."""
@@ -281,6 +287,10 @@ def map_data(us_data, song_duration, pitch_corr, input_file_name, ignore_medley=
             
             if lyric_text.strip() != "~": # if the lyric is just a tilde, don't add it to on-screen lyrics
                 final_lyric = lyric_text.replace('~', '') # tildes in the middle of bottom lyrics are ugly
+                if final_lyric.startswith(" ") and sing_it["text"]:
+                    # the official files keep the space at the end of the previous word
+                    _end_word(sing_it["text"])
+                    final_lyric = final_lyric.lstrip(" ")
                 sing_it["text"].append({"t1": start, "t2": end, "value": final_lyric})
 
                 previous_word_ended_with_space = False
@@ -310,7 +320,10 @@ def map_data(us_data, song_duration, pitch_corr, input_file_name, ignore_medley=
                 previous_line = note
             else:
                 final_lyric = "-"
-                
+
+                if " " in lyric_text and sing_it["text"]:
+                    # "side" "~ " "to": the space after the held note ends the shown word
+                    _end_word(sing_it["text"])
                 if " " in lyric_text and us_data['lyrics_map_list']:
                     if not us_data['lyrics_map_list'][-1]['lyrics'].endswith(" "):
                         us_data['lyrics_map_list'][-1]['lyrics'] += " "
@@ -332,6 +345,8 @@ def map_data(us_data, song_duration, pitch_corr, input_file_name, ignore_medley=
             sing_it["pages"].append({"t1": start, "t2": end, "value": ""})
             
             # add a space to the end of the previous lyric (ultrastar lyrics omit a space along page breaks)
+            if sing_it["text"]:
+                _end_word(sing_it["text"])
             if us_data['lyrics_map_list'] and not us_data['lyrics_map_list'][-1]['lyrics'].endswith(" "):
                 us_data['lyrics_map_list'][-1]['lyrics'] += " "
             

@@ -255,6 +255,18 @@ class AudioWindowTest(unittest.TestCase):
         self.assertAlmostEqual(sing_it['notes'][0]['t1'], 77.54 - 58.2, places=3)
 
 
+class LyricSpacesTest(unittest.TestCase):
+    def test_words_end_with_a_space_like_official_files(self):
+        # 'Side To Side': the space is on the held note "~ "; "night" ends a line; " I've" starts with a space
+        notes = [[':', '0', '2', '5', 'side'], [':', '2', '2', '5', '~ '], [':', '4', '2', '5', 'to '],
+                 [':', '6', '2', '5', 'night'], ['-', '9'], [':', '10', '2', '5', 'I'], [':', '12', '2', '5', ' am'],
+                 ['E']]
+        data = {'BPM': '240', 'GAP': '0', 'notes': notes, 'lyrics_map_list': []}
+        sing_it = UltrastarToSingit.map_data(data, 200.0, 48, 'x.txt', ignore_medley=True)
+        self.assertEqual([t['value'] for t in sing_it['text']], ['side ', 'to ', 'night ', 'I ', 'am'])
+        self.assertEqual(''.join(t['value'] for t in sing_it['text']), 'side to night I am')
+
+
 class PassagesTest(unittest.TestCase):
     @staticmethod
     def note(t1, length, pitch=60):

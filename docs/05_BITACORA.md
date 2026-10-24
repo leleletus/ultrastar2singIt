@@ -102,6 +102,10 @@
 - Scripts que podían pisar o borrar canciones (`2cb47d6`): el extractor y `reverse_vxla` no tocan carpetas existentes;
   `clean_audio_cache` solo borra audio generado y pide `--apply`; el script de iTunes ya no sobrescribe el json. Tres
   scripts sueltos sin versionar que borraban `.bk2` se movieron (no borrados) a `archivo/scripts_viejos_NO_EJECUTAR`.
+- Conversión de prueba (copias, carpeta temporal) de One Kiss, Symphony, Be the One, Side To Side y Because You
+  Loved Me: las tres reconstruidas usan su vxla oficial (letra completa, tono 55–79); `.bk2` idénticos (md5).
+  Encontrado y cerrado B-49 (palabras pegadas). El tono `#p1` del rap de Side To Side es correcto: el juego usa la
+  misma marca (3187 notas en 48 vxla oficiales).
 
 <!-- Plantilla para nuevas entradas:
 ### AAAA-MM-DD — Título

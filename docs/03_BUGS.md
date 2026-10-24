@@ -54,6 +54,7 @@ Estado al commit `4e1cb35`. "Evidencia" = verificado con prueba, con `error.log`
 | B-46 | CRÍTICO | Letras | Letras con acentos/apóstrofes **borradas** si aparecen después de los primeros 4 KB del txt | CERRADO (cd87f8d) |
 | B-47 | MEDIO | Video | "Max video size" sin efecto: binkc no recibía la tasa `/D` (R-11) | CERRADO (b9d454f) |
 | B-48 | ALTO | Tools/Caché | Copias del extractor con el ID del conversor tomadas como ya convertidas: portadas a tamaño completo en el parche, 28 GB de `.mp4` duplicados (R-12) | CERRADO (b9d454f + este commit) |
+| B-49 | MEDIO | Letras | Palabras pegadas en canciones UltraStar ("sideto side", "nightI've"): el espacio de una nota sostenida `~ ` y el fin de línea no pasaban a la letra | CERRADO (este commit) |
 
 ---
 
@@ -359,3 +360,12 @@ Estado al commit `4e1cb35`. "Evidencia" = verificado con prueba, con `error.log`
   extractor y `reverse_vxla` solo guardan fuentes con nombre genérico; un `.bk2` fuente lo copia el conversor tal cual.
   Las copias existentes no se borran: `~/rescate/excluir_copias_mp4.txt` permite no copiarlas al restaurar
   (`rsync --exclude-from`).
+
+### B-49 · MEDIO · Palabras pegadas en la letra de canciones UltraStar
+- **Dónde**: `UltrastarToSingit.map_data`.
+- **Causa**: cuando el espacio iba en una sílaba sostenida (`side` `~ ` `to`), la sílaba `~` se ocultaba y su espacio
+  solo se guardaba en la lista interna de palabras, no en la capa `lyrics`. En los saltos de página pasaba lo mismo.
+- **Evidencia**: Side To Side → "walking sideto side", "all nightI've been"; Because You Loved Me → "by meFor all".
+- **Arreglo**: como en los archivos oficiales, cada palabra y cada fin de línea terminan con espacio, y un espacio
+  inicial pasa al final de la palabra anterior. `VXLA_GENERATOR_VERSION = 4`: los vxla se regeneran solos (los
+  videos no). Las canciones con vxla oficial no cambian. Prueba: `LyricSpacesTest`.
