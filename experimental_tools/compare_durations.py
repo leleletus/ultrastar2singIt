@@ -1,6 +1,6 @@
 import os
 import subprocess
-import json
+import sys
 
 def get_duration(file_path):
     try:
@@ -10,7 +10,8 @@ def get_duration(file_path):
     except Exception:
         return 0.0
 
-custom_dir = "/run/media/djvemo/EADE-F56A/songs_custom"
+# usage: python experimental_tools/compare_durations.py <songs folder>   (only reads)
+custom_dir = sys.argv[1]
 differences = []
 perfect_matches = 0
 total_checked = 0

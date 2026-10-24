@@ -4,8 +4,9 @@ import json
 import xml.etree.ElementTree as ET
 import glob
 
-EXTRACTED_DIR = "/run/media/djvemo/EADE-F56A/lets_sing_workspace/extracted"
-MEGAPACK_DIR = "/run/media/djvemo/EADE-F56A/lets_sing_workspace/megapack_completo"
+# usage: python tools/merge_dlc_json.py <lets_sing_workspace> <output json>
+EXTRACTED_DIR = os.path.join(sys.argv[1], "extracted")
+MEGAPACK_DIR = os.path.join(sys.argv[1], "megapack_completo")
 
 def get_all_megapack_metadata():
     db = {}
@@ -90,7 +91,9 @@ for sid in megapack_ids:
     dlc_data["songs"].append(song_obj)
     added += 1
 
-out_path = "/home/djvemo/Desktop/songs_int_combined.json"
+out_path = sys.argv[2]
+if os.path.exists(out_path):
+    sys.exit(f"{out_path} already exists, choose another name")
 with open(out_path, 'w', encoding='utf-8') as f:
     json.dump(dlc_data, f, indent=4, ensure_ascii=False)
 

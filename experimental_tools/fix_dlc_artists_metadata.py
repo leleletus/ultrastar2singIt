@@ -1,3 +1,4 @@
+import os
 import json
 import urllib.request
 import urllib.parse
@@ -115,13 +116,17 @@ def main(json_path):
             if artist and title and artist != 'Unknown Artist':
                 s['artist'] = artist
                 s['title'] = title
+                s['metadata_source'] = 'itunes_unverified'
                 fixed_count += 1
-                print(f"Fixed: {song_id} -> {artist} - {title}")
+                print(f"Suggested: {song_id} -> {artist} - {title}")
 
-    with open(json_path, 'w', encoding='utf-8') as f:
+    # the first iTunes result is often another song (wrong artist/title in the past): the original json is
+    # never overwritten, check the suggestions against the lyrics before using them (tools/rename_songs.py)
+    out_path = os.path.splitext(json_path)[0] + '.itunes_suggestions.json'
+    with open(out_path, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=4, ensure_ascii=False)
 
-    print(f"\nSuccessfully fixed {fixed_count} songs.")
+    print(f"\n{fixed_count} UNVERIFIED suggestions written to {out_path} ({json_path} was not changed).")
 
 if __name__ == "__main__":
     import sys

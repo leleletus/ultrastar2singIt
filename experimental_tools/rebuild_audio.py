@@ -2,7 +2,7 @@ import os
 import sys
 from pathlib import Path
 
-sys.path.append('/home/djvemo/ultrastar_official')
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from ConfigLoader import load_config
 import ConvertFiles
 

@@ -278,7 +278,7 @@ def main():
     vxla_dir = os.path.join(mega_dir, "Songs", "vxla")
     vxla_files = [f for f in os.listdir(vxla_dir) if f.endswith('.vxla')]
     
-    success_count = 0
+    success_count = skipped = 0
     for vf in vxla_files:
         song_id = vf.replace('.vxla', '')
         vxla_file = os.path.join(vxla_dir, vf)
@@ -290,11 +290,17 @@ def main():
         safe_title = meta.get('title', song_id).replace("?", "").replace("!", "").replace(":", "").replace('"', "").replace("/", " ").strip()
         
         song_folder = os.path.join(out_dir, f"{safe_artist} - {safe_title}")
+        if os.path.exists(song_folder):
+            # never touch a song that is already there: its txt may have been corrected or re-synced
+            skipped += 1
+            continue
         
         if convert_vxla_to_txt(vxla_file, song_id, meta, song_folder, mega_dir):
             success_count += 1
             
     print(f"\n[SUCCESS] Reconstructed {success_count} songs into {out_dir}")
+    if skipped:
+        print(f"[INFO] {skipped} songs already in {out_dir} were left untouched.")
     print("[INFO] Media saved as sources (audio/video/cover): the converter creates the game files.")
 
 if __name__ == '__main__':

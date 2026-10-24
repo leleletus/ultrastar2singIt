@@ -1,12 +1,16 @@
+"""Rebuilds UltraStar songs from the vxla files of a Let's Sing megapack.
+
+Usage: python tools/reverse_vxla.py <lets_sing_workspace> <songs folder>
+Songs whose folder already exists are never touched.
+"""
+import argparse
 import os
 import json
 import shutil
 import xml.etree.ElementTree as ET
 
-WORKSPACE_DIR = "/run/media/djvemo/EADE-F56A/lets_sing_workspace"
-MEGAPACK_DIR = os.path.join(WORKSPACE_DIR, "megapack_completo")
-OUTPUT_DIR = "/run/media/djvemo/EADE-F56A/songs_custom"
-EXTRACTED_DIR = os.path.join(WORKSPACE_DIR, "extracted")
+# set from the command line in main()
+WORKSPACE_DIR = MEGAPACK_DIR = OUTPUT_DIR = EXTRACTED_DIR = None
 
 BPM = 300
 MULTIPLIER = (BPM * 4) / 60.0
@@ -219,6 +223,16 @@ def convert_vxla_to_txt(vxla_file, song_id, meta, output_folder):
     return True
 
 def main():
+    global WORKSPACE_DIR, MEGAPACK_DIR, OUTPUT_DIR, EXTRACTED_DIR
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument('workspace', help="folder with megapack_completo/ and extracted/")
+    parser.add_argument('songs', help="songs folder to write the rebuilt songs to")
+    args = parser.parse_args()
+    WORKSPACE_DIR = args.workspace
+    MEGAPACK_DIR = os.path.join(WORKSPACE_DIR, "megapack_completo")
+    EXTRACTED_DIR = os.path.join(WORKSPACE_DIR, "extracted")
+    OUTPUT_DIR = args.songs
+
     print("Building metadata database from official extracted files...")
     meta_db = build_metadata_db()
     print(f"Loaded metadata for {len(meta_db)} songs.")
@@ -257,6 +271,9 @@ def main():
         safe_artist = "".join(c for c in meta.get('artist', 'Unknown Artist') if c.isalnum() or c in " -_")
         safe_title = "".join(c for c in meta.get('title', song_id) if c.isalnum() or c in " -_")
         out_folder = os.path.join(OUTPUT_DIR, f"{safe_artist} - {safe_title}")
+        if os.path.exists(out_folder):
+            # never touch a song that is already there: its txt may have been corrected or re-synced
+            continue
         
         if convert_vxla_to_txt(vxla_file, song_id, meta, out_folder):
             success_count += 1

@@ -1,10 +1,11 @@
 import os
 import sys
 
-sys.path.append('/home/djvemo/ultrastar_official')
-from UltrastarToSingit import parse_file, map_data
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from UltrastarToSingit import parse_file, map_data  # noqa: E402
 
-custom_dir = "/run/media/djvemo/EADE-F56A/songs_custom"
+# usage: python tools/mass_test.py <songs folder>   (only reads)
+custom_dir = sys.argv[1]
 txt_files = []
 for d in os.listdir(custom_dir):
     d_path = os.path.join(custom_dir, d)
