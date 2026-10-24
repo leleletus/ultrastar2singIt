@@ -430,6 +430,21 @@ def create_placeholder_cover(list_in_dir, file_name, artist, title):
     return list_in_dir / file_name
 
 
+def _image_has_size(path, width, height):
+    """True if the image exists and has the size the game expects."""
+    if not path.exists():
+        return False
+    try:
+        from PIL import Image
+        with Image.open(path) as img:
+            if img.size == (width, height):
+                return True
+        logger.info(f"{path.name} is {img.size[0]}x{img.size[1]}, the game uses {width}x{height}: rebuilding it")
+        return False
+    except Exception:
+        return False
+
+
 def create_cover(cover_file, list_in_dir, png_file_name, from_video=False):
     return _create_image(cover_file, list_in_dir, png_file_name, 256, 256, from_video)
 
@@ -530,7 +545,8 @@ def create_video(file, list_in_dir, output_video_file_name, target_bitrate_kbps,
     return created
 
 
-def create_video_bink(file, list_in_dir, output_video_file_name, quality=None, duration=None):
+def create_video_bink(file, list_in_dir, output_video_file_name, quality=None, duration=None,
+                      compression_percentage=None):
     """Encode a .bk2 with RAD Video Tools. The result is written to the song folder only when binkc
     produced a valid file, an existing .bk2 is never replaced by a failed encode."""
     if not _rad_path:
@@ -563,6 +579,9 @@ def create_video_bink(file, list_in_dir, output_video_file_name, quality=None, d
             bink_args = [_rad_path, 'binkc', bink_in, bink_out, file_format,
                          '/(1280', '/)720', remove_sound]
 
+        if compression_percentage:
+            # data rate as a percentage of the input (from the original converter): keeps "Max video size"
+            bink_args.append('/D' + str(compression_percentage))
         if quality:
             bink_args.append('/Q' + str(quality))
         bink_args.append('/#')
@@ -1254,7 +1273,11 @@ def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None,
                 if not temp_video_file.exists():
                     create_video(real_video, list_in_dir, temp_video_file.name, target_bitrate_kbps, trim_start)
                 if temp_video_file.exists():
-                    create_video_bink(temp_video_file, list_in_dir, output_video_file_name, quality, duration)
+                    temp_size_mb = temp_video_file.stat().st_size / (1024 * 1024)
+                    compression_percentage = 100 if temp_size_mb <= target_size_mb else \
+                        max(1, min(200, int(round(target_size_mb / temp_size_mb * 100))))
+                    create_video_bink(temp_video_file, list_in_dir, output_video_file_name, quality, duration,
+                                      compression_percentage)
 
         if output_format == XML_FORMAT and output_video_path.exists() and 'avi' in get_container_format(output_video_path):
             # created by a previous version: an AVI named .mp4 is not played by the game
@@ -1289,13 +1312,13 @@ def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None,
                     # with "still video" the real cached video is kept, only the patch gets the static one
                     video_for_patch = still_file
 
-        # --- images ---
-        if not (list_in_dir / png_file_name).exists():
+        # --- images (a cached image of the wrong size, e.g. a full-size copy left by an extractor, is rebuilt) ---
+        if not _image_has_size(list_in_dir / png_file_name, 256, 256):
             create_cover(cover_source, list_in_dir, png_file_name)
         if output_format == XML_FORMAT:
-            if not (list_in_dir / png_long_file_name).exists():
+            if not _image_has_size(list_in_dir / png_long_file_name, 191, 396):
                 create_cover_long(cover_source, list_in_dir, png_long_file_name)
-            if not (list_in_dir / png_in_game_file_name).exists():
+            if not _image_has_size(list_in_dir / png_in_game_file_name, 512, 512):
                 create_in_game_loading_picture(cover_source, list_in_dir, png_in_game_file_name)
 
         # --- vxla ---
