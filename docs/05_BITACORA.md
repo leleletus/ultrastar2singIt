@@ -94,6 +94,15 @@
   simulacro de `rsync --exclude-from` con archivos vacíos (583 excluidos, `video.mp4` y `.bk2` intactos).
 - Pendiente: restaurar con Wi‑Fi usando la lista de exclusión; convertir y probar en la consola.
 
+### 2026-10-24 — Biblioteca organizada en el disco local y scripts viejos neutralizados
+- La biblioteca rescatada se copia de RetroROMs (que queda intacto como respaldo) a `~/LetsSing`: `songs/` (entrada
+  del conversor), `output/`, `workspace/`, `juegos/`, `archivo/`. Sin las 583 copias `.mp4` redundantes. Los vxla
+  oficiales y renombrados de la copia de trabajo se añaden sin sobrescribir; después se verifica todo contra el respaldo.
+- Comprobado antes de copiar: los 678 `.bk2` del parche anterior están también en las carpetas de las canciones.
+- Scripts que podían pisar o borrar canciones (`2cb47d6`): el extractor y `reverse_vxla` no tocan carpetas existentes;
+  `clean_audio_cache` solo borra audio generado y pide `--apply`; el script de iTunes ya no sobrescribe el json. Tres
+  scripts sueltos sin versionar que borraban `.bk2` se movieron (no borrados) a `archivo/scripts_viejos_NO_EJECUTAR`.
+
 <!-- Plantilla para nuevas entradas:
 ### AAAA-MM-DD — Título
 - Cambios: …
