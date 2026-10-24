@@ -54,8 +54,8 @@ Herramienta: `python tools/diagnose_library.py <songs_custom> --csv informe.csv`
 
 | Canción | Causa | Arreglo |
 |---|---|---|
-| Please Please Please | `#START:58.2` ignorado y audio ya recortado | soporte de #START (`b074be4`) |
-| Bitch Better Have My Money | el audio no corresponde al txt (dura 331.9 s, la letra termina a 347.6 s) | ajustar GAP en el Sync Editor o con detección de voz |
+| Please Please Please | `#START:58.2` ignorado y audio ya recortado; además el audio viene de otro video (`Yl_thbk40A0` en vez de `cF1Na4AIecM`) y queda 1,55 s tarde (mismo valor en las dos mitades de la canción) | soporte de #START (`b074be4`) + `#GAP:75990` (pendiente de aplicar después de verificar la copia) |
+| Bitch Better Have My Money | el sincronizador USDB no pudo bajar el video con el que se hizo el txt (`B3eAMGXFw1o`) y usó otro (`zGnY6Tq_zzo`), una versión con otras partes: la letra no cabe (termina 15,7 s después del audio) y ningún GAP la arregla | volver a bajar el audio de https://youtu.be/B3eAMGXFw1o con el sincronizador |
 | Because You Loved Me | GAP 60 ms para un audio que no es el del txt | Sync Editor |
 | Be the One, Wolves, Symphony, One Kiss | reconstruidas: tono +43/+38 y sílabas perdidas | vxla oficial (`attach_official_vxla.py`) |
 | Side To Side, Don't Stop the Music, Chantaje | método viejo +51/+52 (fuera de tonalidad) | tono por octavas (`8426e7e`) |
@@ -74,3 +74,11 @@ En la Switch, con muchas canciones instaladas, reiniciar una canción desde el m
 audio del video; saliendo y volviendo a entrar se corrige. Es rendimiento de la consola, no del archivo. Antes de
 tocar el GAP de una canción marcada "desync", confirmar entrando de nuevo a la canción (sin reiniciarla) y comparar con
 el diagnóstico (`audio dura X s, la letra termina a Y s`): solo si el archivo está mal se corrige.
+
+### Herramientas de sincronía (2026-10-24)
+- `python tools/usdb_sources.py <songs>`: canciones de USDB cuyo audio no viene del video con el que se sincronizó la
+  letra. En la biblioteca: Bitch Better Have My Money, Please Please Please y Daft Punk - Something About Us.
+- `python tools/sync_check.py <carpeta de canción>`: separa la voz (Demucs) y mide qué parte de las notas cae sobre
+  voz real, con el GAP actual y con el mejor desplazamiento; solo propone un GAP si el desfase es el mismo en las dos
+  mitades. Úsala antes de tocar una canción marcada "desync" (ver la nota sobre el rendimiento de la Switch).
+  Daft Punk: 95 % con el GAP actual, sin desfase fijo → se deja como está.

@@ -106,6 +106,10 @@
   Loved Me: las tres reconstruidas usan su vxla oficial (letra completa, tono 55–79); `.bk2` idénticos (md5).
   Encontrado y cerrado B-49 (palabras pegadas). El tono `#p1` del rap de Side To Side es correcto: el juego usa la
   misma marca (3187 notas en 48 vxla oficiales).
+- Segunda tanda de prueba (Please Please Please, Wolves, Chantaje, Don't Stop the Music, BBHMM): todas convierten,
+  `.bk2` idénticos. Wolves con su vxla oficial (letra completa); tonos de Chantaje y Don't Stop dentro de la tesitura.
+  Nuevas `tools/usdb_sources.py` y `tools/sync_check.py`: BBHMM tiene el audio de otro video (no se arregla con GAP);
+  Please Please Please queda 1,55 s tarde (`#GAP:75990`).
 
 <!-- Plantilla para nuevas entradas:
 ### AAAA-MM-DD — Título
