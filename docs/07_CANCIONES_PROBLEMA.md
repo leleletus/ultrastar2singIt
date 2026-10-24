@@ -62,6 +62,9 @@ Herramienta: `python tools/diagnose_library.py <songs_custom> --csv informe.csv`
 
 ### Orden recomendado cuando la biblioteca vuelva al disco local
 
+0. Restaurar sin las 583 copias `.mp4` redundantes (28 GB menos) y sin `--delete`, para no perder los
+   `letssing_original.vxla` ni los renombrados locales:
+   `rsync -a --info=progress2 --exclude-from=$HOME/rescate/excluir_copias_mp4.txt <RetroROMs>/carpeta_perdida_2319275/ ~/Datos_EADE/songs_custom/`
 1. `python tools/attach_official_vxla.py <songs_custom> <megapack_completo> --apply`
 2. `python tools/mark_extracted_songs.py <songs_custom> --apply` (las reconstruidas sin vxla oficial)
 3. Revisar y aplicar `python tools/rename_songs.py <songs_custom> docs/correcciones_metadatos.csv --apply`

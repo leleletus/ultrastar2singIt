@@ -15,6 +15,29 @@ Base de comparación del fork: `fd9fe37` (rama `main` local) → `linux-wine-sup
 | R-08 | `5f0d14e` / `4cb04ff` + spec de `78a5b28` | `QtMultimedia` importado en Gui | el spec heredado excluye `QtMultimedia` → build probablemente roto (a verificar) | B-41 |
 | R-09 | `1e04eba` (2026-10-03) "natively name media files" (unpacker) | renombrado de medios al desempaquetar | introdujo `safe_artist`/`safe_title` sin definir → Tools → Unpack falla siempre | B-32 |
 | R-10 | `2c2beb9` / `8f2a560` (2026-10-02) | loudnorm → dynaudnorm | no es regresión de sincronía, pero `dynaudnorm` cambia la dinámica de forma variable a lo largo del tema; el comentario "match −16 LUFS" no se cumple (no mide sonoridad). Vigilar quejas de volumen desigual | M-12 |
+| R-11 | `5f0d14e` (2026-09-29) "Massive Overhaul" | `create_video_bink` reescrita (carpeta temporal para Wine) | el parámetro `compression_percentage` se seguía calculando pero **ya no se pasaba a binkc** (`/D` desaparece): "Max video size" dejó de tener efecto y los `.bk2` salen del tamaño que decida binkc | B-47 |
+| R-12 | `362d058` (ExtractorPro) y `1e04eba` (unpacker), 2026-10-03 | el extractor copia cada medio dos veces: con nombre genérico (`audio.ogg`, `video.mp4`, `cover.png`) y otra vez con el ID del conversor "para la caché" | el conversor toma esas copias como **ya convertidas**: `<id>.png` a tamaño completo (500–1024 px) iba al parche sin reducir a 256×256; `<id>.mp4` es una copia idéntica de `video.mp4` (~50 MB por canción, espacio perdido); `<id>.ogg` es el audio original sin normalizar. Además el extractor tenía su propia copia del algoritmo del ID | B-48 |
+| R-13 | `362d058` y `0844bc6` (2026-10-03 / 05) | dos cambios del algoritmo del ID interno | ver "Historia del ID interno" abajo: cada cambio deja la caché con el ID viejo huérfana y puede duplicar canciones en un JSON combinado | B-30, B-31 |
+
+## Historia del ID interno (`name_id`)
+
+El ID sale del nombre de la carpeta `Artista - Título`: iniciales del artista + título en minúsculas, solo letras y números.
+Todos los archivos convertidos de una canción (`<id>.bk2`, `<id>.ogg`, `<id>.vxla`, `<id>.png`…) llevan ese ID, así que
+**cambiar el algoritmo equivale a perder la caché**.
+
+| Versión | Commit | Regla | Efecto |
+|---|---|---|---|
+| v1 | upstream | `split(' - ')[1]`; se ignora lo que va después del segundo ` - ` | carpeta sin ` - ` → `IndexError`; `Queen - X` y `Queen - X - Live` comparten ID |
+| v2 | `362d058` | igual que v1, sin ` - ` usa el nombre entero; quita `? ! : " /` del artista | cambia el ID solo si una palabra del artista empieza por esos signos (`"Weird" Al` → `WAY…`, antes `"AY…`) |
+| v3 | `0844bc6` | v2 + `&`→`and`, `ø`→`o`, `œ`→`oe`, `æ`→`ae`, `ß`→`ss` + solo ASCII | cambia el ID de canciones con esos caracteres (`White & Nerdy`: `…whitenerdy` → `…whiteandnerdy`); alfabetos no latinos quedaban con ID vacío (R-04) |
+| actual | `naming.py` | v3 congelado + ID de respaldo `Song<md5>` si queda vacío | `legacy_name_ids` + `adopt_legacy_cache` reutilizan la caché de v1/v2; los IDs repetidos se detectan antes de convertir y la canción se omite con aviso |
+
+Lo que se veía como "todas las canciones con lo mismo" durante la conversión no venía del ID, sino de:
+- el temporal compartido `temp_cover_clean.jpg` (R-02): con varios hilos, una canción se quedaba con la portada de otra;
+- los nombres genéricos del extractor (`audio.ogg`, `video.mp4`, `cover.png` iguales en todas las carpetas) y sus copias
+  con el ID (R-12).
+
+Comprobado el 2026-10-24 sobre las 661 carpetas de `songs_custom`: **0 IDs repetidos**.
 
 ## Herencias de upstream (no son regresiones del fork, pero siguen abiertas)
 

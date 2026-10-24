@@ -52,6 +52,8 @@ Estado al commit `4e1cb35`. "Evidencia" = verificado con prueba, con `error.log`
 | B-44 | MEDIO | Wine/Bink | binkc sin timeout ni diagnóstico; `wine` fijo | CERRADO (30669e3) |
 | B-45 | MEDIO | GUI | Cerrar la ventana con la conversión en marcha deja hilos vivos | CERRADO (7fc2657) |
 | B-46 | CRÍTICO | Letras | Letras con acentos/apóstrofes **borradas** si aparecen después de los primeros 4 KB del txt | CERRADO (cd87f8d) |
+| B-47 | MEDIO | Video | "Max video size" sin efecto: binkc no recibía la tasa `/D` (R-11) | CERRADO (b9d454f) |
+| B-48 | ALTO | Tools/Caché | Copias del extractor con el ID del conversor tomadas como ya convertidas: portadas a tamaño completo en el parche, 28 GB de `.mp4` duplicados (R-12) | CERRADO (b9d454f + este commit) |
 
 ---
 
@@ -335,3 +337,25 @@ Estado al commit `4e1cb35`. "Evidencia" = verificado con prueba, con `error.log`
 - **Arreglo**: lectura del archivo completo, UTF-8 estricto → chardet (no occidental) → cp1252 → latin-1; nunca
   `errors='ignore'`. Las letras conservan todo lo que admite Windows-1252 (opción "Conservar tildes", activada por defecto).
   Al cambiar `VXLA_GENERATOR_VERSION` todos los vxla se regeneran solos en la próxima conversión (los videos no).
+
+### B-47 · MEDIO · Tamaño de video ignorado por Bink
+- **Dónde**: `ConvertFiles.create_video_bink` (desde `5f0d14e` hasta `b9d454f`).
+- **Causa**: al reescribir la función para usar una carpeta temporal (rutas de Wine) se perdió el `/D<porcentaje>` del
+  conversor original. El porcentaje se seguía calculando con "Max video size" y se pasaba, pero no se usaba.
+- **Impacto**: los `.bk2` quedan con la tasa que elija binkc → parches más grandes y más carga para la consola.
+- **Arreglo**: `/D` restaurado con el mismo cálculo que el original (100 si el intermedio ya cabe; si no, objetivo/tamaño,
+  entre 1 y 200). Los `.bk2` ya hechos **no** se recodifican: solo afecta a los videos nuevos.
+
+### B-48 · ALTO · Copias "de caché" del extractor
+- **Dónde**: `tools/LetSing_ExtractorPro.py` (`362d058`), `tools/unpacker.py` (`1e04eba`), `tools/reverse_vxla.py`.
+- **Causa**: el extractor copiaba cada medio dos veces: como fuente (`audio.ogg`, `video.mp4`, `cover.png`) y con el ID
+  del conversor (`<id>.ogg`, `<id>.mp4`, `<id>.png`) "para la caché". `reverse_vxla` incluso dejaba las fuentes con el ID
+  oficial, que suele ser el mismo del conversor.
+- **Impacto** (medido el 2026-10-24 en `songs_custom`, solo lectura):
+  - 596 portadas `<id>.png` de 512–1080 px tomadas como convertidas → iban al parche sin reducir a 256×256;
+  - 583 `<id>.mp4` idénticos a `video.mp4` (28,15 GB) sin uso (todas esas canciones tienen su `.bk2`);
+  - con `reverse_vxla`, el video fuente `<id>.mp4` se descartaba por llamarse como un archivo del conversor.
+- **Arreglo**: el conversor rehace las imágenes en caché con tamaño distinto al del juego (`_image_has_size`); el
+  extractor y `reverse_vxla` solo guardan fuentes con nombre genérico; un `.bk2` fuente lo copia el conversor tal cual.
+  Las copias existentes no se borran: `~/rescate/excluir_copias_mp4.txt` permite no copiarlas al restaurar
+  (`rsync --exclude-from`).

@@ -11,19 +11,6 @@ EXTRACTED_DIR = os.path.join(WORKSPACE_DIR, "extracted")
 BPM = 300
 MULTIPLIER = (BPM * 4) / 60.0
 
-def construct_name_id_from_directory_name(dir_long_name) -> str:
-    import unicodedata
-    def strip_accents(s):
-        return ''.join(c for c in unicodedata.normalize('NFD', s) if unicodedata.category(c) != 'Mn')
-    split_dir_name = dir_long_name.split(' - ')
-    if len(split_dir_name) < 2: return dir_long_name
-    artist_dir_name = strip_accents(split_dir_name[0])
-    title_dir_name = strip_accents(split_dir_name[1])
-    artist_caps = [word[0].upper() for word in artist_dir_name.split()]
-    artist_cap = ''.join(artist_caps)
-    title_lower = ''.join(e.lower() for e in title_dir_name if e.isalnum())
-    return artist_cap + title_lower
-
 def seconds_to_beats(sec):
     return int(round(sec * MULTIPLIER))
 
@@ -142,19 +129,20 @@ def convert_vxla_to_txt(vxla_file, song_id, meta, output_folder):
         f.write(f"#BPM:{BPM}\n")
         f.write("#LETSSINGPITCHOFFSET:36\n")
 
-        name_id = song_id
+        # sources get generic names: the official song ID is usually the converter's ID too, and files named
+        # <id>.ogg/.mp4/.png would be taken for already converted ones
         ogg_src = os.path.join(MEGAPACK_DIR, "Songs", "audio", f"{song_id}.ogg")
         if os.path.exists(ogg_src):
-            f.write(f"#MP3:{song_id}.ogg\n")
-            shutil.copy2(ogg_src, os.path.join(output_folder, f"{song_id}.ogg"))
+            f.write("#MP3:audio.ogg\n")
+            shutil.copy2(ogg_src, os.path.join(output_folder, "audio.ogg"))
             
         # Check for multiple video extensions
         video_found = False
         for ext in ['.mp4', '.webm', '.bk2', '.bik']:
             vid_src = os.path.join(MEGAPACK_DIR, "Songs", "videos", f"{song_id}{ext}")
             if os.path.exists(vid_src):
-                f.write(f"#VIDEO:{name_id}{ext}\n")
-                shutil.copy2(vid_src, os.path.join(output_folder, f"{name_id}{ext}"))
+                f.write(f"#VIDEO:video{ext}\n")
+                shutil.copy2(vid_src, os.path.join(output_folder, f"video{ext}"))
                 video_found = True
                 break
         
@@ -162,8 +150,8 @@ def convert_vxla_to_txt(vxla_file, song_id, meta, output_folder):
         for ext in ['.jpg', '.png']:
             cov_src = os.path.join(MEGAPACK_DIR, "Songs", "covers", f"{song_id}{ext}")
             if os.path.exists(cov_src):
-                f.write(f"#COVER:{song_id}{ext}\n")
-                shutil.copy2(cov_src, os.path.join(output_folder, f"{song_id}{ext}"))
+                f.write(f"#COVER:cover{ext}\n")
+                shutil.copy2(cov_src, os.path.join(output_folder, f"cover{ext}"))
                 break
             
         # Extract all lyrics for old format

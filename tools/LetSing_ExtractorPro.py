@@ -10,6 +10,8 @@ def strip_accents(s):
     return ''.join(c for c in unicodedata.normalize('NFD', s) if unicodedata.category(c) != 'Mn')
 
 def construct_name_id(artist, title) -> str:
+    """Only used to find files in the megapack named this way. Converted files are named by the converter
+    (naming.construct_name_id_from_directory_name), the extractor never writes them."""
     artist_dir_name = strip_accents(artist).replace("?", "").replace("!", "").replace(":", "").replace('"', "").replace("/", " ")
     title_dir_name = strip_accents(title).replace("?", "").replace("!", "").replace(":", "").replace('"', "").replace("/", " ")
     artist_caps = [word[0].upper() for word in artist_dir_name.split()]
@@ -34,16 +36,6 @@ def crop_to_square(img_path):
             img_cropped.save(img_path)
     except Exception as e:
         pass
-
-def convert_to_png(src_path, dest_path):
-    try:
-        with Image.open(src_path) as img:
-            if img.mode != "RGB":
-                img = img.convert("RGB")
-            img.save(dest_path, "PNG")
-        return True
-    except:
-        return False
 
 def seconds_to_beats(seconds, bpm=300):
     beats = float(seconds) * float(bpm) / 15.0
@@ -139,7 +131,7 @@ def convert_vxla_to_txt(vxla_file, song_id, meta, output_folder, mega_dir):
     lyrics_data = lyrics_layer.findall('Interval')
     os.makedirs(output_folder, exist_ok=True)
     
-    artist = meta.get('artist', 'Unknown')
+    artist = meta.get('artist', 'Unknown Artist')
     title = meta.get('title', song_id)
     year = meta.get('year', '')
     BPM = 300
@@ -168,8 +160,6 @@ def convert_vxla_to_txt(vxla_file, song_id, meta, output_folder, mega_dir):
                 input_audio = f"audio{ext}"
                 f.write(f"#MP3:{input_audio}\n")
                 shutil.copy2(target_src, os.path.join(output_folder, input_audio))
-                # Create Cache Duplicate
-                shutil.copy2(target_src, os.path.join(output_folder, f"{name_id}.ogg"))
                 audio_found = True
                 break
                 
@@ -184,9 +174,8 @@ def convert_vxla_to_txt(vxla_file, song_id, meta, output_folder, mega_dir):
                 if target_src:
                     input_video = f"video{ext}"
                     f.write(f"#VIDEO:{input_video}\n")
+                    # only the source: the converter makes <id>.bk2 (a .bk2 source is copied as is)
                     shutil.copy2(target_src, os.path.join(output_folder, input_video))
-                    # Create Cache Duplicate (only if it matches what the GUI would generate natively, but creating a copy is safe)
-                    shutil.copy2(target_src, os.path.join(output_folder, f"{name_id}{ext}"))
                     video_found = True
                     break
             if video_found: break
@@ -195,12 +184,12 @@ def convert_vxla_to_txt(vxla_file, song_id, meta, output_folder, mega_dir):
         cover_found = False
         mega_covers = os.path.join(mega_dir, "Songs", "covers")
         if os.path.exists(mega_covers):
-            target_fuzzy = fuzzy(name_id)
+            targets = {fuzzy(name_id), fuzzy(song_id)}
             target_src = None
             
             # Fuzzy match to find the cover in megapack
             for mf in os.listdir(mega_covers):
-                if fuzzy(os.path.splitext(mf)[0]) == target_fuzzy:
+                if fuzzy(os.path.splitext(mf)[0]) in targets:
                     target_src = os.path.join(mega_covers, mf)
                     break
             
@@ -213,14 +202,6 @@ def convert_vxla_to_txt(vxla_file, song_id, meta, output_folder, mega_dir):
                 dest_input = os.path.join(output_folder, input_cover)
                 shutil.copy2(target_src, dest_input)
                 crop_to_square(dest_input)
-                
-                # Cache Duplicate as PNG for double check
-                cache_dest = os.path.join(output_folder, f"{name_id}.png")
-                if ext == '.png':
-                    shutil.copy2(dest_input, cache_dest)
-                else:
-                    convert_to_png(dest_input, cache_dest)
-                    
                 cover_found = True
                 
         # 4. Process Lyrics
@@ -314,7 +295,7 @@ def main():
             success_count += 1
             
     print(f"\n[SUCCESS] Reconstructed {success_count} songs into {out_dir}")
-    print("[INFO] All files saved securely as 'inputs' AND populated with 'cache' copies for visual double-checks.")
+    print("[INFO] Media saved as sources (audio/video/cover): the converter creates the game files.")
 
 if __name__ == '__main__':
     main()

@@ -82,6 +82,18 @@
 - Pendiente: bajar los vxla oficiales del megapack (~25 MB), devolver la biblioteca al disco local con Wi‑Fi y
   aplicar las herramientas en el orden de `07_CANCIONES_PROBLEMA.md`; probar en la consola.
 
+### 2026-10-24 — Revisión del historial: regresiones en video, caché e ID interno
+- Revisados los 28 commits del fork contra `upstream/main` (diff por archivo). Nuevas regresiones: R-11 (tasa `/D` de
+  Bink perdida), R-12 (copias "de caché" del extractor), R-13 (cambios del algoritmo del ID). Historia completa del ID en
+  `04_REGRESIONES.md`.
+- Bugs cerrados: B-47 (`b9d454f`), B-48 (`b9d454f` + extractor/reverse_vxla). `rename_songs` respeta `Artista - Título`
+  (`52791fe`).
+- Medición en RetroROMs (solo tamaños y cabeceras PNG): 583 copias `.mp4` redundantes (28,15 GB), 596 portadas de tamaño
+  incorrecto; 0 IDs repetidos en las 661 carpetas.
+- Pruebas: 28 unitarias OK; extractor con un megapack de prueba (sin copias, portada encontrada por el ID oficial);
+  simulacro de `rsync --exclude-from` con archivos vacíos (583 excluidos, `video.mp4` y `.bk2` intactos).
+- Pendiente: restaurar con Wi‑Fi usando la lista de exclusión; convertir y probar en la consola.
+
 <!-- Plantilla para nuevas entradas:
 ### AAAA-MM-DD — Título
 - Cambios: …
