@@ -252,7 +252,7 @@ def merge_intervals(intervals):
     return merged
 
 def _end_word(text):
-    """Ends the last shown syllable with a space (end of a word or of a line), as the official files do."""
+    """Ends the last shown syllable with a space (end of a word), as the official files do."""
     if not text[-1]["value"].endswith(" "):
         text[-1]["value"] += " "
 
@@ -345,8 +345,7 @@ def map_data(us_data, song_duration, pitch_corr, input_file_name, ignore_medley=
             sing_it["pages"].append({"t1": start, "t2": end, "value": ""})
             
             # add a space to the end of the previous lyric (ultrastar lyrics omit a space along page breaks)
-            if sing_it["text"]:
-                _end_word(sing_it["text"])
+            # (only in the word list: the shown text has none at the end of a line, as in the official files)
             if us_data['lyrics_map_list'] and not us_data['lyrics_map_list'][-1]['lyrics'].endswith(" "):
                 us_data['lyrics_map_list'][-1]['lyrics'] += " "
             

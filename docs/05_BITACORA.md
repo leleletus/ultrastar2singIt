@@ -111,6 +111,16 @@
   Nuevas `tools/usdb_sources.py` y `tools/sync_check.py`: BBHMM tiene el audio de otro video (no se arregla con GAP);
   Please Please Please queda 1,55 s tarde (`#GAP:75990`).
 
+### 2026-10-25 — Biblioteca en ~/LetsSing verificada y primer parche completo
+- Copia terminada y verificada contra RetroROMs (0 diferencias; 729 `.bk2` = 729). Se cortó dos veces (apagado y
+  cierre de sesión de KDE): ahora corre como servicio de usuario con linger.
+- Please Please Please: `#GAP:75990` (copia `.txt.bak`). Respaldo de los 729 `.bk2` con enlaces duros en
+  `~/LetsSing/archivo/respaldo_bk2_2026-10-25` (sin ocupar espacio).
+- Conversión completa: 661/661 en ~8 min, sin codificar ningún video (todas tenían `.bk2`); ningún `.bk2` cambió
+  (mismo inode que el respaldo). Parche en `~/LetsSing/output/0100EE4020D19003` (30 GB, 676 canciones en
+  `songs_int.json` = 661 + las 15 oficiales del DLC, como el parche anterior).
+- Revisando el parche se encontró y cerró B-50 (letra entera pegada en 112 vxla v2.0); B-49 ajustado al formato oficial.
+
 <!-- Plantilla para nuevas entradas:
 ### AAAA-MM-DD — Título
 - Cambios: …

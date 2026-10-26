@@ -36,7 +36,7 @@ NAME_TXT_FILE = 'name.txt'
 MUSIC_GENRE_LIST = ['Pop', 'Rap', 'Rock', 'Ballad', 'Electro']
 
 # Bump whenever the generated vxla changes, so cached vxla files are regenerated (videos are never touched)
-VXLA_GENERATOR_VERSION = 4
+VXLA_GENERATOR_VERSION = 5
 
 # binkc under Wine sometimes "succeeds" with an empty file of a few hundred bytes
 MIN_VALID_BK2_BYTES = 16 * 1024

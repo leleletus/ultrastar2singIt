@@ -54,7 +54,8 @@ Estado al commit `4e1cb35`. "Evidencia" = verificado con prueba, con `error.log`
 | B-46 | CRÍTICO | Letras | Letras con acentos/apóstrofes **borradas** si aparecen después de los primeros 4 KB del txt | CERRADO (cd87f8d) |
 | B-47 | MEDIO | Video | "Max video size" sin efecto: binkc no recibía la tasa `/D` (R-11) | CERRADO (b9d454f) |
 | B-48 | ALTO | Tools/Caché | Copias del extractor con el ID del conversor tomadas como ya convertidas: portadas a tamaño completo en el parche, 28 GB de `.mp4` duplicados (R-12) | CERRADO (b9d454f + este commit) |
-| B-49 | MEDIO | Letras | Palabras pegadas en canciones UltraStar ("sideto side", "nightI've"): el espacio de una nota sostenida `~ ` y el fin de línea no pasaban a la letra | CERRADO (este commit) |
+| B-49 | MEDIO | Letras | Palabras pegadas a mitad de línea en canciones UltraStar ("sideto side"): el espacio de una nota sostenida `~ ` no pasaba a la letra | CERRADO (28276db, ajustado en este commit) |
+| B-50 | ALTO | Letras | 112 de 224 vxla oficiales v2.0: toda la letra pegada ("We'retalkingaway"), se mostraba `lyrics_cut`, que no tiene espacios | CERRADO (este commit) |
 
 ---
 
@@ -361,11 +362,20 @@ Estado al commit `4e1cb35`. "Evidencia" = verificado con prueba, con `error.log`
   Las copias existentes no se borran: `~/rescate/excluir_copias_mp4.txt` permite no copiarlas al restaurar
   (`rsync --exclude-from`).
 
-### B-49 · MEDIO · Palabras pegadas en la letra de canciones UltraStar
+### B-49 · MEDIO · Palabras pegadas a mitad de línea en canciones UltraStar
 - **Dónde**: `UltrastarToSingit.map_data`.
 - **Causa**: cuando el espacio iba en una sílaba sostenida (`side` `~ ` `to`), la sílaba `~` se ocultaba y su espacio
-  solo se guardaba en la lista interna de palabras, no en la capa `lyrics`. En los saltos de página pasaba lo mismo.
-- **Evidencia**: Side To Side → "walking sideto side", "all nightI've been"; Because You Loved Me → "by meFor all".
-- **Arreglo**: como en los archivos oficiales, cada palabra y cada fin de línea terminan con espacio, y un espacio
-  inicial pasa al final de la palabra anterior. `VXLA_GENERATOR_VERSION = 4`: los vxla se regeneran solos (los
-  videos no). Las canciones con vxla oficial no cambian. Prueba: `LyricSpacesTest`.
+  solo se guardaba en la lista interna de palabras, no en la capa `lyrics`.
+- **Arreglo**: cada palabra termina con espacio y un espacio inicial pasa al final de la palabra anterior. Al final de
+  línea **no** se añade: los vxla oficiales tampoco lo llevan (el juego muestra cada página por separado; comprobado
+  en un oficial de 2024: las 60 uniones sin espacio caen justo en fin de página). Prueba: `LyricSpacesTest`.
+
+### B-50 · ALTO · Letra entera pegada en canciones con vxla oficial v2.0
+- **Dónde**: `OfficialVxla.to_sing_it` (desde `7b5a82a`).
+- **Causa**: el texto visible se armaba con `lyrics_cut`, y en 112 de los 224 vxla v2.0 de la biblioteca esa capa no
+  tiene ningún espacio (Take On Me: "We're" "tal" "king" "a" "way"). La capa `lyrics`, con los mismos tiempos, sí los
+  tiene y es la que muestra el juego.
+- **Arreglo**: el texto visible es la capa `lyrics` (como en los v3.0); `lyrics_cut` solo reparte sílabas a las notas.
+  `VXLA_GENERATOR_VERSION = 5`. Prueba: `test_v2_shown_text_keeps_the_spaces_of_the_lyrics_layer`.
+  Verificado en el parche completo: Take On Me → "We're talking away I don't know what…"; las uniones restantes
+  dentro de una línea son sílabas en mayúsculas de una misma palabra (BOOM-BA-YAH, A-B-C de abcdefu).

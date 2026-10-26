@@ -263,8 +263,8 @@ class LyricSpacesTest(unittest.TestCase):
                  ['E']]
         data = {'BPM': '240', 'GAP': '0', 'notes': notes, 'lyrics_map_list': []}
         sing_it = UltrastarToSingit.map_data(data, 200.0, 48, 'x.txt', ignore_medley=True)
-        self.assertEqual([t['value'] for t in sing_it['text']], ['side ', 'to ', 'night ', 'I ', 'am'])
-        self.assertEqual(''.join(t['value'] for t in sing_it['text']), 'side to night I am')
+        # no space at the end of a line: the game shows each page on its own, as in the official files
+        self.assertEqual([t['value'] for t in sing_it['text']], ['side ', 'to ', 'night', 'I ', 'am'])
 
 
 class PassagesTest(unittest.TestCase):
@@ -316,6 +316,17 @@ class OfficialVxlaTest(TempDirTest):
         self.assertEqual([round(t1, 3) for t1, *_ in layers['notes_full']], [1.02, 1.4, 1.9])
         self.assertEqual([v for *_, v in layers['lyrics']], ['Été ', 'là '])  # '-' is not shown
         self.assertEqual([v for *_, v in layers['segments']], ['feat'])
+
+    def test_v2_shown_text_keeps_the_spaces_of_the_lyrics_layer(self):
+        # 'Take On Me': half of the official v2 files have a 'lyrics_cut' layer without any space
+        import OfficialVxla
+        cut = self.V2.replace('value="Été "/><Interval t1="1.400" t2="1.880" value="là "',
+                              'value="Été"/><Interval t1="1.400" t2="1.880" value="là"')
+        src = write(self.tmp / 'nospace.vxla', cut, 'latin-1')
+        OfficialVxla.convert(src, 'new.vxla', self.tmp, 10.0, UltrastarToSingit.JSON)
+        layers, _ = OfficialVxla.read_layers(self.tmp / 'new.vxla')
+        self.assertEqual(''.join(v for *_, v in layers['lyrics']), 'Été là ')
+        self.assertEqual([v for *_, v in layers['notes_full']], ['#p67#.Été', '#p65#.là#g5', '#p65#.-'])
 
 
 class VxlaRoundTripTest(TempDirTest):

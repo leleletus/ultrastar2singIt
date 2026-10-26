@@ -80,6 +80,11 @@ def to_sing_it(layers, song_duration):
             sing_it["notes"].append({"t1": t1, "t2": t2, "value": value})
             if syllable.strip() not in ('', '~', '-'):  # '-' marks a held note, it is not shown
                 sing_it["text"].append({"t1": t1, "t2": t2, "value": syllable})
+        if layers.get('lyrics'):
+            # the shown text is the 'lyrics' layer, as in v3: half of the 'lyrics_cut' layers have no spaces at all
+            # ("We're" "tal" "king" "a" "way" -> "We'retalkingaway")
+            sing_it["text"] = [{"t1": t1, "t2": t2, "value": value} for t1, t2, value in sorted(layers['lyrics'])
+                               if value.strip() not in ('', '~', '-')]
 
     for t1, t2, value in layers.get('pages', []):
         sing_it["pages"].append({"t1": t1, "t2": t2, "value": value})
