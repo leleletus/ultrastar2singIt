@@ -120,6 +120,12 @@
   (mismo inode que el respaldo). Parche en `~/LetsSing/output/0100EE4020D19003` (30 GB, 676 canciones en
   `songs_int.json` = 661 + las 15 oficiales del DLC, como el parche anterior).
 - Revisando el parche se encontró y cerró B-50 (letra entera pegada en 112 vxla v2.0); B-49 ajustado al formato oficial.
+- Revisión del audio del parche: 48 `.ogg` regenerados (#START/#END y cambios), 613 reutilizados; 659/661 coinciden
+  en duración con su fuente. Excepciones: BBHMM (audio de otra versión, ya conocido) y Rockefeller Street, cuyo
+  `audio.ogg` era una copia del audio ya convertido (con los 10,94 s de `#VIDEOGAP` incluidos): el parche está bien,
+  pero el txt apunta ahora al `.m4a` original (copia `.txt.bak`) para que una regeneración no duplique el silencio.
+  En 225 de 272 carpetas `audio.ogg` es idéntico al `<id>.ogg` convertido (copias de un script anterior; sin
+  VIDEOGAP no afecta). Es la única canción de la biblioteca con `#VIDEOGAP`.
 
 <!-- Plantilla para nuevas entradas:
 ### AAAA-MM-DD — Título
