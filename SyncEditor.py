@@ -331,6 +331,10 @@ class SyncEditorDialog(QDialog):
                         break
                 lines.insert(insert_at, gap_line)
 
+            if not os.path.exists(self.txt_path + '.bak'):
+                # the first time a song is re-synced its original txt is kept, the GAP can always be restored
+                with open(self.txt_path + '.bak', 'wb') as f:
+                    f.write(raw)
             tmp_path = self.txt_path + '.tmp'
             with open(tmp_path, 'w', encoding=encoding, newline='') as f:
                 f.write(newline.join(lines) + newline)
