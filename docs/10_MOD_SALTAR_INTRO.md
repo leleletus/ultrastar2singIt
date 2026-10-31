@@ -27,7 +27,7 @@ Cómo se obtuvo: `global-metadata.dat` sacado en la consola con nxdumptool (RomF
 | `InGameSimple.VideoDesyncTolerance` (+0x108), `timeofLastJump` (+0x10C) | — | El video Bink se reengancha solo cuando se separa del audio |
 | `InGameClassic.StartSong` / `InGameSimple.StartSong` | `0x47A38A0` / `0x47A3590` | Inicio de la partida (llama a `InGame.StartSong`, `0x479F890`, que arranca `KaraokeManager.StartVx`) |
 | `InGameSimple.UpdateVx` (slot 18) | `0x47A4700` | Se llama cada fotograma durante la canción |
-| `SwitchToResult()` (InGameClassic y subclases) | ver dump.cs l. 497367 | Termina la canción y muestra resultados, como al acabar normalmente |
+| `InGameClassic.SwitchToResult()` | `0x47A3D50` | Termina la canción y muestra resultados, como al acabar normalmente |
 | `Lyrics.firstNoteStartTime` (+0x94) | — | Inicio de la primera nota |
 | `KaraokePage.TryGetFirstNote` / `TryGetLastNote` | dump.cs l. 495206 | Primera/última nota de una página |
 | `SortTypeComparer.Compare` | `0x45A5140` | Orden de las listas: "Título" ordena por `Singable.Id` (por eso el parche usa IDs con el título primero) |
