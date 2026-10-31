@@ -82,3 +82,8 @@ el diagnóstico (`audio dura X s, la letra termina a Y s`): solo si el archivo e
   voz real, con el GAP actual y con el mejor desplazamiento; solo propone un GAP si el desfase es el mismo en las dos
   mitades. Úsala antes de tocar una canción marcada "desync" (ver la nota sobre el rendimiento de la Switch).
   Daft Punk: 95 % con el GAP actual, sin desfase fijo → se deja como está.
+- `python tools/sync_scan.py <songs> --report informe.csv`: revisa todas las canciones UltraStar contra la voz y
+  las clasifica (ok, desfase, parcial, otra_version, dudosa). Continúa donde quedó (la voz se guarda por canción) y
+  con `--only-analyzed` rehace el informe en segundos. Después, cada canción se arregla en el editor (corte +
+  "Ajustar a la voz").
+

@@ -133,6 +133,14 @@
   Ctrl+S) y modo cantar con micrófono para comprobar el tono de las notas.
 - Verificado sin pantalla con copias de BBHMM (aviso "la letra termina 15,7 s después del audio") y Take On Me
   (vxla oficial, solo lectura); micrófono simulado una octava abajo: cuenta como acierto, igual que el juego.
+- Editor, segunda versión (`SyncModel.py` sin Qt + `SyncEditor.py`): controles con íconos; **cortes** (✂: desde
+  una línea, las flechas mueven solo esa parte y lo siguiente; al guardar se mueven los tiempos de esas notas en
+  pulsos, con copia `.bak`, y no deja guardar si una parte se monta sobre la anterior); **Analizar voz** (Demucs,
+  guardado en `<id>.voice.npz`): la voz se dibuja sobre las notas, un mapa colorea cada línea según coincida con la
+  voz y la varita mueve la parte a donde está la voz. Verificado con BBHMM: línea 8 movida +2,24 s → coincide 97 %;
+  el txt guardado solo cambia los tiempos (letras, tonos y duraciones idénticos).
+- `tools/sync_scan.py`: el mismo análisis para toda la biblioteca, con informe CSV (ok / desfase / parcial /
+  otra_version / dudosa). Demucs tarda ~6 min por canción en CPU: las 274 canciones UltraStar, ~18-20 h.
 
 <!-- Plantilla para nuevas entradas:
 ### AAAA-MM-DD — Título

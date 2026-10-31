@@ -47,6 +47,11 @@ def _render(svg_name: str, color: str, size: int) -> QPixmap:
     return pixmap
 
 
+def make_icon(svg_name: str, color: str = '#d0d8e0', size: int = 20) -> QIcon:
+    """Any Tabler icon in any color (toolbars of the sync editor)."""
+    return QIcon(_render(svg_name, color, size))
+
+
 class Icon(Enum):
     START = ('player-play', Color.GREEN)
     STOP = ('player-stop', Color.RED)

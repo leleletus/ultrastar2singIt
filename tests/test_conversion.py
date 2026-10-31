@@ -359,27 +359,61 @@ if __name__ == '__main__':
     unittest.main()
 
 
-class SyncEditorTest(unittest.TestCase):
+class SyncModelTest(unittest.TestCase):
     def test_pitch_detection(self):
         import numpy as np
-        os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
-        import SyncEditor
+        import SyncModel
         for hz, rate in ((110.0, 48000), (220.0, 44100), (440.0, 16000), (659.25, 48000)):
             t = np.arange(int(rate * 0.05)) / rate
             voice = 0.5 * np.sin(2 * np.pi * hz * t) + 0.2 * np.sin(2 * np.pi * 2 * hz * t)  # with a harmonic
-            self.assertAlmostEqual(SyncEditor.detect_pitch(voice, rate), hz, delta=hz * 0.01)
-        self.assertIsNone(SyncEditor.detect_pitch(np.zeros(2400), 48000))  # silence
-        self.assertAlmostEqual(SyncEditor.hz_to_midi(440.0), 69)
-        self.assertEqual(SyncEditor.fold_to(57, 70), 69)  # any octave counts, like the game
+            self.assertAlmostEqual(SyncModel.detect_pitch(voice, rate), hz, delta=hz * 0.01)
+        self.assertIsNone(SyncModel.detect_pitch(np.zeros(2400), 48000))  # silence
+        self.assertAlmostEqual(SyncModel.hz_to_midi(440.0), 69)
+        self.assertEqual(SyncModel.fold_to(57, 70), 69)  # any octave counts, like the game
 
     def test_txt_notes_and_lines(self):
-        os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
-        import SyncEditor
+        import SyncModel
         data = {'BPM': '240', 'notes': [[':', '0', '2', '5', 'side'], [':', '2', '2', '5', '~ '],
                                         ['*', '4', '2', '7', 'to '], ['-', '6'], ['F', '8', '2', '0', 'yo']]}
-        notes, syllables, lines = SyncEditor.load_txt(data)
-        self.assertEqual([n.pitch for n in notes], [65, 65, 67, 60])
-        self.assertEqual([n.sung for n in notes], [True, True, True, False])
-        self.assertEqual([s[2] for s in syllables], ['side ', 'to ', 'yo'])
-        self.assertEqual(lines, [[0, 1], [2]])
-        self.assertAlmostEqual(notes[2].t, 4 * 60 / 240 / 4)
+        song = SyncModel.load_txt(data)
+        self.assertEqual([n.pitch for n in song.notes], [65, 65, 67, 60])
+        self.assertEqual([n.sung for n in song.notes], [True, True, True, False])
+        self.assertEqual([n.line for n in song.notes], [0, 0, 0, 1])
+        self.assertEqual([s[2] for s in song.syllables], ['side ', 'to ', 'yo'])
+        self.assertEqual(song.lines, [[0, 1], [2]])
+        self.assertAlmostEqual(song.line_starts[1], 8 * 60 / 240 / 4)
+
+    def test_cut_moves_only_the_lines_after_it(self):
+        import SyncModel
+        txt = ['#BPM:240', '#GAP:100', ': 0 2 5 a', ': 2 2 5 b', '- 5', ': 8 2 5 c', ': 10 2 5 d', '- 13',
+               ': 16 2 5  e', 'E']
+        out = SyncModel.rewrite_txt(txt, 150, [0, 0, -3], expected_notes=5)
+        self.assertEqual(out, ['#BPM:240', '#GAP:150', ': 0 2 5 a', ': 2 2 5 b', '- 5', ': 8 2 5 c',
+                               ': 10 2 5 d', '- 12', ': 13 2 5  e', 'E'])  # lyric spacing kept
+        self.assertEqual(SyncModel.rewrite_txt(txt, 100), txt)  # only #GAP
+        with self.assertRaises(ValueError):  # would overlap the line before
+            SyncModel.rewrite_txt(txt, 100, [0, -5, -5], expected_notes=5)
+        with self.assertRaises(ValueError):  # the notes of the file are not the ones loaded
+            SyncModel.rewrite_txt(txt, 100, [0, 0, -3], expected_notes=4)
+        with self.assertRaises(ValueError):  # duets can only move #GAP
+            SyncModel.rewrite_txt(txt[:2] + ['P1'] + txt[2:], 100, [0, 0, -3])
+
+    def test_line_report_finds_the_part_out_of_time(self):
+        import numpy as np
+        import SyncModel
+        # two lines of notes at 1-3 s and 10-12 s; the singer sings the second one 1 s later
+        data = {'BPM': '60', 'notes': [[':', str(b), '2', '9', 'la '] for b in range(4, 12, 2)] + [['-', '20']] +
+                                       [[':', str(b), '2', '9', 'la '] for b in range(40, 48, 2)]}
+        song = SyncModel.load_txt(data)
+        frames = int(20 / SyncModel.FRAME)
+        active = np.zeros(frames, dtype=bool)
+        pitch = np.full(frames, np.nan, dtype=np.float32)
+        for start, end in ((1.0, 3.0), (11.0, 13.0)):
+            active[int(start / 0.02):int(end / 0.02)] = True
+            pitch[int(start / 0.02):int(end / 0.02)] = 69 - 12  # an octave lower still counts
+        report = SyncModel.line_report(song, {'active': active, 'pitch': pitch}, lambda i: 0.0)
+        self.assertAlmostEqual(report[0][1], 0.0)
+        self.assertGreater(report[0][0], 0.9)
+        self.assertAlmostEqual(report[1][1], 1.0, delta=0.05)
+        self.assertLess(report[1][0], 0.6)      # only half of it is on the voice now
+        self.assertGreater(report[1][2], 0.95)  # and all of it once moved
