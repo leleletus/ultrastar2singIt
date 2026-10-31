@@ -80,11 +80,12 @@ def _simple(text):
 
 
 COMPILATION = re.compile(r'\b(hits|now that|now \d|best of|greatest|top \d+|compilation|collection|essentials|'
-                         r'anthology|karaoke|party|summer \d{4}|the very best|the hits|playlist|bravo|ministry)\b', re.I)
+                         r'anthology|karaoke|party|summer \d{4}|the very best|the hits|playlist|bravo|ministry|'
+                         r'hi-five|ultimate|complete|singles)\b|\w+ songs\b', re.I)
 
 
 VARIANT = re.compile(r'\b(remix|remixes|mix|live|acoustic|unplugged|version|edit|raw sessions|instrumental|'
-                     r'karaoke|cover|sped up|slowed|demo|remaster(ed)?)\b', re.I)
+                     r'karaoke|cover|sped up|slowed|demo|remaster(ed)?|mono|stereo|deluxe|expanded)\b', re.I)
 
 
 def store_cover(artist, title):
@@ -104,7 +105,8 @@ def store_cover(artist, title):
         album = r.get('collectionName', '')
         if (r.get('collectionArtistName') or '').lower() == 'various artists' or COMPILATION.search(album):
             continue
-        single = _simple(album.replace('- Single', '').replace('- EP', '')) == want_title or '- Single' in album
+        # a single counts only when it is named after the song (a B-side sits on the single of another song)
+        single = _simple(album.replace('- Single', '').replace('- EP', '')) == want_title
         # remixes, live or acoustic releases have another artwork than the song: only if nothing else
         variant = bool(VARIANT.search(album)) and not VARIANT.search(title)
         candidates.append((variant, 0 if single else 1, r.get('releaseDate', '9999'), r.get('artworkUrl100'), album))
@@ -208,8 +210,7 @@ def main():
             except Exception:
                 continue
     if args.dlc:
-        forced |= {d.name for d in songs if (d / naming.OFFICIAL_VXLA_NAME).exists()
-                   and not official_cover(d, vxla_index)}
+        forced |= {d.name for d in songs if (d / naming.OFFICIAL_VXLA_NAME).exists()}
     shared += [d for d in songs if d.name in forced and d not in shared]
     if args.frames:  # covers made from a frame of the video: try to get a real one
         shared += [d for d in songs if (d / (NEW_COVER + '.jpg')).exists() and d not in shared
@@ -220,9 +221,12 @@ def main():
     for d in shared:
         txt = ConvertFiles.choose_txt_file([p for p in d.iterdir() if p.suffix.lower() == '.txt'])
         data = UltrastarToSingit.parse_file(txt)
-        # a forced song wants another image than the one it has: straight to the store
+        # a forced song wants another image than the one it has: its official cover, else the store
         url = None if d.name in forced else usdb_cover_url(d)
-        source = None if url or d.name in forced else official_cover(d, vxla_index)
+        source = None if url else official_cover(d, vxla_index)
+        if source is not None and d.name in forced and current_cover(d) is not None \
+                and sha1(source) == sha1(current_cover(d)):
+            continue  # already the official one
         album = None
         if not url and not source:
             try:
