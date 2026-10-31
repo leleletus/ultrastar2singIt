@@ -1849,9 +1849,46 @@ def scan_song_folders_single(input_path, directory, video_suffix, sync_cache):
     return rows[0] if rows else None
 
 
+def start_hang_watchdog(app, seconds=10):
+    """If the window stops answering for `seconds`, writes where every thread is to hang_trace.log (once per
+    freeze), so a frozen GUI can be diagnosed instead of guessed."""
+    import faulthandler
+    import threading
+    import time
+    from ConfigLoader import app_dir
+    state = {'beat': time.monotonic(), 'dumped': False}
+
+    def beat():
+        state['beat'] = time.monotonic()
+        state['dumped'] = False
+
+    timer = QTimer(app)
+    timer.timeout.connect(beat)
+    timer.start(1000)
+
+    def watch():
+        while True:
+            time.sleep(2)
+            stalled = time.monotonic() - state['beat']
+            if stalled > seconds and not state['dumped']:
+                state['dumped'] = True
+                try:
+                    with open(os.path.join(app_dir(), 'hang_trace.log'), 'a', encoding='utf-8') as f:
+                        f.write(f"\n=== {time.strftime('%Y-%m-%d %H:%M:%S')} window not answering for "
+                                f"{stalled:.0f} s ===\n")
+                        f.flush()
+                        faulthandler.dump_traceback(file=f, all_threads=True)
+                except OSError:
+                    pass
+
+    threading.Thread(target=watch, name='hang-watchdog', daemon=True).start()
+    return timer
+
+
 def main():
     app = QApplication(sys.argv)
     app.setApplicationName("LetsSingUltraStarConverter")
+    app._hang_watchdog = start_hang_watchdog(app)
     window = MainWindow()
     apply_theme_change(app.styleHints().colorScheme(), app, window)
     app.styleHints().colorSchemeChanged.connect(lambda scheme: apply_theme_change(scheme, app, window))

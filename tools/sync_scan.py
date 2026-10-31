@@ -21,6 +21,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import ConvertFiles  # noqa: E402
 import SyncModel  # noqa: E402
@@ -55,6 +56,24 @@ def song_timing(song_dir):
     return song, audio, gap - (start_offset - trim_start)
 
 
+def suspicion(song_dir, usdb_other):
+    """0 = most likely out of sync (checked first), 2 = no sign of trouble. Cheap: no voice analysis."""
+    try:
+        song, audio, shift = song_timing(song_dir)
+    except Exception:
+        return 0
+    if song_dir.name in usdb_other or audio is None or not song.notes:
+        return 0
+    try:
+        if song.line_ends[-1] + shift > ConvertFiles.get_duration(audio) + 1:
+            return 0
+    except Exception:
+        return 0
+    if shift < 0 or song.notes[0].t + shift < 0.5 or not 50 <= (song.bpm or 100) <= 400:
+        return 1
+    return 2
+
+
 def check_song(song_dir, analyze=True):
     song, audio, shift = song_timing(song_dir)
     if audio is None:
@@ -87,6 +106,11 @@ def main():
     base = Path(args.songs)
     dirs = sorted(p for p in base.iterdir() if p.is_dir() and (not args.song or p.name in args.song))
     todo = [d for d in dirs if not (d / naming.OFFICIAL_VXLA_NAME).exists()]
+    if not args.only_analyzed:
+        # the songs most likely out of sync first, so the report is useful long before the scan ends
+        import usdb_sources
+        usdb_other = {folder for folder, _, _ in usdb_sources.check(str(base))[0]}
+        todo.sort(key=lambda d: (suspicion(d, usdb_other), d.name.lower()))
     print(f"{len(todo)} UltraStar songs to check ({len(dirs) - len(todo)} use the official vxla and are skipped)",
           flush=True)
     rows = []

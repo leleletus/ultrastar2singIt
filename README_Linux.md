@@ -35,3 +35,10 @@ source venv/bin/activate
 pip install -r requirements.txt
 python3 LetsSingUltraStarConverter.py
 ```
+
+## Opening it every day
+```
+~/ultrastar_official/start_linux.sh          # open the program
+bash install_linux_launcher.sh               # once: adds it to the applications menu (KDE, GNOME...)
+```
+More in [`docs/08_USO_EN_LINUX.md`](docs/08_USO_EN_LINUX.md).

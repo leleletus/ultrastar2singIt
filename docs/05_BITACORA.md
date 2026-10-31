@@ -146,6 +146,12 @@
   arrastra las demás; cortar nunca mueve nada (la parte nueva conserva su desplazamiento). La parte que mueven las
   flechas queda fija aunque se navegue por la canción; se cambia con clic en el mapa, `[` `]` o **Toda la letra** (G).
   Verificado con una copia del BBHMM guardado: línea 71 de 4:07.02 a 4:08.02 sin tocar el GAP ni las otras partes.
+- BBHMM sincronizada a mano por partes (aceptable para jugar). Revisión de las 274 canciones UltraStar lanzada
+  como servicio con CPU en modo idle (`~/LetsSing/informe_sincronia.csv`), sospechosas primero.
+- La ventana se congeló una vez con el video de BBHMM abierto: hilo principal bloqueado (`futex_wait`, sin CPU),
+  no por memoria. Sin permiso de ptrace no se pudo ver el punto exacto; se agregó un vigilante que escribe
+  `hang_trace.log` (pila de todos los hilos) si la ventana no responde en 10 s.
+- `install_linux_launcher.sh` (acceso en el menú) y `docs/08_USO_EN_LINUX.md`.
 
 <!-- Plantilla para nuevas entradas:
 ### AAAA-MM-DD — Título

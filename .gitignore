@@ -31,3 +31,4 @@ config.yml
 # must stay after the !folder/** exceptions
 **/__pycache__/
 *.pyc
+hang_trace.log

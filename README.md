@@ -72,6 +72,10 @@ settings remembered, full Spanish translation. Tests: `python -m unittest discov
 - [RAD Video Tools](https://www.radgametools.com/bnkdown.htm) (**needed only for Let's Sing 2024+**)
 
 ## How to use
+**Linux:** open the program with `~/ultrastar_official/start_linux.sh` (or run `bash install_linux_launcher.sh`
+once to get it in the applications menu). Daily use on Linux, the menu launcher and long background tasks:
+[`docs/08_USO_EN_LINUX.md`](docs/08_USO_EN_LINUX.md).
+
 See the [Guide document](Guide.md) for a detailed step-by-step guide on how to use this converter and patch your DLC with custom songs.
 
 This converter can also be run from the command line by using the `--cli` flag, use the `--help` flag for a quick rundown of available options.
