@@ -250,5 +250,12 @@
   "Move the line being played (and its part) to where the voice is": "Mover la línea que suena (y su parte) a donde está la voz",
   "All the lyrics (GAP {gap} ms): every part moves": "Toda la letra (GAP {gap} ms): se mueven todas las partes",
   "Lines {a}-{b} ({t1} - {t2}): {ms:+.0f} ms": "Líneas {a}-{b} ({t1} - {t2}): {ms:+.0f} ms",
-  "{n} parts. The arrows move the selected part (click another one on the map, or [ ]). ": "{n} partes. Las flechas mueven la parte seleccionada (elige otra con clic en el mapa o con [ ]). "
+  "{n} parts. The arrows move the selected part (click another one on the map, or [ ]). ": "{n} partes. Las flechas mueven la parte seleccionada (elige otra con clic en el mapa o con [ ]). ",
+  "the lyrics are on the voice": "la letra va sobre la voz",
+  "a part of the lyrics is out of time": "una parte de la letra está desfasada",
+  "all the lyrics are early or late": "toda la letra va adelantada o atrasada",
+  "the audio is another version": "el audio es otra versión de la canción",
+  "little of the voice matches the notes: check it by ear": "poca voz coincide con las notas: revisar de oído",
+  "Voice check: {result}.": "Revisión de voz: {result}.",
+  "Click to open the sync editor.": "Haz clic para abrir el editor de sincronización."
 }

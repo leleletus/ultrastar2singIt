@@ -1,5 +1,6 @@
 import ctypes
 import logging
+import json
 import os
 import re
 import sys
@@ -113,6 +114,7 @@ class SongRow:
     has_txt: bool = False
     cached_txt: bool = False
     doubtful_sync: bool = False
+    sync_note: str = ''  # result of the voice check (tools/sync_scan.py), when the song was checked
     official_vxla: bool = False
     order: int = 0
     checked: bool = False
@@ -122,6 +124,27 @@ class SongRow:
     @property
     def fully_cached(self):
         return self.cached_video and self.cached_audio and self.cached_image and self.cached_txt
+
+
+VOICE_CHECK_TEXT = {'ok': "the lyrics are on the voice", 'parcial': "a part of the lyrics is out of time",
+                    'desfase': "all the lyrics are early or late", 'otra_version': "the audio is another version",
+                    'dudosa': "little of the voice matches the notes: check it by ear"}
+
+
+def voice_check(directory_path, sidecar_name, txt_path, txt_mtime):
+    """(verdict, text for the tooltip) of tools/sync_scan.py if it checked this same txt, else None."""
+    try:
+        with open(os.path.join(directory_path, sidecar_name), encoding='utf-8') as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return None
+    if data.get('txt') != txt_path.name or abs(float(data.get('txt_mtime', 0)) - (txt_mtime or 0)) > 1:
+        return None  # the txt changed since (re-synced): the old result no longer applies
+    verdict = data.get('verdict', '')
+    text = tr(VOICE_CHECK_TEXT.get(verdict, verdict))
+    if data.get('detail') and verdict != 'ok':
+        text += f" ({data['detail']})"
+    return verdict, tr("Voice check: {result}.").format(result=text)
 
 
 def is_doubtful_sync(txt_path) -> bool:
@@ -183,6 +206,10 @@ def scan_song_folders(input_path: str, video_suffix: str, sync_cache: dict, only
             else:
                 row.doubtful_sync = is_doubtful_sync(txt_path)
                 sync_cache[str(txt_path)] = (mtime, row.doubtful_sync)
+            checked = voice_check(directory_path, name_id + naming.SYNC_REPORT_SUFFIX, txt_path, mtime)
+            if checked:  # the voice check knows better than the guess from the txt
+                row.doubtful_sync = checked[0] != 'ok'
+                row.sync_note = checked[1]
         rows.append(row)
     return rows
 
@@ -340,6 +367,8 @@ class SongTableModel(QAbstractTableModel):
             if role == Qt.DecorationRole:
                 return (Icon.SYNC_WARNING if r.doubtful_sync else Icon.SYNC).get_icon()
             if role == Qt.ToolTipRole:
+                if r.sync_note:
+                    return r.sync_note + " " + tr("Click to open the sync editor.")
                 return tr("Possible desync detected (negative GAP, odd BPM or lyrics at the very start). "
                           "Click to open the sync editor.") if r.doubtful_sync else tr("Open the sync editor")
         if col == COL_PLAY:

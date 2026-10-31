@@ -78,6 +78,18 @@ def suspicion(song_dir, usdb_other):
     return 2
 
 
+def write_sidecar(song_dir, verdict, detail):
+    """<id>.sync.json next to the song: the GUI shows it in its sync column (dropped when the txt changes)."""
+    folder = song_dir.name.rstrip('.')
+    txt = ConvertFiles.choose_txt_file([p for p in song_dir.iterdir() if p.suffix.lower() == '.txt'])
+    path = song_dir / (naming.construct_name_id_from_directory_name(folder) + naming.SYNC_REPORT_SUFFIX)
+    data = {'verdict': verdict, 'detail': detail, 'txt': txt.name, 'txt_mtime': txt.stat().st_mtime,
+            'checked': time.strftime('%Y-%m-%d %H:%M')}
+    tmp = path.with_name(path.name + '.tmp')
+    tmp.write_text(json.dumps(data, ensure_ascii=False), encoding='utf-8')
+    os.replace(tmp, path)
+
+
 def check_song(song_dir, analyze=True):
     song, audio, shift = song_timing(song_dir)
     if audio is None:
@@ -94,6 +106,7 @@ def check_song(song_dir, analyze=True):
     lyrics_end = (song.line_ends[-1] + shift) if song.line_ends else 0.0
     verdict, detail = SyncModel.song_verdict(report, [s + shift for s in song.line_starts], duration, lyrics_end)
     scores = [r[0] for r in report if r[0] is not None]
+    write_sidecar(song_dir, verdict, detail)
     return {'verdict': verdict, 'detail': detail,
             'match': f"{sum(scores) / len(scores):.0%}" if scores else '',
             'lines_out': sum(1 for r in report if r[0] is not None and abs(r[1]) >= 0.3)}
