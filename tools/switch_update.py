@@ -13,7 +13,8 @@ after every update. The first time, --baseline gives the photo of the
 patch that was copied to the Switch. Before copying, a sample of the files that did not change is checked on the
 Switch: if their sizes differ, the Switch has another patch and nothing is copied (copy the whole folder instead).
 Every file replaced on the Switch is first saved to <output>/../switch_backup_<date>/. Nothing is deleted on the
-Switch (files of songs removed from the patch are only listed).
+Switch (files of songs removed from the patch are only listed); a file is removed only to be replaced, after its
+backup (DBI's MTP responder does not overwrite files).
 """
 import argparse
 import hashlib
@@ -116,6 +117,10 @@ def main():
         else:
             kio('mkdir', url.rsplit('/', 1)[0])
         result = kio('copy', '--overwrite', 'file://' + os.path.join(patch, k), url)
+        if result.returncode != 0 and k in on_switch:
+            # DBI's MTP responder refuses to overwrite: remove it (it is already backed up) and copy again
+            kio('remove', url)
+            result = kio('copy', 'file://' + os.path.join(patch, k), url)
         got = remote_size(url)
         if result.returncode != 0 or got != local[k][0]:
             sys.exit(f"Copy of {k} failed ({result.stderr.strip()[:200]}); the Switch keeps the other files. "

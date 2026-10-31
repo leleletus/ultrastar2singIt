@@ -18,12 +18,27 @@ _STRUCTURE_NAMES = {'couplet1': 'couplet', 'couplet2': 'couplet', 'couplet3': 'c
                     'bridge': 'pont', 'intro': 'intro', 'outro': 'outro'}
 
 
+def _utf8_text(raw):
+    """The text without its XML declaration when a file declares a one-byte encoding (Windows-1252, ISO-8859-1)
+    but is really UTF-8: read as declared, "é" became "Ã©" and "«" became "Â«". None for any other file."""
+    declared = re.match(rb'\s*(?:\xef\xbb\xbf)?<\?xml[^>]*encoding=["\']([^"\']+)', raw)
+    if not declared or declared.group(1).lower().replace(b'_', b'-') in (b'utf-8', b'utf8', b'utf-16'):
+        return None
+    try:
+        text = raw.decode('utf-8-sig')
+    except UnicodeDecodeError:
+        return None  # really a one-byte file
+    if all(ord(c) < 128 for c in text):
+        return None  # plain ASCII: the same in both encodings
+    return re.sub(r'^\s*<\?xml[^>]*\?>', '', text)
+
+
 def read_layers(path):
     """{layer name: [(t1, t2, value), ...]} and the file version."""
     with open(path, 'rb') as f:
         raw = f.read()
     try:
-        root = ET.fromstring(raw)
+        root = ET.fromstring(_utf8_text(raw) or raw)
     except ET.ParseError:
         # some extracted files declare an encoding they are not written in (e.g. "utf-16" for UTF-8 text)
         text = None

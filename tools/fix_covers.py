@@ -8,6 +8,7 @@ An older script replaced the cover of many USDB songs with one image per artist 
 the same cover). For every song whose cover is shared:
   - USDB songs: the cover is downloaded again from the address kept in their .usdb file;
   - songs rebuilt from DLCs (letssing_original.vxla): the loose official cover of the extracted games (2024+);
+  - else the single/album cover of the iTunes store, when artist and title match exactly;
   - otherwise a frame of the song's own video (the megapack covers have the same problem, they are not used).
 The new image is saved as cover_song.<ext> (the old one is kept) and #COVER of the txt points to it (a .bak of the
 txt is kept). The next conversion rebuilds the cover of those songs (the converter notices the newer source).
@@ -20,6 +21,8 @@ import io
 import json
 import os
 import sys
+import re
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -65,6 +68,30 @@ def official_cover(song_dir, vxla_index):
     for ext in ('.png', '.jpg', '.jpeg'):
         if (covers / (found.stem + ext)).exists():
             return covers / (found.stem + ext)
+    return None
+
+
+def _simple(text):
+    import unicodedata
+    text = unicodedata.normalize('NFKD', text.lower())
+    text = re.sub(r'\(.*?\)|\[.*?\]| - .*$', '', ''.join(c for c in text if not unicodedata.combining(c)))
+    return ' '.join(re.sub(r'[^a-z0-9 ]', ' ', text).split())
+
+
+def store_cover_url(artist, title):
+    """Cover of the single/album in the iTunes store, only when artist AND title really match (the first result
+    of a loose search is often another song: that is how wrong artists/titles were made in the past)."""
+    query = urllib.parse.urlencode({'term': f"{artist} {title}", 'entity': 'song', 'limit': 25})
+    request = urllib.request.Request(f"https://itunes.apple.com/search?{query}",
+                                     headers={'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64)'})
+    with urllib.request.urlopen(request, timeout=30) as response:
+        results = json.loads(response.read().decode('utf-8')).get('results', [])
+    want_title, first_artist = _simple(title), _simple(re.split(r' feat\.? | ft\.? |,| & | x | \+ ', artist)[0])
+    for r in results:
+        if _simple(r.get('trackName', '')) == want_title and first_artist in _simple(r.get('artistName', '')):
+            url = r.get('artworkUrl100')
+            if url:
+                return url.replace('100x100bb', '1000x1000bb')
     return None
 
 
@@ -119,6 +146,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('songs')
     parser.add_argument('--extracted', help="folder with the extracted Let's Sing games (official covers)")
+    parser.add_argument('--frames', action='store_true', help="also replace covers taken from a video frame")
     parser.add_argument('--apply', action='store_true')
     args = parser.parse_args()
 
@@ -136,6 +164,9 @@ def main():
     if args.extracted:
         for f in Path(args.extracted).rglob('*.vxla'):
             vxla_index.setdefault(sha1(f), f)
+    if args.frames:  # covers made from a frame of the video: try to get a real one
+        shared += [d for d in songs if (d / (NEW_COVER + '.jpg')).exists() and d not in shared
+                   and not usdb_cover_url(d) and not official_cover(d, vxla_index)]
     print(f"{len(shared)} songs share their cover with other songs")
 
     fixed, failed = 0, []
@@ -144,6 +175,11 @@ def main():
         data = UltrastarToSingit.parse_file(txt)
         url = usdb_cover_url(d)
         source = None if url else official_cover(d, vxla_index)
+        if not url and not source:
+            try:
+                url = store_cover_url(data.get('ARTIST', ''), data.get('TITLE', ''))
+            except Exception:
+                url = None
         print(f"   {d.name}  <-  {url or source or 'a frame of its video'}")
         if not args.apply:
             continue

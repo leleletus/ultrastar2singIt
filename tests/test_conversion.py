@@ -306,6 +306,15 @@ class OfficialVxlaTest(TempDirTest):
         self.assertEqual(version, '2.0')
         self.assertEqual(layers['lyrics_cut'][0][2], 'Été ')
 
+    def test_utf8_file_declared_as_windows_1252(self):
+        # 'Facile', 'thank u, next': the file says Windows-1252 but is UTF-8 ("é" was read as "Ã©")
+        import OfficialVxla
+        src = write(self.tmp / 'declared.vxla', self.V2.replace('ISO-8859-1', 'Windows-1252'), 'utf-8')
+        layers, _ = OfficialVxla.read_layers(src)
+        self.assertEqual(layers['lyrics'][0][2], 'Été ')
+        real = write(self.tmp / 'real1252.vxla', self.V2.replace('ISO-8859-1', 'Windows-1252'), 'cp1252')
+        self.assertEqual(OfficialVxla.read_layers(real)[0]['lyrics'][0][2], 'Été ')  # a real one still works
+
     def test_v2_to_v3_keeps_timing_pitch_and_syllables(self):
         import OfficialVxla
         src = write(self.tmp / 'old.vxla', self.V2, 'latin-1')

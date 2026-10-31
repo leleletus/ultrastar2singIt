@@ -36,7 +36,7 @@ NAME_TXT_FILE = 'name.txt'
 MUSIC_GENRE_LIST = ['Pop', 'Rap', 'Rock', 'Ballad', 'Electro']
 
 # Bump whenever the generated vxla changes, so cached vxla files are regenerated (videos are never touched)
-VXLA_GENERATOR_VERSION = 5
+VXLA_GENERATOR_VERSION = 6
 
 # binkc under Wine sometimes "succeeds" with an empty file of a few hundred bytes
 MIN_VALID_BK2_BYTES = 16 * 1024
@@ -196,6 +196,7 @@ def resolve_config(cfg):
         if dlc_entity:
             cfg.core.id = dlc_entity.core_id
             cfg.dlc.json_name = dlc_entity.dlc_json_name
+            cfg.core.edition = dlc_entity.core_edition
     return cfg
 
 
@@ -631,6 +632,9 @@ def parse_year(txt_data) -> int:
 
 # Languages written in songs_xx.json, with the names the official files use ("English"). Only languages known to be
 # accepted are written; any other (Korean, Japanese...) is kept as GAME_LANGUAGE_FALLBACK until tested on the console.
+# Only the editions below get the real language (their official files use it); every other edition keeps "English",
+# as it always had, so patches for older games do not change.
+REAL_LANGUAGE_EDITIONS = ('2026',)
 GAME_LANGUAGES = ('English', 'Spanish', 'French', 'German', 'Italian', 'Portuguese', 'Dutch')
 GAME_LANGUAGE_FALLBACK = 'English'
 _LANGUAGE_ALIASES = {
@@ -730,7 +734,9 @@ def handle_xml_or_json(dlc_id, core_id, json_file_name, list_in_dir, txt_data,
             "theme": "Love, Deep, Party",
             "difficulty": "VeryEasy",
             "coopfriendly": "Coop",
-            "language": song_language(txt_data, os.fspath(list_in_dir)),
+            "language": song_language(txt_data, os.fspath(list_in_dir))
+            if str(getattr(getattr(cfg, 'core', None), 'edition', '')) in REAL_LANGUAGE_EDITIONS
+            else GAME_LANGUAGE_FALLBACK,
             "bpm": bpm
         }
         add_song_to_json(dlc_id, json_file_name, song_data, cfg)
