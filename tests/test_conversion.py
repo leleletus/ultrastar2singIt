@@ -417,3 +417,19 @@ class SyncModelTest(unittest.TestCase):
         self.assertAlmostEqual(report[1][1], 1.0, delta=0.05)
         self.assertLess(report[1][0], 0.6)      # only half of it is on the voice now
         self.assertGreater(report[1][2], 0.95)  # and all of it once moved
+
+
+class LanguageTest(unittest.TestCase):
+    def test_tag_first_language_and_aliases(self):
+        self.assertEqual(ConvertFiles.song_language({'LANGUAGE': 'Spanish, English', 'notes': []}), 'Spanish')
+        self.assertEqual(ConvertFiles.song_language({'LANGUAGE': 'Français', 'notes': []}), 'French')
+        self.assertEqual(ConvertFiles.song_language({'LANGUAGE': 'Deutsch', 'notes': []}), 'German')
+        # languages not tested on the console yet keep the fallback
+        self.assertEqual(ConvertFiles.song_language({'LANGUAGE': 'Korean (romanized)', 'notes': []}), 'English')
+
+    def test_detected_from_the_lyrics(self):
+        words = ("je ne sais pas pourquoi tu es là mais je t'aime et la nuit c'est pour toi que je chante "
+                 "mon coeur est à toi dans la nuit avec moi pour toujours").split()
+        notes = [[':', str(i), '1', '0', w + ' '] for i, w in enumerate(words)]
+        self.assertEqual(ConvertFiles.song_language({'notes': notes}), 'French')
+        self.assertEqual(ConvertFiles.song_language({'notes': notes[:5]}), 'English')  # too short: fallback

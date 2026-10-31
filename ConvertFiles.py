@@ -430,6 +430,19 @@ def create_placeholder_cover(list_in_dir, file_name, artist, title):
     return list_in_dir / file_name
 
 
+def _image_is_current(path, width, height, source):
+    """The cached image exists, has the size the game expects and is newer than its source image."""
+    if not _image_has_size(path, width, height):
+        return False
+    try:
+        if source is not None and os.path.getmtime(source) > os.path.getmtime(path):
+            logger.info(f"{path.name}: its source image changed, rebuilding it")
+            return False
+    except OSError:
+        pass
+    return True
+
+
 def _image_has_size(path, width, height):
     """True if the image exists and has the size the game expects."""
     if not path.exists():
@@ -616,6 +629,77 @@ def parse_year(txt_data) -> int:
     return int(match.group(1)) if match else 2000
 
 
+# Languages written in songs_xx.json, with the names the official files use ("English"). Only languages known to be
+# accepted are written; any other (Korean, Japanese...) is kept as GAME_LANGUAGE_FALLBACK until tested on the console.
+GAME_LANGUAGES = ('English', 'Spanish', 'French', 'German', 'Italian', 'Portuguese', 'Dutch')
+GAME_LANGUAGE_FALLBACK = 'English'
+_LANGUAGE_ALIASES = {
+    'english': 'English', 'ingles': 'English', 'inglés': 'English', 'anglais': 'English', 'englisch': 'English',
+    'spanish': 'Spanish', 'espanol': 'Spanish', 'español': 'Spanish', 'castellano': 'Spanish', 'espagnol': 'Spanish',
+    'spanisch': 'Spanish',
+    'french': 'French', 'francais': 'French', 'français': 'French', 'frances': 'French', 'francés': 'French',
+    'franzosisch': 'French', 'französisch': 'French',
+    'german': 'German', 'deutsch': 'German', 'aleman': 'German', 'alemán': 'German', 'allemand': 'German',
+    'italian': 'Italian', 'italiano': 'Italian', 'italien': 'Italian', 'italienisch': 'Italian',
+    'portuguese': 'Portuguese', 'portugues': 'Portuguese', 'português': 'Portuguese', 'portugués': 'Portuguese',
+    'dutch': 'Dutch', 'nederlands': 'Dutch', 'holandes': 'Dutch', 'holandés': 'Dutch', 'flemish': 'Dutch',
+    'korean': 'Korean', 'japanese': 'Japanese', 'russian': 'Russian', 'polish': 'Polish', 'swedish': 'Swedish',
+    'turkish': 'Turkish', 'greek': 'Greek', 'chinese': 'Chinese', 'catalan': 'Catalan', 'latin': 'Latin',
+}
+# frequent short words of each language, to tell the language of lyrics without a #LANGUAGE tag
+_STOPWORDS = {
+    'English': set("the and you i me my to a it is in that of your we be don't i'm on for all love what this "
+                   "with so but just know oh baby can no like get".split()),
+    'Spanish': set("que de la el y en no me te mi tu yo lo se por un una es con para pero como más mas amor "
+                   "quiero qué cuando esta está todo".split()),
+    'French': set("je tu il et le la les de des que qui pas ne un une est mon ma mes moi toi c'est j'ai "
+                  "dans pour sur avec plus vous nous".split()),
+    'German': set("ich du und der die das nicht ist ein eine mich dich mein dein wir es zu mit auf sie "
+                  "wie so noch auch".split()),
+    'Italian': set("che di il la e non io tu mi ti un una per con sei sono come ma più amore della".split()),
+    'Portuguese': set("que de não eu você o a e um uma meu minha com para em do da te amor é tão".split()),
+    'Dutch': set("ik je de het een en niet is van dat mijn jij wij zijn op met maar".split()),
+}
+
+
+def detect_language(words):
+    """Most likely language of a list of lyric words (by their most frequent short words), or None."""
+    words = [w.lower().strip(".,!?¡¿\"()") for w in words if w.strip()]
+    if len(words) < 20:
+        return None
+    scores = {lang: sum(1 for w in words if w in stop) for lang, stop in _STOPWORDS.items()}
+    best = max(scores, key=scores.get)
+    second = sorted(scores.values())[-2]
+    # a clear winner only: songs mixing languages keep the first one of their tag or the fallback
+    return best if scores[best] >= 8 and scores[best] >= 1.5 * max(second, 1) else None
+
+
+def song_language(txt_data, song_dir=None):
+    """Language for the game: the first one of #LANGUAGE ("Korean (romanized), English" -> Korean), else the
+    one of the lyrics (those of the official vxla when there is one: rebuilt txt files lost their spaces).
+    Languages not in GAME_LANGUAGES become GAME_LANGUAGE_FALLBACK."""
+    tag = txt_data.get('LANGUAGE', '').strip()
+    language = None
+    if tag:
+        first = re.split(r'[,;/&+]| and | y ', tag)[0]
+        first = re.sub(r'\(.*?\)', '', first).strip().lower()
+        language = _LANGUAGE_ALIASES.get(first)
+    if language is None:
+        text = ''
+        official = os.path.join(song_dir, naming.OFFICIAL_VXLA_NAME) if song_dir else None
+        if official and os.path.isfile(official):
+            try:
+                layers, _ = OfficialVxla.read_layers(official)
+                text = ''.join(v for _, _, v in layers.get('lyrics', []))
+            except Exception:
+                text = ''
+        if not text:
+            text = ''.join(n[4] for n in txt_data.get('notes', [])
+                           if len(n) > 4 and n[0] in (':', '*', 'F', 'R', 'G'))
+        language = detect_language(text.replace('~', '').split())
+    return language if language in GAME_LANGUAGES else GAME_LANGUAGE_FALLBACK
+
+
 def build_song_metadata(txt_data):
     title = txt_data.get('TITLE', 'title')
     artist = txt_data.get('ARTIST', 'artist')
@@ -646,7 +730,7 @@ def handle_xml_or_json(dlc_id, core_id, json_file_name, list_in_dir, txt_data,
             "theme": "Love, Deep, Party",
             "difficulty": "VeryEasy",
             "coopfriendly": "Coop",
-            "language": "English",
+            "language": song_language(txt_data, os.fspath(list_in_dir)),
             "bpm": bpm
         }
         add_song_to_json(dlc_id, json_file_name, song_data, cfg)
@@ -1313,12 +1397,12 @@ def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None,
                     video_for_patch = still_file
 
         # --- images (a cached image of the wrong size, e.g. a full-size copy left by an extractor, is rebuilt) ---
-        if not _image_has_size(list_in_dir / png_file_name, 256, 256):
+        if not _image_is_current(list_in_dir / png_file_name, 256, 256, cover_source):
             create_cover(cover_source, list_in_dir, png_file_name)
         if output_format == XML_FORMAT:
-            if not _image_has_size(list_in_dir / png_long_file_name, 191, 396):
+            if not _image_is_current(list_in_dir / png_long_file_name, 191, 396, cover_source):
                 create_cover_long(cover_source, list_in_dir, png_long_file_name)
-            if not _image_has_size(list_in_dir / png_in_game_file_name, 512, 512):
+            if not _image_is_current(list_in_dir / png_in_game_file_name, 512, 512, cover_source):
                 create_in_game_loading_picture(cover_source, list_in_dir, png_in_game_file_name)
 
         # --- vxla ---
