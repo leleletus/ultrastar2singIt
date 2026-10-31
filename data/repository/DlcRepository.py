@@ -13,7 +13,7 @@ def _get_connection() -> sqlite3.Connection:
 def init():
     with _get_connection() as conn:
         c = conn.cursor()
-        c.execute("""drop table dlc""")
+        c.execute("""DROP TABLE IF EXISTS dlc""")
         c.execute("""CREATE TABLE IF NOT EXISTS dlc (
                 dlc_id TEXT PRIMARY KEY,
                 dlc_name TEXT,

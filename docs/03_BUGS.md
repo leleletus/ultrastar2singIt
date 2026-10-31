@@ -25,7 +25,7 @@ Estado al commit `4e1cb35`. "Evidencia" = verificado con prueba, con `error.log`
 | B-17 | MEDIO | Salida | Escudo `_Patch`: `isfile` relativo al CWD y doble anidado `_Patch/_Patch` | CERRADO (30669e3 + 7fc2657) |
 | B-18 | ALTO | Config | config.yml se guarda en el CWD pero se lee de la carpeta de la app | CERRADO (7fc2657) |
 | B-19 | MEDIO | GUI/Config | Multihilo y nº de hilos no se cargan; al guardar se pisan | CERRADO (7fc2657) |
-| B-20 | MEDIO | GUI/i18n | Idioma no se restaura; textos mezclados; clave española en modo inglés | EN CURSO 7fc2657 (idioma restaurado y textos nuevos traducidos; faltan tooltips/tabla) |
+| B-20 | MEDIO | GUI/i18n | Idioma no se restaura; textos mezclados; clave española en modo inglés | CERRADO (7fc2657 + revisión 2026-10-31: 0 textos sin traducir) |
 | B-21 | ALTO | GUI | `self.log_message` no existe → excepción en Fix Sync y Play | CERRADO (7fc2657) |
 | B-22 | BAJO | GUI | Volver al "orden original" ordena por la columna Lyrics | CERRADO (7fc2657) |
 | B-23 | BAJO | GUI | Tras convertir se pierde la selección múltiple | CERRADO (7fc2657) |
@@ -40,7 +40,7 @@ Estado al commit `4e1cb35`. "Evidencia" = verificado con prueba, con `error.log`
 | B-32 | ALTO | Tools | Tools → Unpack está roto (NameError) y genera tiempos erróneos | CERRADO (27f8a17) |
 | B-33 | BAJO | Tools | reverse_vxla: NameError `name_id` | CERRADO (27f8a17) |
 | B-34 | BAJO | Tools | ExtractorPro no lee vxla propios; espacios mal detectados | CERRADO (27f8a17) |
-| B-35 | BAJO | Datos | `DlcRepository.init` falla en BD nueva | ABIERTO |
+| B-35 | BAJO | Datos | `DlcRepository.init` falla en BD nueva | CERRADO (DROP TABLE IF EXISTS; prueba DlcRepositoryTest) |
 | B-36 | BAJO | GUI | Regex de TitleID laxa | CERRADO (7fc2657) |
 | B-37 | MEDIO | Logging | error.log en el CWD; spam DEBUG de librerías; log sin límite | CERRADO (30669e3) |
 | B-38 | MEDIO | Tono | Importación pesada de TensorFlow al cargar; Demucs no funciona empaquetado | CERRADO (8426e7e) |

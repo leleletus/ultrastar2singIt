@@ -508,3 +508,16 @@ class SyncVerdictTest(unittest.TestCase):
         self.assertIn('-1500 ms', detail)
         self.assertEqual(SyncModel.song_verdict([(0.2, 0.8, 0.9)] * 12, times, 100, 60)[0], 'desfase')
         self.assertEqual(SyncModel.song_verdict(block, times, 50, 60)[0], 'otra_version')
+
+
+class DlcRepositoryTest(TempDirTest):
+    def test_init_on_a_new_database(self):
+        from data.repository import DlcRepository
+        old = DlcRepository.DB_PATH
+        DlcRepository.DB_PATH = str(self.tmp / 'new.db')
+        try:
+            DlcRepository.init()  # B-35: used to fail with "no such table: dlc"
+            entity = DlcRepository.get_by_dlc_id('0100EE4020D19003')
+            self.assertEqual((entity.dlc_json_name, entity.core_edition), ('songs_int', '2026'))
+        finally:
+            DlcRepository.DB_PATH = old

@@ -1,13 +1,11 @@
 # 09 — Historial de bugs
 
-Resumen al 2026-10-31: **62 bugs registrados, 57 cerrados, 5 pendientes**. El detalle de cada uno (causa, impacto, arreglo) está en [03_BUGS.md](03_BUGS.md); las regresiones del historial de git en [04_REGRESIONES.md](04_REGRESIONES.md) y el día a día en [05_BITACORA.md](05_BITACORA.md).
+Resumen al 2026-10-31: **62 bugs registrados, 59 cerrados, 3 pendientes**. El detalle de cada uno (causa, impacto, arreglo) está en [03_BUGS.md](03_BUGS.md); las regresiones del historial de git en [04_REGRESIONES.md](04_REGRESIONES.md) y el día a día en [05_BITACORA.md](05_BITACORA.md).
 
 ## Pendientes
 
 | ID | Severidad | Área | Problema | Estado |
 |---|---|---|---|---|
-| B-20 | MEDIO | GUI/i18n | Idioma no se restaura; textos mezclados; clave española en modo inglés | EN CURSO 7fc2657 (idioma restaurado y textos nuevos traducidos; faltan tooltips/tabla) |
-| B-35 | BAJO | Datos | `DlcRepository.init` falla en BD nueva | ABIERTO |
 | B-41 | ALTO | Build | El `.spec` excluye QtMultimedia, que la GUI importa | EN CURSO (spec corregido en 7fc2657; build sin probar) |
 | B-42 | MEDIO | Repo | requirements.txt y build.yml no versionados; requirements inutilizable | EN CURSO (.pyc fuera de git; requirements pendiente) |
 | B-61 | ALTO | GUI | La ventana se congeló una vez (hilo principal bloqueado, con el video de BBHMM abierto) | ABIERTO (vigilante hang_trace.log en 6e74b01) |
@@ -20,7 +18,7 @@ Resumen al 2026-10-31: **62 bugs registrados, 57 cerrados, 5 pendientes**. El de
 | Revisión de sincronía de las 274 canciones UltraStar contra la voz (`tools/sync_scan.py`) | En marcha en segundo plano; informe en `~/LetsSing/informe_sincronia.csv` |
 | Bitch Better Have My Money: audio de otra versión | Sincronizada a mano por partes; lo ideal es bajar el audio de https://youtu.be/B3eAMGXFw1o |
 | Varios idiomas por canción (el juego guarda una lista, p. ej. "Korean, English") | Por probar en la consola |
-| Tema, dificultad y voz (Love/Deep/Party, VeryEasy…VeryHard, Women/Men/Both) reales por canción | Hoy todas: "Love, Deep, Party", "VeryEasy", "Both" |
+| Tema real por canción (Love/Deep/Party) | Todas siguen con los tres (no hay datos oficiales de 2026 para calcularlo sin equivocarse); dificultad y voz ya se calculan (603b4cd) |
 | Archivos `beats/<id>.json` y `vxla_feat` que traen los DLC oficiales de 2026 | Sin generar (el juego funciona sin ellos) |
 
 ## Cerrados
@@ -46,6 +44,7 @@ Resumen al 2026-10-31: **62 bugs registrados, 57 cerrados, 5 pendientes**. El de
 | B-17 | MEDIO | Salida | Escudo `_Patch`: `isfile` relativo al CWD y doble anidado `_Patch/_Patch` | (30669e3 + 7fc2657) |
 | B-18 | ALTO | Config | config.yml se guarda en el CWD pero se lee de la carpeta de la app | (7fc2657) |
 | B-19 | MEDIO | GUI/Config | Multihilo y nº de hilos no se cargan; al guardar se pisan | (7fc2657) |
+| B-20 | MEDIO | GUI/i18n | Idioma no se restaura; textos mezclados; clave española en modo inglés | (7fc2657 + revisión 2026-10-31: 0 textos sin traducir) |
 | B-21 | ALTO | GUI | `self.log_message` no existe → excepción en Fix Sync y Play | (7fc2657) |
 | B-22 | BAJO | GUI | Volver al "orden original" ordena por la columna Lyrics | (7fc2657) |
 | B-23 | BAJO | GUI | Tras convertir se pierde la selección múltiple | (7fc2657) |
@@ -60,6 +59,7 @@ Resumen al 2026-10-31: **62 bugs registrados, 57 cerrados, 5 pendientes**. El de
 | B-32 | ALTO | Tools | Tools → Unpack está roto (NameError) y genera tiempos erróneos | (27f8a17) |
 | B-33 | BAJO | Tools | reverse_vxla: NameError `name_id` | (27f8a17) |
 | B-34 | BAJO | Tools | ExtractorPro no lee vxla propios; espacios mal detectados | (27f8a17) |
+| B-35 | BAJO | Datos | `DlcRepository.init` falla en BD nueva | (DROP TABLE IF EXISTS; prueba DlcRepositoryTest) |
 | B-36 | BAJO | GUI | Regex de TitleID laxa | (7fc2657) |
 | B-37 | MEDIO | Logging | error.log en el CWD; spam DEBUG de librerías; log sin límite | (30669e3) |
 | B-38 | MEDIO | Tono | Importación pesada de TensorFlow al cargar; Demucs no funciona empaquetado | (8426e7e) |
