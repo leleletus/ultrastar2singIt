@@ -28,6 +28,43 @@ song selection menu designed for hundreds of tracks rather than just a few dozen
 To make the whole process even more user-friendly, I've implemented a GUI and packaged the converter as a standalone executable,
 so you don't need to worry about installing Python or any dependencies.
 
+## What this fork adds (`linux-wine-support` branch)
+Detailed technical notes, bug list, regressions and work log (in Spanish) are in [`docs/`](docs/README.md).
+
+**Your converted videos are safe.** Encoding a `.bk2` can take hours, so the converter never deletes or re-encodes one:
+"Clear cache" keeps them (double confirmation), a failed encode never replaces a good file, and before the output
+folder is cleared any video without a copy in its song folder is rescued.
+
+**Sync editor** (right click on a song → *Fix sync…*), a small video editor for the lyrics:
+- video, the notes as bars like the game and karaoke lyrics; play/pause, ±5 s, ±0.1 s, previous/next line,
+  jump to the first lyrics, speed 0.5×–1.25×, a timeline you can click, keyboard shortcuts on every button;
+- move all the lyrics (`#GAP`) or **cut** at a line and move only that part and what follows (a gap in the
+  middle of the song); a `.bak` of the txt is kept the first time a song is saved;
+- **Analyze voice**: the singer is isolated (Demucs) and drawn over the notes; a map colours every line by how well
+  it matches the voice and *Fit to voice* moves a part to where the singer really is;
+- **Sing mode**: listens to the microphone, draws your voice over the notes and counts the notes you hit (any
+  octave, like the game) to check that the pitch of a song is right;
+- songs that use an official Let's Sing lyrics file are shown read-only (the game uses their timing as is).
+
+**Lyrics and notes**
+- Songs rebuilt from older Let's Sing DLCs use the official vxla (`letssing_original.vxla`, see
+  `tools/attach_official_vxla.py`): exact timing, pitch and syllables; v2.0 files are converted to the 2024+ format.
+- Encoding detection on the whole txt (accents and apostrophes were silently deleted before), `#START`/`#END`,
+  pitch moved only by whole octaves, words no longer glued together, passages (`long`/`speed`) like the official files.
+- Each song keeps a signature of how its lyrics and audio were made, so only what changed is converted again.
+
+**Library tools** (`tools/`, all of them only report unless `--apply` is given)
+| Tool | What it does |
+|---|---|
+| `diagnose_library.py` | finds rebuilt songs, missing lyrics, glued lyrics, odd pitch, `#START` songs |
+| `attach_official_vxla.py` | pairs rebuilt songs with their official vxla by their lyrics |
+| `rename_songs.py` | fixes wrong artist/title and renames the folder and its cache (videos included) |
+| `usdb_sources.py` | songs whose audio was downloaded from another video than the one the lyrics were timed to |
+| `sync_check.py` / `sync_scan.py` | compares the lyrics with the isolated voice, one song or the whole library (CSV report) |
+
+**GUI**: fast song table with per-song status, convert only the checked songs or a single one, coloured log,
+settings remembered, full Spanish translation. Tests: `python -m unittest discover -s tests -t .`
+
 ## Requirements
 - Windows 7+
 - [ffmpeg](https://ffmpeg.org/download.html) - I used version [7.1.1-full_build from gyan.dev](https://www.gyan.dev/ffmpeg/builds/)

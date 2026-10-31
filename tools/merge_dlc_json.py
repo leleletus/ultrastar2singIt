@@ -4,7 +4,7 @@ import json
 import xml.etree.ElementTree as ET
 import glob
 
-# usage: python tools/merge_dlc_json.py <lets_sing_workspace> <output json>
+# usage: python tools/merge_dlc_json.py <lets_sing_workspace> <output json> [<DLC songs_int.json>]
 EXTRACTED_DIR = os.path.join(sys.argv[1], "extracted")
 MEGAPACK_DIR = os.path.join(sys.argv[1], "megapack_completo")
 
@@ -56,15 +56,16 @@ with open(os.path.join(MEGAPACK_DIR, "todas_las_canciones.json"), 'r', encoding=
 
 meta_db = get_all_megapack_metadata()
 
-# Find the DLC JSON dynamically
-user_dlc_json = ""
-for root, dirs, files in os.walk("/home/djvemo/Desktop"):
-    if "songs_int.json" in files:
-        user_dlc_json = os.path.join(root, "songs_int.json")
-        break
-
+# songs_int.json of the DLC (3rd argument), else the first one found in the workspace
+user_dlc_json = sys.argv[3] if len(sys.argv) > 3 else ""
 if not user_dlc_json:
-    print("Could not find songs_int.json on Desktop")
+    for root, dirs, files in os.walk(sys.argv[1]):
+        if "songs_int.json" in files:
+            user_dlc_json = os.path.join(root, "songs_int.json")
+            break
+
+if not user_dlc_json or not os.path.exists(user_dlc_json):
+    print("songs_int.json of the DLC not found: pass it as third argument")
     sys.exit(1)
 
 print(f"Found DLC json: {user_dlc_json}")

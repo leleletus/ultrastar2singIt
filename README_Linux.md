@@ -9,8 +9,9 @@ This branch/patch introduces native Linux compatibility via Wine and Python nati
 2. **Dynamic Paths in GUI:**
    - `Gui.py` now intelligently looks for `ffmpeg` at `/usr/bin/ffmpeg` on Linux.
    - It also automatically searches for `radvideo64.exe` inside `~/.wine/drive_c/Program Files (x86)/RADVideo/`.
-3. **Replaced pytablericons with Pillow (PIL):**
-   - Removed the `pytablericons` dependency in `GuiElement.py` and replaced it with native `ImageDraw` shapes. `pytablericons` often crashed on Linux environments due to missing font or cairo rendering dependencies. Pillow makes the GUI completely cross-platform and more stable.
+3. **Icons:**
+   - The Tabler SVG icons of `pytablericons` are rendered with QtSvg (`GuiElement.py`); its own renderer needs
+     pygame/cairo and failed on many Linux systems. Without the package the GUI still works (plain dots).
 4. **JSON Fixes:**
    - Fixed a bug where `ConvertFiles.py` generated `songs_int.json` without the `"language": "English"` tag, which caused the Nintendo Switch game to crash internally on load.
 
