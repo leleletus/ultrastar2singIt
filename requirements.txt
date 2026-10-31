@@ -8,5 +8,6 @@ chardet==7.6.0
 Levenshtein==0.27.5
 Markdown==3.10.3
 pillow==12.3.0
+numpy==2.5.3
 pyqtdarktheme==0.1.7
 pytablericons==1.0.1
