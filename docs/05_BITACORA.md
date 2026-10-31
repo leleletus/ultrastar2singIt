@@ -163,6 +163,12 @@
 - Prueba en la consola del usuario: letras y acentos bien; búsqueda de texto busca en artista y título; navegar por
   letra en "Título" seguía al artista (B-56); portadas en blanco/recopilatorio (B-58); Swish Swish duplicada (B-59).
 - B-52…B-62 registrados; resumen en `09_HISTORIAL_BUGS.md`.
+- Aplicado: 215 años reales (183 MusicBrainz, 32 iTunes; 25 sin dato fiable se dejan), 230 portadas de DLC con la
+  carátula del single/álbum (4 sin resultado conservan la suya), portadas en blanco reemplazadas. Swish Swish duplicada
+  movida al archivo. Parche regenerado entero con los IDs de juego (660 canciones, 729 `.bk2` intactos; el único
+  `.bk2` rescatado era el de la versión quitada, guardado en `archivo/rescatados_al_convertir`).
+- Pendiente con el usuario: copiar el parche nuevo a la Switch (`switch_update.py --apply --prune`: copia todo con
+  los nombres nuevos y quita los viejos que conoce la foto).
 
 <!-- Plantilla para nuevas entradas:
 ### AAAA-MM-DD — Título
