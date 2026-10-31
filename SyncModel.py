@@ -258,12 +258,30 @@ def line_report(song, voice, shift_of_line, max_shift=3.0, step=0.04):
         scores = total / weight
         now = float(scores[steps])
         best = int(np.argmax(scores))
-        # prefer no change when the gain is small (repeated notes fit at many offsets)
-        if scores[best] - now < 0.12:
+        # prefer no change when the gain is small (repeated notes fit at many offsets), and never trust a best shift
+        # at the edge of the search: it is the line fitting the phrase next to it (checked on official songs)
+        if scores[best] - now < 0.12 or abs(offsets[best]) > max_shift - 0.25:
             report.append((now, 0.0, now))
         else:
             report.append((now, float(offsets[best]), float(scores[best])))
     return report
+
+
+def runs_out_of_time(report, line_times, min_lines=3, spread=0.25, min_shift=0.3):
+    """Blocks of at least min_lines lines in a row moved by about the same amount: (first time, shift, lines).
+    A real desync moves a whole part; single lines that fit somewhere else are noise (repeated phrases)."""
+    rows = [(t, extra) for t, (now, extra, _) in zip(line_times, report) if now is not None]
+    runs, i = [], 0
+    while i < len(rows):
+        j = i
+        while j < len(rows) and abs(rows[j][1]) >= min_shift and abs(rows[j][1] - rows[i][1]) <= spread:
+            j += 1
+        if j - i >= min_lines:
+            runs.append((rows[i][0], float(np.median([e for _, e in rows[i:j]])), j - i))
+            i = j
+        else:
+            i += 1
+    return runs
 
 
 def song_verdict(report, line_times, audio_end, lyrics_end):
@@ -273,15 +291,16 @@ def song_verdict(report, line_times, audio_end, lyrics_end):
     rows = [(t, now, extra) for t, (now, extra, _) in zip(line_times, report) if now is not None]
     if not rows:
         return 'sin_notas', ''
-    moved = [(t, extra) for t, _, extra in rows if abs(extra) >= 0.3]
     mean_now = sum(r[1] for r in rows) / len(rows)
-    if not moved:
-        return ('ok' if mean_now >= 0.45 else 'dudosa'), f"coincidencia {mean_now:.0%}"
-    if len(moved) >= 0.6 * len(rows):
-        median = float(np.median([e for _, e in moved]))
+    runs = runs_out_of_time(report, line_times)
+    moved = sum(n for _, _, n in runs)
+    if moved >= 0.6 * len(rows):
+        median = float(np.median([e for _, e, n in runs for _ in range(n)]))
         return 'desfase', f"toda la letra {median * 1000:+.0f} ms"
-    first = moved[0][0]
-    return 'parcial', f"{len(moved)} de {len(rows)} líneas fuera de tiempo, desde {int(first // 60)}:{first % 60:04.1f}"
+    if runs:
+        parts = ', '.join(f"{int(t // 60)}:{t % 60:04.1f} ({e * 1000:+.0f} ms, {n} líneas)" for t, e, n in runs[:4])
+        return 'parcial', f"{moved} de {len(rows)} líneas fuera de tiempo: {parts}"
+    return ('ok' if mean_now >= 0.45 else 'dudosa'), f"coincidencia {mean_now:.0%}"
 
 
 # ---------------------------------------------------------------------------------------------- saving

@@ -494,3 +494,17 @@ class SongProfileTest(TempDirTest):
         fast = vxla('fast.vxla', [(i * 0.2, i * 0.2 + 0.15, 55 + (i * 7) % 19) for i in range(400)])
         levels = ConvertFiles.DIFFICULTY_LEVELS
         self.assertLess(levels.index(ConvertFiles.song_difficulty(slow)), levels.index(ConvertFiles.song_difficulty(fast)))
+
+
+class SyncVerdictTest(unittest.TestCase):
+    def test_only_blocks_of_lines_moved_alike_count(self):
+        import SyncModel
+        times = [i * 5.0 for i in range(12)]
+        scattered = [(0.6, x, 0.8) for x in (0, 2.4, 0, -1.4, 0, 0, 2.9, 0, 0, -2.1, 0, 0)]  # repeated phrases
+        self.assertEqual(SyncModel.song_verdict(scattered, times, 100, 60)[0], 'ok')
+        block = [(0.6, 0, 0.6)] * 5 + [(0.2, -1.5, 0.9)] * 4 + [(0.6, 0, 0.6)] * 3  # a part 1.5 s late
+        verdict, detail = SyncModel.song_verdict(block, times, 100, 60)
+        self.assertEqual(verdict, 'parcial')
+        self.assertIn('-1500 ms', detail)
+        self.assertEqual(SyncModel.song_verdict([(0.2, 0.8, 0.9)] * 12, times, 100, 60)[0], 'desfase')
+        self.assertEqual(SyncModel.song_verdict(block, times, 50, 60)[0], 'otra_version')
