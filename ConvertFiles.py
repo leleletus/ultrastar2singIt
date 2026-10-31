@@ -664,6 +664,50 @@ REAL_LANGUAGE_EDITIONS = ('2026',)
 GAME_ID_EDITIONS = ('2026',)
 
 
+# Difficulty and singer of a song (Let's Sing 2026 filters by them; before every song said "VeryEasy" and "Both").
+# Difficulty: fitted on the 59 official songs whose real values are known (2024/2026 DLCs), within one level for 53 of
+# 59 in cross-validation; its features do not depend on the octave of the notes. Singer: from
+# <songs>/_artist_genders.json (tools/artist_genders.py, MusicBrainz); pitch was not enough (Queen sings as high as
+# many women), and a wrong value would hide the song from a filter, so anything unsure stays "Both".
+DIFFICULTY_LEVELS = ('VeryEasy', 'Easy', 'Medium', 'Hard', 'VeryHard')
+DIFFICULTY_WEIGHTS = (0.05301, 0.48165, -6.62458, 0.99983, -2.04069, -0.21842)  # range, notes/s, note s, jump, rap, 1
+ARTIST_GENDERS_FILE = '_artist_genders.json'
+_artist_genders = {}
+
+
+def singer_gender(artist):
+    if not _artist_genders and _input_dir:
+        try:
+            with open(os.path.join(_input_dir, ARTIST_GENDERS_FILE), encoding='utf-8') as f:
+                _artist_genders.update(json.load(f))
+        except (OSError, ValueError):
+            _artist_genders[''] = 'Both'  # no file: do not try again
+    gender = _artist_genders.get(artist.strip())
+    return gender if gender in ('Men', 'Women', 'Both') else 'Both'
+
+
+def song_difficulty(vxla_path):
+    """Difficulty for songs_xx.json from the notes of the converted vxla."""
+    import numpy as np
+    try:
+        layers, _ = OfficialVxla.read_layers(vxla_path)
+        notes = OfficialVxla.to_sing_it(layers, 3600.0)['notes']
+        pitches = [int(re.match(r'#p(\d+)', n['value']).group(1)) for n in notes]
+        sung = [(n['t1'], n['t2'], q) for n, q in zip(notes, pitches) if q > 1]
+        if len(sung) < 10:
+            return 'Medium'
+        values = np.array([q for _, _, q in sung], dtype=float)
+        span = max(notes[-1]['t2'] - notes[0]['t1'], 1.0)
+        features = (float(np.percentile(values, 95) - np.percentile(values, 5)), len(notes) / span,
+                    float(np.median([b - a for a, b, _ in sung])), float(np.mean(np.abs(np.diff(values)))),
+                    (len(pitches) - len(sung)) / len(pitches), 1.0)
+        level = int(round(sum(w * f for w, f in zip(DIFFICULTY_WEIGHTS, features))))
+        return DIFFICULTY_LEVELS[min(max(level, 0), len(DIFFICULTY_LEVELS) - 1)]
+    except Exception as e:
+        logger.warning(f"{os.path.basename(str(vxla_path))}: difficulty not estimated ({e})")
+        return 'Medium'
+
+
 def uses_game_ids(cfg) -> bool:
     return str(getattr(getattr(cfg, 'core', None), 'edition', '')) in GAME_ID_EDITIONS
 
@@ -791,7 +835,7 @@ def _remove_old_patch_copies(songs_dir, old_ids, song_dir, current_ids):
 
 
 def handle_xml_or_json(dlc_id, core_id, json_file_name, list_in_dir, txt_data,
-                       name_id, output_format, xml_file_name, cfg, old_ids=()):
+                       name_id, output_format, xml_file_name, cfg, old_ids=(), profile=None):
     """Creates <id>_meta.xml (XML games); registers the song in SongsDLC.tsv or songs_xx.json."""
     title, artist, year, genre, bpm = build_song_metadata(
         txt_data, getattr(getattr(cfg, 'core', None), 'edition', None))
@@ -804,12 +848,12 @@ def handle_xml_or_json(dlc_id, core_id, json_file_name, list_in_dir, txt_data,
             "id": name_id,
             "artist": artist,
             "title": title,
-            "gender": "Both",
+            "gender": profile[1] if profile else "Both",
             "year": year,
             "timeless": "",
             "genre": genre,
             "theme": "Love, Deep, Party",
-            "difficulty": "VeryEasy",
+            "difficulty": profile[0] if profile else "VeryEasy",
             "coopfriendly": "Coop",
             "language": song_language(txt_data, os.fspath(list_in_dir))
             if str(getattr(getattr(cfg, 'core', None), 'edition', '')) in REAL_LANGUAGE_EDITIONS
@@ -1561,9 +1605,12 @@ def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None,
                 copied.append(destination)
 
             # Handle name.txt, then SongsDLC.tsv + meta xml (XML format) or the json file (JSON format)
+            profile = None
+            if uses_game_ids(cfg):  # Let's Sing 2026 only: older editions keep what they always had
+                profile = (song_difficulty(list_in_dir / vxla_file_name), singer_gender(txt_data.get('ARTIST', '')))
             handle_xml_or_json(dlc_id, core_id, json_file_name, list_in_dir, txt_data,
                                game_id, output_format, xml_file_name, cfg,
-                               old_ids=[i for i in [name_id] + legacy_ids if i != game_id])
+                               old_ids=[i for i in [name_id] + legacy_ids if i != game_id], profile=profile)
             if output_format == XML_FORMAT:
                 shutil.copy2(os.fspath(list_in_dir / xml_file_name), os.path.join(base_dlc_dir, 'romfs'))
             add_data_to_name_txt(dlc_id, game_id, output_format, dlc_json_name, cfg)

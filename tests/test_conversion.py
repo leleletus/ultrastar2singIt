@@ -468,3 +468,29 @@ class GameIdTest(unittest.TestCase):
         self.assertEqual(ConvertFiles.match_genre({'GENRE': 'Reguetón'}, '2026'), 'Latin')
         self.assertEqual(ConvertFiles.match_genre({'GENRE': 'Contemporary R&B, Pop'}, '2026'), 'RnB')
         self.assertEqual(ConvertFiles.match_genre({'GENRE': 'Hip-Hop, Rap'}, '2024'), 'Rap')  # unchanged
+
+
+class SongProfileTest(TempDirTest):
+    def test_singer_from_the_artist_file_and_unknown_is_both(self):
+        (self.tmp / ConvertFiles.ARTIST_GENDERS_FILE).write_text(
+            json.dumps({'Céline Dion': 'Women', 'Queen': 'Both', 'Eminem': 'Men'}), encoding='utf-8')
+        old_input, ConvertFiles._input_dir = ConvertFiles._input_dir, str(self.tmp)
+        ConvertFiles._artist_genders.clear()
+        try:
+            self.assertEqual(ConvertFiles.singer_gender('Céline Dion'), 'Women')
+            self.assertEqual(ConvertFiles.singer_gender('Queen'), 'Both')
+            self.assertEqual(ConvertFiles.singer_gender('Nobody Known'), 'Both')  # never hidden from a filter
+        finally:
+            ConvertFiles._input_dir = old_input
+            ConvertFiles._artist_genders.clear()
+
+    def test_difficulty_grows_with_fast_wide_melodies(self):
+        def vxla(name, notes):
+            body = ''.join(f'<Interval t1="{t1:.3f}" t2="{t2:.3f}" value="#p{p}#.la"/>' for t1, t2, p in notes)
+            return write(self.tmp / name, '<?xml version="1.0" encoding="utf-8"?><AnnotationFile version="3.0">'
+                         f'<IntervalLayer datatype="STRING" name="notes_full">{body}</IntervalLayer>'
+                         '<IntervalLayer datatype="STRING" name="lyrics"></IntervalLayer></AnnotationFile>', 'utf-8')
+        slow = vxla('slow.vxla', [(i * 1.5, i * 1.5 + 1.2, 60 + i % 2) for i in range(60)])
+        fast = vxla('fast.vxla', [(i * 0.2, i * 0.2 + 0.15, 55 + (i * 7) % 19) for i in range(400)])
+        levels = ConvertFiles.DIFFICULTY_LEVELS
+        self.assertLess(levels.index(ConvertFiles.song_difficulty(slow)), levels.index(ConvertFiles.song_difficulty(fast)))

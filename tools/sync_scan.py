@@ -50,6 +50,10 @@ def song_timing(song_dir):
         pass
     start_offset, trim_start = float(meta.get('lyrics_offset') or 0), float(meta.get('trim_start') or 0)
     converted = song_dir / (name_id + naming.AUDIO_SUFFIX)
+    official = song_dir / naming.OFFICIAL_VXLA_NAME
+    if official.exists() and converted.exists():
+        # the official vxla is used as it is: its times are already those of the audio
+        return SyncModel.load_official(str(official)), converted, 0.0
     if converted.exists():
         return song, converted, gap + video_gap - start_offset
     audio, _, _ = ConvertFiles.resolve_song_sources(song_dir, data, naming.all_name_ids(folder))
@@ -101,39 +105,61 @@ def main():
     parser.add_argument('--report', default='informe_sincronia.csv')
     parser.add_argument('--only-analyzed', action='store_true')
     parser.add_argument('--song', action='append', help="only this folder (can be repeated)")
+    parser.add_argument('--jobs', type=int, default=1, help="songs analyzed at the same time (CPU cores are shared)")
+    parser.add_argument('--official', type=int, default=0,
+                        help="also check this many songs with an official vxla (their timing is the game's: a "
+                             "reference to see how often the check is wrong)")
     args = parser.parse_args()
+    if args.jobs > 1:  # every Demucs gets its share of the cores instead of all of them fighting
+        os.environ.setdefault('OMP_NUM_THREADS', str(max(2, (os.cpu_count() or 4) // args.jobs)))
 
     base = Path(args.songs)
     dirs = sorted(p for p in base.iterdir() if p.is_dir() and (not args.song or p.name in args.song))
     todo = [d for d in dirs if not (d / naming.OFFICIAL_VXLA_NAME).exists()]
+    reference = []
+    if args.official:
+        import random
+        official = [d for d in dirs if (d / naming.OFFICIAL_VXLA_NAME).exists()]
+        reference = random.Random(1).sample(official, min(args.official, len(official)))
     if not args.only_analyzed:
         # the songs most likely out of sync first, so the report is useful long before the scan ends
         import usdb_sources
         usdb_other = {folder for folder, _, _ in usdb_sources.check(str(base))[0]}
         todo.sort(key=lambda d: (suspicion(d, usdb_other), d.name.lower()))
+    todo = reference + todo
     print(f"{len(todo)} UltraStar songs to check ({len(dirs) - len(todo)} use the official vxla and are skipped)",
           flush=True)
     rows = []
     started = time.time()
-    for n, d in enumerate(todo, 1):
+    done = 0
+    order = {'otra_version': 0, 'parcial': 1, 'desfase': 2, 'dudosa': 3, 'error': 4, 'sin_audio': 5,
+             'sin_notas': 6, 'ok': 7}
+
+    def work(d):
         t0 = time.time()
         try:
             result = check_song(d, analyze=not args.only_analyzed)
         except Exception as e:  # one broken song must not stop the scan
             result = {'verdict': 'error', 'detail': str(e)[:200]}
-        if result is None:
-            continue
-        rows.append({'song': d.name, **result})
-        left = (time.time() - started) / n * (len(todo) - n)
-        print(f"[{n}/{len(todo)}] {result['verdict']:12} {d.name}  {result.get('detail', '')}"
-              f"  ({time.time() - t0:.0f} s, faltan ~{left / 60:.0f} min)", flush=True)
-        with open(args.report, 'w', newline='', encoding='utf-8-sig') as f:  # rewritten after every song
-            writer = csv.DictWriter(f, fieldnames=['song', 'verdict', 'detail', 'match', 'lines_out'],
-                                    delimiter=';', extrasaction='ignore')
-            writer.writeheader()
-            order = {'otra_version': 0, 'parcial': 1, 'desfase': 2, 'dudosa': 3, 'error': 4, 'sin_audio': 5,
-                     'sin_notas': 6, 'ok': 7}
-            writer.writerows(sorted(rows, key=lambda r: (order.get(r['verdict'], 9), r['song'])))
+        return d, result, time.time() - t0
+
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=max(1, args.jobs)) as pool:
+        for d, result, took in pool.map(work, todo):
+            done += 1
+            if result is None:
+                continue
+            kind = 'oficial' if d in reference else 'ultrastar'
+            rows.append({'song': d.name, 'kind': kind, **result})
+            left = (time.time() - started) / done * (len(todo) - done)
+            print(f"[{done}/{len(todo)}] {result['verdict']:12} {'(oficial) ' if kind == 'oficial' else ''}{d.name}  "
+                  f"{result.get('detail', '')}  ({took:.0f} s, faltan ~{left / 60:.0f} min)", flush=True)
+            with open(args.report, 'w', newline='', encoding='utf-8-sig') as f:  # rewritten after every song
+                writer = csv.DictWriter(f, fieldnames=['song', 'kind', 'verdict', 'detail', 'match', 'lines_out'],
+                                        delimiter=';', extrasaction='ignore')
+                writer.writeheader()
+                writer.writerows(sorted(rows, key=lambda r: (r['kind'] == 'oficial', order.get(r['verdict'], 9),
+                                                             r['song'])))
     counts = {}
     for r in rows:
         counts[r['verdict']] = counts.get(r['verdict'], 0) + 1
