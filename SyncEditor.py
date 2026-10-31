@@ -80,11 +80,17 @@ class NoteLane(QWidget):
                 p.setPen(QColor('#5a6a7a'))
                 p.drawText(4, int(y_of(m)) - 2, note_name(m))
 
-        # cuts: everything after them moves on its own
-        p.setPen(QPen(QColor(ORANGE), 1, Qt.DashLine))
+        # the selected part (the one the arrows move) is tinted; cuts are orange lines
+        if ed.selected:
+            x1 = max(0.0, x_of(ed.line_time(ed.selected)))
+            x2 = min(float(w), x_of(ed.line_end(ed.part_end(ed.selected))))
+            if x2 > x1:
+                p.fillRect(QRectF(x1, 0, x2 - x1, h), QColor(217, 119, 6, 40))
         for line in ed.splits:
             x = x_of(ed.line_time(line))
             if 0 <= x <= w:
+                p.setPen(QPen(QColor(ORANGE), 2 if line == ed.selected else 1,
+                              Qt.SolidLine if line == ed.selected else Qt.DashLine))
                 p.drawLine(int(x), 0, int(x), h)
 
         # isolated voice (after "Analyze voice"): where the singer really is
@@ -148,7 +154,10 @@ class SyncMap(QWidget):
     def mousePressEvent(self, event):
         total = self.editor.total_s()
         if total:
-            self.editor.seek_s(event.position().x() / self.width() * total)
+            seconds = event.position().x() / self.width() * total
+            self.editor.seek_s(seconds)
+            if self.editor.splits:
+                self.editor.select_part_at(seconds)
 
     def paintEvent(self, _event):
         ed = self.editor
@@ -171,6 +180,13 @@ class SyncMap(QWidget):
                     if abs(extra) < 0.3 and now < 0.45:
                         color = QColor('#a3a3a3')
             p.fillRect(QRectF(x_of(start), 6, max(2.0, x_of(end) - x_of(start)), h - 12), color)
+        if ed.selected or ed.splits:  # the part the arrows move
+            first = ed.selected
+            last = ed.part_end(first) if first else len(ed.song.lines) - 1
+            x1, x2 = x_of(ed.line_time(first)), x_of(ed.line_end(last))
+            p.setPen(QPen(QColor('#ffffff'), 2))
+            p.setBrush(Qt.NoBrush)
+            p.drawRect(QRectF(x1, 2, max(4.0, x2 - x1), h - 4))
         end_audio = x_of(total)
         p.setPen(QPen(QColor(RED), 2))
         p.drawLine(int(end_audio) - 1, 0, int(end_audio) - 1, h)
@@ -277,7 +293,8 @@ class SyncEditorDialog(QDialog):
         # songs rebuilt from DLC use their official vxla as it is: #GAP of the txt is not used there
         self.official = os.path.isfile(official)
         self.song = SyncModel.load_official(official) if self.official else load_txt(self.us_data)
-        self.splits = {}          # first line of a cut -> extra seconds for that line and the ones after it
+        self.splits = {}          # first line of a part -> extra seconds of that part (up to the next cut)
+        self.selected = 0         # part moved by the arrows: 0 = all the lyrics (#GAP)
         self.line_extra = [0.0] * len(self.song.lines)
         sung = [n.pitch for n in self.song.notes if n.sung] or [60]
         self.pitch_lo, self.pitch_hi = min(sung) - 2, max(sung) + 2
@@ -418,11 +435,8 @@ class SyncEditorDialog(QDialog):
                             text=f"{amount}", color=ORANGE)
             sync.addWidget(b)
             self.edit_buttons.append(b)
-        self.lbl_gap = QLabel()
-        self.lbl_gap.setAlignment(Qt.AlignCenter)
-        self.lbl_gap.setMinimumWidth(260)
-        self.lbl_gap.setStyleSheet("font-weight: bold; font-size: 15px; padding: 2px 8px;")
-        sync.addWidget(self.lbl_gap)
+        self.lbl_gap = QLabel()  # shown in the row under the buttons, it can be long
+        self.lbl_gap.setStyleSheet("font-weight: bold; font-size: 15px; color: #d97706;")
         for icon, amount, key in (('chevron-right', 10, "Shift+Right"), ('chevron-right', 50, "Right"),
                                   ('chevrons-right', 250, "Ctrl+Right")):
             b = tool_button(icon, tr("Lyrics later"), lambda a=amount: self.adjust(a), self, (key,),
@@ -431,17 +445,25 @@ class SyncEditorDialog(QDialog):
             sync.addWidget(b)
             self.edit_buttons.append(b)
         sync.addWidget(separator())
-        self.btn_cut = tool_button('scissors', tr("Cut here: from this line on, the arrows move only this part "
-                                                  "and what comes after it (the part before stays as it is)"),
-                                   self.cut_here, self, ("C",), text=tr("Cut"), color=ORANGE)
-        self.btn_uncut = tool_button('arrow-back-up', tr("Remove the cut of this part"), self.remove_cut, self,
-                                     text=tr("Join"), color=GREY)
-        self.btn_auto = tool_button('wand', tr("Move this part to where the voice is"), self.auto_adjust, self,
-                                    ("A",), text=tr("Fit to voice"), color='#7c3aed')
+        self.btn_cut = tool_button('scissors', tr("Cut start: a part starts at the line being played and gets "
+                                                  "selected; the arrows move only that part"),
+                                   self.cut_start, self, ("C",), text=tr("Start"), color=ORANGE)
+        self.btn_cut_end = tool_button('separator-vertical', tr("Cut end: the selected part ends just before the "
+                                                                "line being played, what comes after does not move"),
+                                       self.cut_end, self, ("V",), text=tr("End"), color=ORANGE)
+        self.btn_uncut = tool_button('arrow-back-up', tr("Join the selected part to the one before it"),
+                                     self.remove_cut, self, text=tr("Join"), color=GREY)
+        self.btn_all = tool_button('arrows-horizontal', tr("Select all the lyrics (#GAP): moves every part"),
+                                   lambda: self.select_part(0), self, ("G",), text=tr("All the lyrics"), color=BLUE)
+        self.btn_all.setCheckable(True)
+        QShortcut(QKeySequence("["), self, activated=lambda: self.step_part(-1))
+        QShortcut(QKeySequence("]"), self, activated=lambda: self.step_part(1))
+        self.btn_auto = tool_button('wand', tr("Move the line being played (and its part) to where the voice is"),
+                                    self.auto_adjust, self, ("A",), text=tr("Fit to voice"), color='#7c3aed')
         self.btn_voice = tool_button('wave-sine', tr("Isolate the voice (about 2-3 minutes) to see where the singer "
                                                      "really is and which lines are out of time"),
                                      self.analyze_voice, self, text=tr("Analyze voice"), color=BLUE)
-        for b in (self.btn_cut, self.btn_uncut, self.btn_auto):
+        for b in (self.btn_cut, self.btn_cut_end, self.btn_uncut, self.btn_all, self.btn_auto):
             sync.addWidget(b)
             self.edit_buttons.append(b)
         sync.addWidget(self.btn_voice)
@@ -459,9 +481,13 @@ class SyncEditorDialog(QDialog):
         sync.addWidget(self.btn_save)
         layout.addLayout(sync)
 
+        part_row = QHBoxLayout()
+        part_row.addWidget(self.lbl_gap)
         self.lbl_part = QLabel()
         self.lbl_part.setStyleSheet("color: #6b7280;")
-        layout.addWidget(self.lbl_part)
+        self.lbl_part.setWordWrap(True)
+        part_row.addWidget(self.lbl_part, stretch=1)
+        layout.addLayout(part_row)
 
         # --- sing mode
         sing = QHBoxLayout()
@@ -585,18 +611,19 @@ class SyncEditorDialog(QDialog):
                 line = i
         return line
 
-    def part_start(self, line=None):
-        """First line of the part being edited: 0 (all the lyrics, #GAP) or the last cut before the line."""
-        line = self.current_line() if line is None else line
+    def part_of(self, line):
+        """First line of the part a line belongs to: 0 (no cut before it) or the cut that starts its part."""
         cuts = [c for c in self.splits if c <= line]
         return max(cuts) if cuts else 0
 
+    def part_end(self, part):
+        """Last line of a part (the line before the next cut, or the last line)."""
+        later = [c for c in self.splits if c > part]
+        return (min(later) if later else len(self.song.lines)) - 1
+
     def recompute_extra(self):
-        total, cuts = 0.0, sorted(self.splits.items())
-        self.line_extra = []
-        for i in range(len(self.song.lines)):
-            total = sum(d for c, d in cuts if c <= i)
-            self.line_extra.append(total)
+        # every part keeps its own shift: moving one never drags the parts after it
+        self.line_extra = [self.splits.get(self.part_of(i), 0.0) for i in range(len(self.song.lines))]
 
     # ------------------------------------------------------------------ editing
     def changed(self):
@@ -606,46 +633,81 @@ class SyncEditorDialog(QDialog):
         return 60.0 / self.song.bpm / 4 if self.song.bpm else 0.0
 
     def adjust(self, amount_ms):
+        """Moves the selected part (or all the lyrics when no part is selected), wherever the playback is."""
         if self.official:
             return
-        part = self.part_start()
-        if part == 0:
+        if self.selected == 0:
             self.gap_ms += amount_ms
         else:
-            self.splits[part] += amount_ms / 1000.0
+            self.splits[self.selected] += amount_ms / 1000.0
             self.recompute_extra()
         self.refresh_labels()
         self.schedule_report()
 
-    def cut_here(self):
+    def add_cut(self, line):
+        """A part starts at line; it keeps the shift it had, so cutting never moves anything."""
+        if line > 0 and line not in self.splits:
+            self.splits[line] = self.line_extra[line]
+            self.recompute_extra()
+
+    def cut_start(self):
+        """Cut at the start of the line being played and select the part that starts there."""
         if self.official:
             return
         line = self.current_line()
         if line == 0:
+            self.select_part(0)
             self.lbl_part.setText(tr("The first line already moves with the whole lyrics (#GAP)."))
             return
-        if line not in self.splits:
-            self.splits[line] = 0.0
-            self.recompute_extra()
+        self.add_cut(line)
+        self.select_part(line)
+
+    def cut_end(self):
+        """Cut at the start of the line being played: the selected part ends just before it, the rest stays."""
+        if self.official:
+            return
+        line = self.current_line()
+        if line == 0:
+            return
+        self.add_cut(line)
         self.refresh_labels()
 
+    def select_part(self, part):
+        self.selected = part if part == 0 or part in self.splits else self.part_of(part)
+        self.refresh_labels()
+
+    def select_part_at(self, seconds):
+        """Selects the part playing at that time (click on the map)."""
+        line = 0
+        for i in range(len(self.song.lines)):
+            if self.line_time(i) <= seconds + 0.05:
+                line = i
+        self.select_part(self.part_of(line))
+
+    def step_part(self, step):
+        parts = [0] + sorted(self.splits)
+        i = parts.index(self.selected) if self.selected in parts else 0
+        self.select_part(parts[min(max(i + step, 0), len(parts) - 1)])
+
     def remove_cut(self):
-        part = self.part_start()
+        """Joins the selected part to the one before it (its lines take that part's shift)."""
+        part = self.selected
         if part in self.splits:
             del self.splits[part]
             self.recompute_extra()
-            self.refresh_labels()
+            self.select_part(self.part_of(part))
             self.schedule_report()
 
     def undo_all(self):
         self.gap_ms = self.original_gap_ms
         self.splits.clear()
+        self.selected = 0
         self.recompute_extra()
         self.refresh_labels()
         self.schedule_report()
 
     def auto_adjust(self):
-        """Moves the part of the current line by the shift the voice analysis found for that line."""
+        """Moves the line being played, and its part up to the next cut, to where the voice analysis found it."""
         if self.official:
             return
         if not self.report:
@@ -656,9 +718,9 @@ class SyncEditorDialog(QDialog):
         if now is None or abs(extra) < 0.05:
             self.lbl_part.setText(tr("This line already matches the voice."))
             return
-        if line != self.part_start(line) and line != 0:
-            self.splits[line] = 0.0  # a new part starts at this line, the lines before stay
-            self.recompute_extra()
+        if line != 0:
+            self.add_cut(line)
+        self.select_part(self.part_of(line))
         self.adjust(extra * 1000)
 
     def overlapping_line(self):
@@ -669,19 +731,26 @@ class SyncEditorDialog(QDialog):
         return None
 
     def refresh_labels(self):
-        part = self.part_start()
-        if part == 0:
+        part = self.selected
+        if part == 0 and not self.splits:
             self.lbl_gap.setText(tr("All the lyrics: GAP {gap} ms").format(gap=int(round(self.gap_ms))) +
                                  (f"  ({self.gap_ms - self.original_gap_ms:+.0f})"
                                   if self.gap_ms != self.original_gap_ms else ""))
+        elif part == 0:
+            self.lbl_gap.setText(tr("All the lyrics (GAP {gap} ms): every part moves").format(
+                gap=int(round(self.gap_ms))))
         else:
-            self.lbl_gap.setText(tr("From line {n} ({time}): {ms:+.0f} ms").format(
-                n=part + 1, time=fmt_time(self.line_time(part)), ms=self.splits[part] * 1000))
-        parts = len(self.splits) + 1
-        hint = tr("{n} parts. ").format(n=parts) if self.splits else ""
-        if self.splits and self.beat_s():
-            hint += tr("Moving a part is saved in steps of {ms:.0f} ms (one beat of this song). ").format(
-                ms=self.beat_s() * 1000)
+            last = self.part_end(part)
+            self.lbl_gap.setText(tr("Lines {a}-{b} ({t1} - {t2}): {ms:+.0f} ms").format(
+                a=part + 1, b=last + 1, t1=fmt_time(self.line_time(part)), t2=fmt_time(self.line_end(last)),
+                ms=self.splits[part] * 1000))
+        hint = ""
+        if self.splits:
+            hint += tr("{n} parts. The arrows move the selected part (click another one on the map, or [ ]). ").format(
+                n=len(self.splits) + 1)
+            if self.beat_s():
+                hint += tr("Moving a part is saved in steps of {ms:.0f} ms (one beat of this song). ").format(
+                    ms=self.beat_s() * 1000)
         if self.report:
             line = self.current_line()
             now, extra, _ = self.report[line]
@@ -696,6 +765,7 @@ class SyncEditorDialog(QDialog):
         self.lbl_part.setText(hint)
         self.btn_save.setEnabled(overlap is None and not self.official)
         self.btn_uncut.setEnabled(part != 0 and not self.official)
+        self.btn_all.setChecked(part == 0)
         self.update_info()
 
     # ------------------------------------------------------------------ voice analysis

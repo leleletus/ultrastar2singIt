@@ -239,5 +239,16 @@
   "The voice of this line is {ms:+.0f} ms away: press the wand to fit it.": "La voz de esta línea está a {ms:+.0f} ms: pulsa la varita para ajustarla.",
   "This line already matches the voice.": "Esta línea ya coincide con la voz.",
   "{n} parts. ": "{n} partes. ",
-  "Line {n} now starts before line {m} ends: move it later or remove that cut before saving.": "La línea {n} ahora empieza antes de que termine la línea {m}: muévela más tarde o quita ese corte antes de guardar."
+  "Line {n} now starts before line {m} ends: move it later or remove that cut before saving.": "La línea {n} ahora empieza antes de que termine la línea {m}: muévela más tarde o quita ese corte antes de guardar.",
+  "Cut start: a part starts at the line being played and gets selected; the arrows move only that part": "Cortar inicio: empieza una parte en la línea que está sonando y queda seleccionada; las flechas mueven solo esa parte",
+  "Start": "Inicio",
+  "Cut end: the selected part ends just before the line being played, what comes after does not move": "Cortar fin: la parte seleccionada termina justo antes de la línea que está sonando; lo que viene después no se mueve",
+  "End": "Fin",
+  "Join the selected part to the one before it": "Unir la parte seleccionada con la anterior",
+  "Select all the lyrics (#GAP): moves every part": "Seleccionar toda la letra (#GAP): mueve todas las partes",
+  "All the lyrics": "Toda la letra",
+  "Move the line being played (and its part) to where the voice is": "Mover la línea que suena (y su parte) a donde está la voz",
+  "All the lyrics (GAP {gap} ms): every part moves": "Toda la letra (GAP {gap} ms): se mueven todas las partes",
+  "Lines {a}-{b} ({t1} - {t2}): {ms:+.0f} ms": "Líneas {a}-{b} ({t1} - {t2}): {ms:+.0f} ms",
+  "{n} parts. The arrows move the selected part (click another one on the map, or [ ]). ": "{n} partes. Las flechas mueven la parte seleccionada (elige otra con clic en el mapa o con [ ]). "
 }

@@ -141,6 +141,11 @@
   el txt guardado solo cambia los tiempos (letras, tonos y duraciones idénticos).
 - `tools/sync_scan.py`: el mismo análisis para toda la biblioteca, con informe CSV (ok / desfase / parcial /
   otra_version / dudosa). Demucs tarda ~6 min por canción en CPU: las 274 canciones UltraStar, ~18-20 h.
+- Editor, partes independientes (pedido tras sincronizar BBHMM): **✂ Inicio** abre una parte en la línea que suena
+  y la selecciona; **✂ Fin** la cierra antes de la línea que suena sin mover lo siguiente; mover una parte ya no
+  arrastra las demás; cortar nunca mueve nada (la parte nueva conserva su desplazamiento). La parte que mueven las
+  flechas queda fija aunque se navegue por la canción; se cambia con clic en el mapa, `[` `]` o **Toda la letra** (G).
+  Verificado con una copia del BBHMM guardado: línea 71 de 4:07.02 a 4:08.02 sin tocar el GAP ni las otras partes.
 
 <!-- Plantilla para nuevas entradas:
 ### AAAA-MM-DD — Título

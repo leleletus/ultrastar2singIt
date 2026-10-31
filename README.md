@@ -38,8 +38,9 @@ folder is cleared any video without a copy in its song folder is rescued.
 **Sync editor** (right click on a song → *Fix sync…*), a small video editor for the lyrics:
 - video, the notes as bars like the game and karaoke lyrics; play/pause, ±5 s, ±0.1 s, previous/next line,
   jump to the first lyrics, speed 0.5×–1.25×, a timeline you can click, keyboard shortcuts on every button;
-- move all the lyrics (`#GAP`) or **cut** at a line and move only that part and what follows (a gap in the
-  middle of the song); a `.bak` of the txt is kept the first time a song is saved;
+- move all the lyrics (`#GAP`) or **cut** the song into parts (cut start / cut end) and move one part without
+  touching the others (a gap in the middle of the song); the selected part stays selected while you move around
+  the song; a `.bak` of the txt is kept the first time a song is saved;
 - **Analyze voice**: the singer is isolated (Demucs) and drawn over the notes; a map colours every line by how well
   it matches the voice and *Fit to voice* moves a part to where the singer really is;
 - **Sing mode**: listens to the microphone, draws your voice over the notes and counts the notes you hit (any
