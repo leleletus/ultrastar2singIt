@@ -12,6 +12,7 @@ Fecha de la auditoría: 2026-10-21.
 | [05_BITACORA.md](05_BITACORA.md) | Bitácora: historia del proyecto por fases según git y entradas de trabajo |
 | [06_BACKLOG_Y_MEJORAS.md](06_BACKLOG_Y_MEJORAS.md) | Backlog priorizado, mejoras de la interfaz gráfica, plan de trabajo por fases |
 | [07_CANCIONES_PROBLEMA.md](07_CANCIONES_PROBLEMA.md) | Canciones reportadas con problemas: causa probable, arreglo que la cubre y qué verificar |
+| [10_MOD_SALTAR_INTRO.md](10_MOD_SALTAR_INTRO.md) | Mod para Let's Sing 2026 (saltar el intro, terminar al acabar la letra): lo que dice el código del juego y el diseño |
 | [09_HISTORIAL_BUGS.md](09_HISTORIAL_BUGS.md) | Resumen de todos los bugs: cerrados (con su commit), pendientes y mejoras por hacer |
 | [08_USO_EN_LINUX.md](08_USO_EN_LINUX.md) | Abrir el programa, acceso en el menú (KDE), revisar la sincronía de la biblioteca en segundo plano, ventana colgada |
 
