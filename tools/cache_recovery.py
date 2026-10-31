@@ -48,8 +48,8 @@ def recover_cache(input_dir: str, output_dir: str) -> tuple[int, str]:
                 dest = os.path.join(d_path, name_id + suffix)
                 if os.path.exists(dest):
                     continue
-                # the patch may still use an ID made by an older version
-                for nid in naming.all_name_ids(d.rstrip('.')):
+                # the patch may use an ID made by an older version, or the game ID (Let's Sing 2026)
+                for nid in naming.all_name_ids(d.rstrip('.')) + [naming.game_song_id(d.rstrip('.'))]:
                     src = os.path.join(songs_dir, sub_dir, nid + suffix)
                     if os.path.exists(src):
                         try:

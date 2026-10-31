@@ -21,6 +21,7 @@ import io
 import json
 import os
 import sys
+import time
 import re
 import urllib.parse
 import urllib.request
@@ -78,21 +79,37 @@ def _simple(text):
     return ' '.join(re.sub(r'[^a-z0-9 ]', ' ', text).split())
 
 
-def store_cover_url(artist, title):
-    """Cover of the single/album in the iTunes store, only when artist AND title really match (the first result
-    of a loose search is often another song: that is how wrong artists/titles were made in the past)."""
-    query = urllib.parse.urlencode({'term': f"{artist} {title}", 'entity': 'song', 'limit': 25})
+COMPILATION = re.compile(r'\b(hits|now that|now \d|best of|greatest|top \d+|compilation|collection|essentials|'
+                         r'anthology|karaoke|party|summer \d{4}|the very best|the hits|playlist|bravo|ministry)\b', re.I)
+
+
+def store_cover(artist, title):
+    """(cover URL, album name) of the song in the iTunes store, only when artist AND title really match (a loose
+    search gave wrong artists/titles in the past). Prefers the single, then an album of the artist; never a
+    compilation ("Various Artists", "... Hits", "Best of ...")."""
+    query = urllib.parse.urlencode({'term': f"{artist} {title}", 'entity': 'song', 'limit': 50})
     request = urllib.request.Request(f"https://itunes.apple.com/search?{query}",
                                      headers={'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64)'})
     with urllib.request.urlopen(request, timeout=30) as response:
         results = json.loads(response.read().decode('utf-8')).get('results', [])
     want_title, first_artist = _simple(title), _simple(re.split(r' feat\.? | ft\.? |,| & | x | \+ ', artist)[0])
+    candidates = []
     for r in results:
-        if _simple(r.get('trackName', '')) == want_title and first_artist in _simple(r.get('artistName', '')):
-            url = r.get('artworkUrl100')
-            if url:
-                return url.replace('100x100bb', '1000x1000bb')
-    return None
+        if _simple(r.get('trackName', '')) != want_title or first_artist not in _simple(r.get('artistName', '')):
+            continue
+        album = r.get('collectionName', '')
+        if (r.get('collectionArtistName') or '').lower() == 'various artists' or COMPILATION.search(album):
+            continue
+        single = _simple(album.replace('- Single', '').replace('- EP', '')) == want_title or '- Single' in album
+        candidates.append((0 if single else 1, r.get('releaseDate', '9999'), r.get('artworkUrl100'), album))
+    for _, _, url, album in sorted(candidates):
+        if url:
+            return url.replace('100x100bb', '1000x1000bb'), album
+    return None, None
+
+
+def store_cover_url(artist, title):
+    return store_cover(artist, title)[0]
 
 
 def video_frame(song_dir, data):
@@ -147,6 +164,12 @@ def main():
     parser.add_argument('songs')
     parser.add_argument('--extracted', help="folder with the extracted Let's Sing games (official covers)")
     parser.add_argument('--frames', action='store_true', help="also replace covers taken from a video frame")
+    parser.add_argument('--blank', action='store_true', help="also replace plain covers (one colour, e.g. white)")
+    parser.add_argument('--dlc', action='store_true',
+                        help="songs rebuilt from DLCs: use the single/album cover of the store when there is one "
+                             "(the megapack covers are often video frames or compilations)")
+    parser.add_argument('--song', action='append', default=[],
+                        help="also replace the cover of this folder with the store one (can be repeated)")
     parser.add_argument('--apply', action='store_true')
     args = parser.parse_args()
 
@@ -160,10 +183,28 @@ def main():
         if cover is not None:
             by_hash[sha1(cover)].append(d)
     shared = [d for group in by_hash.values() if len(group) > 1 for d in group]
+    by_shared = set(shared)
     vxla_index = {}
     if args.extracted:
         for f in Path(args.extracted).rglob('*.vxla'):
             vxla_index.setdefault(sha1(f), f)
+    forced = set(args.song)
+    if args.blank:  # plain images (all white...): a real cover is better
+        from PIL import Image
+        import numpy as np
+        for d in songs:
+            try:
+                cover = current_cover(d)
+                if cover is not None:
+                    pixels = np.asarray(Image.open(cover).convert('L').resize((64, 64)), dtype=np.float32)
+                    if pixels.std() < 3:
+                        forced.add(d.name)
+            except Exception:
+                continue
+    if args.dlc:
+        forced |= {d.name for d in songs if (d / naming.OFFICIAL_VXLA_NAME).exists()
+                   and not official_cover(d, vxla_index)}
+    shared += [d for d in songs if d.name in forced and d not in shared]
     if args.frames:  # covers made from a frame of the video: try to get a real one
         shared += [d for d in songs if (d / (NEW_COVER + '.jpg')).exists() and d not in shared
                    and not usdb_cover_url(d) and not official_cover(d, vxla_index)]
@@ -173,14 +214,20 @@ def main():
     for d in shared:
         txt = ConvertFiles.choose_txt_file([p for p in d.iterdir() if p.suffix.lower() == '.txt'])
         data = UltrastarToSingit.parse_file(txt)
-        url = usdb_cover_url(d)
-        source = None if url else official_cover(d, vxla_index)
+        # a forced song wants another image than the one it has: straight to the store
+        url = None if d.name in forced else usdb_cover_url(d)
+        source = None if url or d.name in forced else official_cover(d, vxla_index)
+        album = None
         if not url and not source:
             try:
-                url = store_cover_url(data.get('ARTIST', ''), data.get('TITLE', ''))
+                url, album = store_cover(data.get('ARTIST', ''), data.get('TITLE', ''))
             except Exception:
                 url = None
-        print(f"   {d.name}  <-  {url or source or 'a frame of its video'}")
+            time.sleep(3)  # the store limits the requests per minute
+        if not url and not source and d.name in forced and d not in by_shared:
+            failed.append((d.name, 'not in the store: its cover is kept'))
+            continue
+        print(f"   {d.name}  <-  {(album + ': ') if album else ''}{url or source or 'a frame of its video'}")
         if not args.apply:
             continue
         try:

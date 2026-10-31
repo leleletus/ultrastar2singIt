@@ -5,6 +5,7 @@ very slow to encode .bk2 videos) is named after it. Older algorithms are kept in
 legacy_name_ids() so caches created by previous versions can still be reused.
 """
 import hashlib
+import re
 import unicodedata
 
 
@@ -41,6 +42,24 @@ def construct_name_id_from_directory_name(dir_long_name) -> str:
         # Non-latin names (e.g. Japanese, Cyrillic) leave nothing ASCII: use a stable hash instead
         name_id = 'Song' + hashlib.md5(dir_long_name.encode('utf-8')).hexdigest()[:8]
     return name_id
+
+
+def game_song_id(dir_long_name) -> str:
+    """ID the game sees, title first like the official IDs ("2 Be Loved (Am I Ready)" -> "2BeLoved"), followed by
+    the artist initials so it never matches an official song ("Zoe Wees - Control" -> "ControlZW").
+
+    Let's Sing 2026 sorts its "Title" list by this ID, not by the title: with the cache ID (artist initials first)
+    the custom songs were listed by artist. The cache files keep construct_name_id_from_directory_name."""
+    parts = dir_long_name.split(' - ')
+    title = ' - '.join(parts[1:]) if len(parts) > 1 else dir_long_name
+    title = re.sub(r'\(.*?\)|\[.*?\]', ' ', title)  # "(feat. ...)", "[DUET]" like the official IDs
+    words = re.findall(r'[A-Za-z0-9]+', strip_accents(title).replace("'", '').replace('’', ''))
+    camel = ''.join(c for c in ''.join(w[0].upper() + w[1:] for w in words) if c.isascii() and c.isalnum())
+    if not camel:  # non-latin title: the cache ID is already unique
+        return construct_name_id_from_directory_name(dir_long_name)
+    artist = _remove_punctuation(strip_accents(parts[0])) if len(parts) > 1 else ''
+    initials = ''.join(c for c in (w[0].upper() for w in artist.split()) if c.isascii() and c.isalnum())
+    return camel + initials
 
 
 def _strip_marks(s):

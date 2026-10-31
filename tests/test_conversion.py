@@ -433,8 +433,9 @@ class LanguageTest(unittest.TestCase):
         self.assertEqual(ConvertFiles.song_language({'LANGUAGE': 'Spanish, English', 'notes': []}), 'Spanish')
         self.assertEqual(ConvertFiles.song_language({'LANGUAGE': 'Français', 'notes': []}), 'French')
         self.assertEqual(ConvertFiles.song_language({'LANGUAGE': 'Deutsch', 'notes': []}), 'German')
-        # languages not tested on the console yet keep the fallback
-        self.assertEqual(ConvertFiles.song_language({'LANGUAGE': 'Korean (romanized)', 'notes': []}), 'English')
+        # the languages of Let's Sing 2026: Korean exists, any other known one is "Other"
+        self.assertEqual(ConvertFiles.song_language({'LANGUAGE': 'Korean (romanized), English', 'notes': []}), 'Korean')
+        self.assertEqual(ConvertFiles.song_language({'LANGUAGE': 'Japanese (romanized)', 'notes': []}), 'Other')
 
     def test_detected_from_the_lyrics(self):
         words = ("je ne sais pas pourquoi tu es là mais je t'aime et la nuit c'est pour toi que je chante "
@@ -442,3 +443,28 @@ class LanguageTest(unittest.TestCase):
         notes = [[':', str(i), '1', '0', w + ' '] for i, w in enumerate(words)]
         self.assertEqual(ConvertFiles.song_language({'notes': notes}), 'French')
         self.assertEqual(ConvertFiles.song_language({'notes': notes[:5]}), 'English')  # too short: fallback
+
+
+class GameIdTest(unittest.TestCase):
+    def test_title_first_like_official_ids(self):
+        self.assertEqual(naming.game_song_id('Zoe Wees - Control'), 'ControlZW')
+        self.assertEqual(naming.game_song_id('Lizzo - 2 Be Loved (Am I Ready)'), '2BeLovedL')
+        self.assertEqual(naming.game_song_id('九 - 歌'), naming.construct_name_id_from_directory_name('九 - 歌'))
+        # the game sorts its "Title" list by this ID
+        ids = [naming.game_song_id(f) for f in ('Zoe Wees - Control', 'Lizzo - Good As Hell', 'ABBA - Mamma Mia')]
+        self.assertEqual(sorted(ids), ['ControlZW', 'GoodAsHellL', 'MammaMiaA'])
+
+    def test_unique_and_only_for_2026(self):
+        from munch import munchify
+        folders = ['Queen - Bohemian Rhapsody', 'Queen - Bohemian Rhapsody (Live)', 'Zoe Wees - Control']
+        ids = ConvertFiles.game_ids_for(folders, munchify({'core': {'edition': '2026'}}))
+        self.assertEqual(ids['Queen - Bohemian Rhapsody'], 'BohemianRhapsodyQ')
+        self.assertEqual(ids['Queen - Bohemian Rhapsody (Live)'], 'BohemianRhapsodyQ2')
+        old = ConvertFiles.game_ids_for(folders, munchify({'core': {'edition': '2024'}}))
+        self.assertEqual(old['Zoe Wees - Control'], 'ZWcontrol')  # older editions keep the cache ID
+
+    def test_genres_of_2026_only_for_2026(self):
+        self.assertEqual(ConvertFiles.match_genre({'GENRE': 'Hip-Hop, Rap'}, '2026'), 'HipHop')
+        self.assertEqual(ConvertFiles.match_genre({'GENRE': 'Reguetón'}, '2026'), 'Latin')
+        self.assertEqual(ConvertFiles.match_genre({'GENRE': 'Contemporary R&B, Pop'}, '2026'), 'RnB')
+        self.assertEqual(ConvertFiles.match_genre({'GENRE': 'Hip-Hop, Rap'}, '2024'), 'Rap')  # unchanged

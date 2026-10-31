@@ -16,7 +16,7 @@ Estado al commit `4e1cb35`. "Evidencia" = verificado con prueba, con `error.log`
 | B-08 | ALTO | Conversión | Elección de archivos fuente arbitraria: ignora #MP3/#COVER y toma archivos generados | CERRADO (30669e3) |
 | B-09 | MEDIO | Caché | Filtro `_cover.mp4` obsoleto: el video estático cacheado cuenta como video fuente | CERRADO (30669e3) |
 | B-10 | ALTO | Conversión (XML) | En XML se copia un AVI con extensión .mp4 | CERRADO (30669e3) |
-| B-11 | MEDIO | Video (JSON) | "Max video size" no se aplica a los .bk2 | EN CURSO 30669e3 (bitrate del intermedio limitado; parámetro de binkc pendiente) |
+| B-11 | MEDIO | Video (JSON) | "Max video size" no se aplica a los .bk2 | CERRADO (b9d454f: tasa /D de Bink restaurada, ver B-47) |
 | B-12 | MEDIO | Caché | "Still video" contamina la caché (XML) o se ignora (JSON) | CERRADO (30669e3) |
 | B-13 | MEDIO | Caché | El vxla no se regenera al cambiar formato/tono/medley | CERRADO (30669e3) |
 | B-14 | MEDIO | Video (JSON) | Videos fuente .bk2/.mpeg/.m4v se ignoran → video estático | CERRADO (30669e3) |
@@ -35,7 +35,7 @@ Estado al commit `4e1cb35`. "Evidencia" = verificado con prueba, con `error.log`
 | B-27 | BAJO | GUI | Play reproduce el primer .ogg (puede ser la preview) | CERRADO (7fc2657) |
 | B-28 | MEDIO | Caché | "Clear cache" no borra los intermedios `.avi` ni `_cover.avi` | CERRADO (7fc2657) |
 | B-29 | MEDIO | Parser | Notas sin sílaba revientan; tags sensibles a mayúsculas; duetos mezclados | CERRADO (cd87f8d) |
-| B-30 | MEDIO | IDs | name_id: colisiones, ID vacío, 6 implementaciones divergentes | EN CURSO 30669e3 (módulo único, colisiones detectadas, ID de respaldo; cálculo sin cambios) |
+| B-30 | MEDIO | IDs | name_id: colisiones, ID vacío, 6 implementaciones divergentes | CERRADO (30669e3 + 1b437ba: un solo módulo naming.py, colisiones detectadas) |
 | B-31 | MEDIO | Tools | Recover cache no encuentra el romfs correcto en XML ni IDs nuevos | CERRADO (b779bc6) |
 | B-32 | ALTO | Tools | Tools → Unpack está roto (NameError) y genera tiempos erróneos | CERRADO (27f8a17) |
 | B-33 | BAJO | Tools | reverse_vxla: NameError `name_id` | CERRADO (27f8a17) |
@@ -53,10 +53,21 @@ Estado al commit `4e1cb35`. "Evidencia" = verificado con prueba, con `error.log`
 | B-45 | MEDIO | GUI | Cerrar la ventana con la conversión en marcha deja hilos vivos | CERRADO (7fc2657) |
 | B-46 | CRÍTICO | Letras | Letras con acentos/apóstrofes **borradas** si aparecen después de los primeros 4 KB del txt | CERRADO (cd87f8d) |
 | B-47 | MEDIO | Video | "Max video size" sin efecto: binkc no recibía la tasa `/D` (R-11) | CERRADO (b9d454f) |
-| B-48 | ALTO | Tools/Caché | Copias del extractor con el ID del conversor tomadas como ya convertidas: portadas a tamaño completo en el parche, 28 GB de `.mp4` duplicados (R-12) | CERRADO (b9d454f + este commit) |
-| B-49 | MEDIO | Letras | Palabras pegadas a mitad de línea en canciones UltraStar ("sideto side"): el espacio de una nota sostenida `~ ` no pasaba a la letra | CERRADO (28276db, ajustado en este commit) |
-| B-50 | ALTO | Letras | 112 de 224 vxla oficiales v2.0: toda la letra pegada ("We'retalkingaway"), se mostraba `lyrics_cut`, que no tiene espacios | CERRADO (este commit) |
-| B-51 | ALTO | Sync Editor | Las letras no aparecían nunca ("Aquí aparecerán las letras"): un atributo tapaba el método `lyrics_offset_s` (desde `b074be4`) | CERRADO (este commit) |
+| B-48 | ALTO | Tools/Caché | Copias del extractor con el ID del conversor tomadas como ya convertidas: portadas a tamaño completo en el parche, 28 GB de `.mp4` duplicados (R-12) | CERRADO (b9d454f + 1b437ba) |
+| B-49 | MEDIO | Letras | Palabras pegadas a mitad de línea en canciones UltraStar ("sideto side"): el espacio de una nota sostenida `~ ` no pasaba a la letra | CERRADO (28276db, ajustado en 3eca0ac) |
+| B-50 | ALTO | Letras | 112 de 224 vxla oficiales v2.0: toda la letra pegada ("We'retalkingaway"), se mostraba `lyrics_cut`, que no tiene espacios | CERRADO (3eca0ac) |
+| B-51 | ALTO | Sync Editor | Las letras no aparecían nunca ("Aquí aparecerán las letras"): un atributo tapaba el método `lyrics_offset_s` (desde `b074be4`) | CERRADO (d412df5) |
+| B-52 | ALTO | Datos | El idioma de todas las canciones salía "English" (fijo en el código): el filtro por idioma del juego no servía | CERRADO (aa33a0e, e4aeb93; solo 2026) |
+| B-53 | ALTO | Portadas | 79 canciones con la portada de otra (una por artista, de un script anterior) | CERRADO (aa33a0e: tools/fix_covers.py) |
+| B-54 | ALTO | Letras | Caracteres rotos ("Ã©", "Â«") en letras oficiales: archivos UTF-8 que declaran Windows-1252 | CERRADO (e4aeb93) |
+| B-55 | MEDIO | Datos | Género "Rap" no existe en 2026 (es "HipHop"); RnB/Latin/Country nunca se usaban | CERRADO (este commit; solo 2026) |
+| B-56 | ALTO | Orden | Lista "Título" del juego ordenada por artista: Let's Sing 2026 ordena por el ID y el nuestro empezaba por las iniciales del artista | CERRADO (este commit: ID de juego título primero, solo 2026) |
+| B-57 | MEDIO | Datos | 240 canciones de DLC con el año del DLC (2020) en vez del de la canción | CERRADO (este commit: tools/fix_years.py) |
+| B-58 | MEDIO | Portadas | Portadas del megapack en blanco, fotogramas borrosos o de recopilatorios | CERRADO (este commit: fix_covers --blank/--dlc) |
+| B-59 | BAJO | Biblioteca | Swish Swish duplicada (normal y Album Version) | CERRADO (movida a archivo/duplicados_quitados) |
+| B-60 | BAJO | Herramientas | Los registros de los servicios no se vaciaban al relanzar (systemd "file:") | CERRADO (usar "truncate:") |
+| B-61 | ALTO | GUI | La ventana se congeló una vez (hilo principal bloqueado, con el video de BBHMM abierto) | ABIERTO (vigilante hang_trace.log en 6e74b01) |
+| B-62 | MEDIO | Switch | DBI no sobrescribe archivos por MTP ("Access denied") | CERRADO (e4aeb93: borrar ya respaldado y copiar) |
 
 ---
 

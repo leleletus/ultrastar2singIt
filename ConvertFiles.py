@@ -228,8 +228,9 @@ def _rescue_unbacked_videos(dirs_to_convert, cfg) -> bool:
     there (or to <input>/_rescued_bk2) first. Returns False if anything could not be saved.
     """
     song_dirs = {}
+    game_ids = game_ids_for(dirs_to_convert, cfg)
     for dir_name in dirs_to_convert:
-        for nid in naming.all_name_ids(dir_name):
+        for nid in naming.all_name_ids(dir_name) + [game_ids[dir_name], naming.game_song_id(dir_name.rstrip('.'))]:
             song_dirs.setdefault(nid, Path(_input_dir) / dir_name)
 
     base_videos = None
@@ -244,13 +245,17 @@ def _rescue_unbacked_videos(dirs_to_convert, cfg) -> bool:
         candidates = []
         if song_dir is not None:
             candidates.append(song_dir / video.name)
+            # the cache keeps the cache ID: a patch video named with the game ID is the same file
+            candidates += [song_dir / (nid + video.suffix) for nid in naming.all_name_ids(song_dir.name.rstrip('.'))]
         if base_videos is not None:
             candidates.append(base_videos / video.name)
         if any(c.is_file() and c.stat().st_size == size for c in candidates):
             continue
 
-        if song_dir is not None and not (song_dir / video.name).exists():
-            destination = song_dir / video.name
+        cache_name = naming.construct_name_id_from_directory_name(song_dir.name.rstrip('.')) + video.suffix \
+            if song_dir is not None else video.name
+        if song_dir is not None and not (song_dir / cache_name).exists():
+            destination = song_dir / cache_name
         else:
             destination = Path(_input_dir) / '_rescued_bk2' / video.name
             if destination.exists():
@@ -617,8 +622,28 @@ def create_video_bink(file, list_in_dir, output_video_file_name, quality=None, d
         return False
 
 
-def match_genre(txt_data):
+# Genres of Let's Sing 2026 (GameSong.Genre in the game code) and the #GENRE words that lead to them, checked in
+# this order ("Hip-Hop, Rap" -> HipHop, "Contemporary R&B, Pop" -> RnB, "Electro Pop" -> Electro)
+GENRES_2026 = (
+    ('HipHop', ('hip-hop', 'hip hop', 'hiphop', 'rap', 'trap', 'urban', 'glitch hop', 'electro hop')),
+    ('RnB', ('r&b', 'rnb', 'soul')),
+    ('Latin', ('reggaeton', 'reguetón', 'reggaetón', 'latin', 'bachata', 'vallenato', 'salsa', 'cumbia', 'mambo',
+               'flamenco', 'merengue', 'dembow')),
+    ('Country', ('country',)),
+    ('Rock', ('rock', 'alternative', 'punk', 'metal', 'grunge')),
+    ('Electro', ('electro', 'electronic', 'dance', 'house', 'edm', 'techno', 'trance', 'disco', 'synth')),
+    ('Ballad', ('ballad', 'balada')),
+    ('Pop', ('pop',)),
+)
+
+
+def match_genre(txt_data, edition=None):
     genre_raw = txt_data.get('GENRE', '').lower()
+    if str(edition) in GAME_ID_EDITIONS:
+        for genre, words in GENRES_2026:
+            if any(w in genre_raw for w in words):
+                return genre
+        return 'Pop'
     for g in MUSIC_GENRE_LIST:
         if g.lower() in genre_raw:
             return g
@@ -630,12 +655,35 @@ def parse_year(txt_data) -> int:
     return int(match.group(1)) if match else 2000
 
 
-# Languages written in songs_xx.json, with the names the official files use ("English"). Only languages known to be
-# accepted are written; any other (Korean, Japanese...) is kept as GAME_LANGUAGE_FALLBACK until tested on the console.
+# Languages of songs_xx.json: the KaraokeLanguage.Languages of Let's Sing 2026 (read from the game code). A song in
+# any other known language (Japanese, Italian...) is "Other", like the game groups them; no language found: English.
 # Only the editions below get the real language (their official files use it); every other edition keeps "English",
 # as it always had, so patches for older games do not change.
 REAL_LANGUAGE_EDITIONS = ('2026',)
-GAME_LANGUAGES = ('English', 'Spanish', 'French', 'German', 'Italian', 'Portuguese', 'Dutch')
+# Editions whose "Title" list is sorted by the song ID: the patch uses naming.game_song_id (title first) there.
+GAME_ID_EDITIONS = ('2026',)
+
+
+def uses_game_ids(cfg) -> bool:
+    return str(getattr(getattr(cfg, 'core', None), 'edition', '')) in GAME_ID_EDITIONS
+
+
+def game_ids_for(dir_names, cfg) -> dict:
+    """{folder: ID used inside the patch}. The cache ID for older editions; for GAME_ID_EDITIONS the title-first
+    game ID, made unique with a number when two folders give the same one (stable: sorted by folder name)."""
+    if not uses_game_ids(cfg):
+        return {d: naming.construct_name_id_from_directory_name(d.rstrip('.')) for d in dir_names}
+    result, used = {}, set()
+    for d in sorted(dir_names, key=str.lower):
+        base = naming.game_song_id(d.rstrip('.'))
+        game_id, n = base, 2
+        while game_id.lower() in used:
+            game_id, n = f"{base}{n}", n + 1
+        used.add(game_id.lower())
+        result[d] = game_id
+    return result
+GAME_LANGUAGES = ('English', 'French', 'Spanish', 'German', 'Korean')
+GAME_LANGUAGE_OTHER = 'Other'
 GAME_LANGUAGE_FALLBACK = 'English'
 _LANGUAGE_ALIASES = {
     'english': 'English', 'ingles': 'English', 'inglés': 'English', 'anglais': 'English', 'englisch': 'English',
@@ -649,6 +697,7 @@ _LANGUAGE_ALIASES = {
     'dutch': 'Dutch', 'nederlands': 'Dutch', 'holandes': 'Dutch', 'holandés': 'Dutch', 'flemish': 'Dutch',
     'korean': 'Korean', 'japanese': 'Japanese', 'russian': 'Russian', 'polish': 'Polish', 'swedish': 'Swedish',
     'turkish': 'Turkish', 'greek': 'Greek', 'chinese': 'Chinese', 'catalan': 'Catalan', 'latin': 'Latin',
+    'romanian': 'Romanian', 'coreano': 'Korean', 'japones': 'Japanese', 'japonés': 'Japanese',
 }
 # frequent short words of each language, to tell the language of lyrics without a #LANGUAGE tag
 _STOPWORDS = {
@@ -681,7 +730,7 @@ def detect_language(words):
 def song_language(txt_data, song_dir=None):
     """Language for the game: the first one of #LANGUAGE ("Korean (romanized), English" -> Korean), else the
     one of the lyrics (those of the official vxla when there is one: rebuilt txt files lost their spaces).
-    Languages not in GAME_LANGUAGES become GAME_LANGUAGE_FALLBACK."""
+    Known languages the game does not list become "Other"; no language found: English."""
     tag = txt_data.get('LANGUAGE', '').strip()
     language = None
     if tag:
@@ -701,23 +750,51 @@ def song_language(txt_data, song_dir=None):
             text = ''.join(n[4] for n in txt_data.get('notes', [])
                            if len(n) > 4 and n[0] in (':', '*', 'F', 'R', 'G'))
         language = detect_language(text.replace('~', '').split())
-    return language if language in GAME_LANGUAGES else GAME_LANGUAGE_FALLBACK
+    if language is None:
+        return GAME_LANGUAGE_FALLBACK
+    return language if language in GAME_LANGUAGES else GAME_LANGUAGE_OTHER
 
 
-def build_song_metadata(txt_data):
+def build_song_metadata(txt_data, edition=None):
     title = txt_data.get('TITLE', 'title')
     artist = txt_data.get('ARTIST', 'artist')
     try:
         bpm = int(float(txt_data.get('BPM', '120').replace(',', '.')))
     except ValueError:
         bpm = 120
-    return title, artist, parse_year(txt_data), match_genre(txt_data), bpm
+    return title, artist, parse_year(txt_data), match_genre(txt_data, edition), bpm
+
+
+def _remove_old_patch_copies(songs_dir, old_ids, song_dir, current_ids):
+    """Copies of a song left in the patch under its cache ID after the patch moved to game IDs. Only copies are
+    removed, never a file named with the game ID of any song, and a video only when the song folder has the same
+    file (the cache is never touched)."""
+    places = (('audio', naming.AUDIO_SUFFIX), ('audio_preview', naming.AUDIO_PREVIEW_SUFFIX),
+              ('covers', naming.COVER_SUFFIX), ('vxla', naming.VXLA_SUFFIX),
+              ('videos', naming.VIDEO_BK2_SUFFIX), ('videos', naming.VIDEO_MP4_SUFFIX))
+    for old_id in old_ids:
+        if old_id.lower() in current_ids:
+            continue
+        for sub, suffix in places:
+            path = os.path.join(songs_dir, sub, old_id + suffix)
+            if not os.path.isfile(path):
+                continue
+            if suffix in (naming.VIDEO_BK2_SUFFIX, naming.VIDEO_MP4_SUFFIX):
+                cached = Path(song_dir) / (old_id + suffix)
+                if not (cached.is_file() and cached.stat().st_size == os.path.getsize(path)):
+                    logger.warning(f"Kept {path}: no identical copy in the song folder")
+                    continue
+            try:
+                os.remove(path)
+            except OSError as e:
+                logger.warning(f"Could not remove the old copy {path}: {e}")
 
 
 def handle_xml_or_json(dlc_id, core_id, json_file_name, list_in_dir, txt_data,
-                       name_id, output_format, xml_file_name, cfg):
+                       name_id, output_format, xml_file_name, cfg, old_ids=()):
     """Creates <id>_meta.xml (XML games); registers the song in SongsDLC.tsv or songs_xx.json."""
-    title, artist, year, genre, bpm = build_song_metadata(txt_data)
+    title, artist, year, genre, bpm = build_song_metadata(
+        txt_data, getattr(getattr(cfg, 'core', None), 'edition', None))
 
     if output_format == XML_FORMAT:
         uid = add_data_to_songsdlc_tsv(core_id, artist, name_id, title, year, cfg)
@@ -739,7 +816,7 @@ def handle_xml_or_json(dlc_id, core_id, json_file_name, list_in_dir, txt_data,
             else GAME_LANGUAGE_FALLBACK,
             "bpm": bpm
         }
-        add_song_to_json(dlc_id, json_file_name, song_data, cfg)
+        add_song_to_json(dlc_id, json_file_name, song_data, cfg, old_ids)
 
 
 def create_meta_xml(uid, artist, genre, list_in_dir, name_id, title, xml_file_name, year):
@@ -782,7 +859,7 @@ def _read_text(path):
     return raw.decode(encoding), encoding
 
 
-def add_song_to_json(dlc_id, json_file_name, song_data, cfg):
+def add_song_to_json(dlc_id, json_file_name, song_data, cfg, old_ids=()):
     with registry_lock:
         source_json = str(cfg.conversion_tweaks.dlc_songs.songs_json_path) if not _is_blank(cfg.conversion_tweaks.dlc_songs.songs_json_path) else None
 
@@ -802,8 +879,9 @@ def add_song_to_json(dlc_id, json_file_name, song_data, cfg):
         else:
             data = {"name": json_file_name.split('_')[1].split('.')[0], "songs": []}
 
-        # Remove any existing song with the same ID to replace it
-        data['songs'] = [s for s in data.get('songs', []) if str(s.get('id')) != str(song_data.get('id'))]
+        # Remove any existing song with the same ID to replace it (and the entry it had under an older ID)
+        drop = {str(song_data.get('id'))} | {str(i) for i in old_ids}
+        data['songs'] = [s for s in data.get('songs', []) if str(s.get('id')) not in drop]
         data['songs'].append(song_data)
         _atomic_write_text(dest_json_file, json.dumps(data, ensure_ascii=False, indent=4))
 
@@ -1160,6 +1238,10 @@ def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None,
     vxla_output_type = UltrastarToSingit.JSON if output_format == JSON_FORMAT else UltrastarToSingit.XML
 
     json_file_name = (dlc_json_name + '.json') if dlc_json_name else None
+    all_dirs = [d for d in os.listdir(_input_dir) if os.path.isdir(os.path.join(_input_dir, d))] \
+        if os.path.isdir(_input_dir) else list(dirs_to_convert)
+    game_ids = game_ids_for(sorted(set(all_dirs) | set(dirs_to_convert)), cfg)
+    current_game_ids = {g.lower() for g in game_ids.values()}
 
     summary = {'ok': [], 'skipped': [], 'failed': [], 'stopped': False}
     summary_lock = threading.Lock()
@@ -1453,12 +1535,16 @@ def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None,
         # name.txt / the JSON without its files can hang the game
         base_dlc_dir = os.path.join(_output_dir, dlc_id)
         songs_dir = os.path.join(base_dlc_dir, 'romfs', 'Songs')
+        # inside the patch the files carry the game ID (title first for 2026), the cache keeps name_id
+        game_id = game_ids.get(dir_long_name, name_id)
+        in_patch = lambda file_name: game_id + file_name[len(name_id):]
         copies = [
-            (list_in_dir / ogg_file_name, os.path.join(songs_dir, 'audio', ogg_file_name)),
-            (list_in_dir / ogg_preview_file_name, os.path.join(songs_dir, 'audio_preview', ogg_preview_file_name)),
-            (list_in_dir / png_file_name, os.path.join(songs_dir, 'covers', png_file_name)),
-            (list_in_dir / vxla_file_name, os.path.join(songs_dir, 'vxla', vxla_file_name)),
-            (video_for_patch, os.path.join(songs_dir, 'videos', output_video_file_name)),
+            (list_in_dir / ogg_file_name, os.path.join(songs_dir, 'audio', in_patch(ogg_file_name))),
+            (list_in_dir / ogg_preview_file_name,
+             os.path.join(songs_dir, 'audio_preview', in_patch(ogg_preview_file_name))),
+            (list_in_dir / png_file_name, os.path.join(songs_dir, 'covers', in_patch(png_file_name))),
+            (list_in_dir / vxla_file_name, os.path.join(songs_dir, 'vxla', in_patch(vxla_file_name))),
+            (video_for_patch, os.path.join(songs_dir, 'videos', in_patch(output_video_file_name))),
         ]
         if output_format == XML_FORMAT:
             os.makedirs(os.path.join(songs_dir, 'covers_duet'), exist_ok=True)
@@ -1476,10 +1562,13 @@ def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None,
 
             # Handle name.txt, then SongsDLC.tsv + meta xml (XML format) or the json file (JSON format)
             handle_xml_or_json(dlc_id, core_id, json_file_name, list_in_dir, txt_data,
-                               name_id, output_format, xml_file_name, cfg)
+                               game_id, output_format, xml_file_name, cfg,
+                               old_ids=[i for i in [name_id] + legacy_ids if i != game_id])
             if output_format == XML_FORMAT:
                 shutil.copy2(os.fspath(list_in_dir / xml_file_name), os.path.join(base_dlc_dir, 'romfs'))
-            add_data_to_name_txt(dlc_id, name_id, output_format, dlc_json_name, cfg)
+            add_data_to_name_txt(dlc_id, game_id, output_format, dlc_json_name, cfg)
+            if game_id != name_id:
+                _remove_old_patch_copies(songs_dir, [name_id] + legacy_ids, list_in_dir, current_game_ids)
         except Exception:
             # don't leave half a song in the patch (these are copies, the cache is untouched)
             for destination in copied:

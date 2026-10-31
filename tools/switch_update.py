@@ -67,6 +67,9 @@ def main():
     parser.add_argument('--baseline', help="photo of the patch the Switch has (first time only)")
     parser.add_argument('--apply', action='store_true')
     parser.add_argument('--sample', type=int, default=25, help="unchanged files checked on the Switch")
+    parser.add_argument('--prune', action='store_true',
+                        help="with --apply: also remove from the Switch the files of the photo that are no longer in "
+                             "the patch (e.g. after the songs were renamed); only files this tool knows it put there")
     args = parser.parse_args()
 
     patch = os.path.abspath(os.path.expanduser(args.patch))
@@ -89,20 +92,25 @@ def main():
     for k in changed:
         print(f"   {'new    ' if k not in on_switch else 'changed'}  {k}")
     if removed:
-        print(f"{len(removed)} file(s) no longer in the patch (left on the Switch, harmless): {removed[:10]}")
-    if not changed:
+        action = 'will be removed from the Switch' if args.prune else 'left on the Switch (use --prune to remove them)'
+        print(f"{len(removed)} file(s) no longer in the patch ({sum(on_switch[k][0] for k in removed) / 2**30:.1f} GB), "
+              f"{action}: {removed[:5]}")
+    if not changed and not (removed and args.prune):
         return
 
     # is the Switch really at the photo? check a sample of the unchanged files
     if kio('ls', remote + '/', timeout=60).returncode != 0:
         sys.exit(f"Can't open {remote}: is the Switch connected with DBI in MTP mode?")
+    # what the photo says the Switch has (unchanged files first; after a rename almost everything changes)
     unchanged = [k for k in local if k not in changed and k in on_switch]
+    others = [k for k in on_switch if k not in unchanged]
     sample = random.sample(unchanged, min(args.sample, len(unchanged)))
+    sample += random.sample(others, min(args.sample - len(sample), len(others)))
     wrong = [k for k in sample if remote_size(f"{remote}/{k}") != on_switch[k][0]]
     if wrong:
         sys.exit(f"The Switch does not have the expected patch ({len(wrong)} of {len(sample)} checked files differ, "
                  f"e.g. {wrong[:3]}). Nothing copied: copy the whole folder once instead.")
-    print(f"Switch checked: {len(sample)} unchanged files match the photo.")
+    print(f"Switch checked: {len(sample)} files match the photo.")
     if not args.apply:
         print("Run again with --apply to copy.")
         return
@@ -129,6 +137,15 @@ def main():
         print(f"   copied {k}")
         with open(manifest_path, 'w', encoding='utf-8') as f:  # after every file: a cut leaves it consistent
             json.dump(on_switch, f)
+    if args.prune:
+        for k in removed:
+            if kio('remove', f"{remote}/{k}").returncode == 0 or remote_size(f"{remote}/{k}") is None:
+                del on_switch[k]
+                with open(manifest_path, 'w', encoding='utf-8') as f:
+                    json.dump(on_switch, f)
+            else:
+                print(f"   could not remove {k}")
+        print(f"   {len(removed)} old file(s) removed from the Switch")
     print(f"Done. Previous versions saved in {backup}" if os.path.isdir(backup) else "Done.")
 
 
