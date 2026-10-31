@@ -62,6 +62,16 @@ folder is cleared any video without a copy in its song folder is rescued.
 | `rename_songs.py` | fixes wrong artist/title and renames the folder and its cache (videos included) |
 | `usdb_sources.py` | songs whose audio was downloaded from another video than the one the lyrics were timed to |
 | `sync_check.py` / `sync_scan.py` | compares the lyrics with the isolated voice, one song or the whole library (CSV report) |
+| `fix_covers.py` | gives every song its own cover: USDB link, official cover, single/album of the store (never compilations) |
+| `fix_years.py` | real release year (MusicBrainz, iTunes) for songs rebuilt from DLCs that had the DLC year |
+| `artist_genders.py` | men / women / both for each artist (MusicBrainz), used for the "gender" of Let's Sing 2026 |
+| `validate_patch.py` | checks the patch before copying it: files, values the game accepts, covers, lyrics |
+| `switch_update.py` | copies to the Switch over MTP (DBI) only the files that changed; `--prune` removes renamed ones |
+
+**Let's Sing 2026** (only this edition; older ones are generated as before): the "Title" list of the game is sorted
+by the song ID, so the patch uses title-first IDs; real language (English/French/Spanish/German/Korean/Other), genre
+(HipHop, RnB, Latin...), difficulty (estimated from the notes) and singer. Design of a mod to skip long intros:
+[`docs/10_MOD_SALTAR_INTRO.md`](docs/10_MOD_SALTAR_INTRO.md).
 
 **GUI**: fast song table with per-song status, convert only the checked songs or a single one, coloured log,
 settings remembered, full Spanish translation. Tests: `python -m unittest discover -s tests -t .`

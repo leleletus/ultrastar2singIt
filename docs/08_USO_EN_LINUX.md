@@ -100,6 +100,21 @@ en la Switch. La primera vez hay que indicarle qué parche se copió entero, con
 Si alguna vez se copia el parche entero a mano, crear la foto nueva con el mismo comando pasando como
 `--baseline` un archivo hecho justo después de esa copia (o volver a copiar con la herramienta).
 
+## Mantener la biblioteca (herramientas)
+
+Todas solo muestran lo que harían; con `--apply` lo hacen (los txt que tocan quedan con copia `.txt.bak`).
+
+| Herramienta | Para qué |
+|---|---|
+| `tools/fix_covers.py <songs> --extracted <juegos extraídos> [--dlc] [--blank] [--song "<carpeta>"]` | portadas propias: enlace del .usdb, portada oficial, single/álbum de la tienda |
+| `tools/fix_years.py <songs> --extracted <juegos extraídos>` | año real de las canciones de DLC que tenían 2020 |
+| `tools/artist_genders.py <songs>` | voz (hombre/mujer/ambos) por artista para 2026; deja `<songs>/_artist_genders.json` |
+| `tools/validate_patch.py ~/LetsSing/output/0100EE4020D19003` | revisar el parche antes de copiarlo a la Switch |
+
+Después de cualquiera de ellas, convertir (los videos no se recodifican) y copiar con `switch_update.py`.
+En la interfaz, la columna **Sinc.** muestra el resultado de la revisión de voz de cada canción (naranja: revisar) y
+el motivo al pasar el ratón; si se resincroniza la canción, el aviso viejo desaparece.
+
 ## Si la ventana deja de responder
 
 El programa guarda en `~/ultrastar_official/hang_trace.log` dónde estaba cada hilo cuando la ventana lleva más
