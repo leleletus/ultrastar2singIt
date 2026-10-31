@@ -83,6 +83,10 @@ COMPILATION = re.compile(r'\b(hits|now that|now \d|best of|greatest|top \d+|comp
                          r'anthology|karaoke|party|summer \d{4}|the very best|the hits|playlist|bravo|ministry)\b', re.I)
 
 
+VARIANT = re.compile(r'\b(remix|remixes|mix|live|acoustic|unplugged|version|edit|raw sessions|instrumental|'
+                     r'karaoke|cover|sped up|slowed|demo|remaster(ed)?)\b', re.I)
+
+
 def store_cover(artist, title):
     """(cover URL, album name) of the song in the iTunes store, only when artist AND title really match (a loose
     search gave wrong artists/titles in the past). Prefers the single, then an album of the artist; never a
@@ -101,8 +105,10 @@ def store_cover(artist, title):
         if (r.get('collectionArtistName') or '').lower() == 'various artists' or COMPILATION.search(album):
             continue
         single = _simple(album.replace('- Single', '').replace('- EP', '')) == want_title or '- Single' in album
-        candidates.append((0 if single else 1, r.get('releaseDate', '9999'), r.get('artworkUrl100'), album))
-    for _, _, url, album in sorted(candidates):
+        # remixes, live or acoustic releases have another artwork than the song: only if nothing else
+        variant = bool(VARIANT.search(album)) and not VARIANT.search(title)
+        candidates.append((variant, 0 if single else 1, r.get('releaseDate', '9999'), r.get('artworkUrl100'), album))
+    for _, _, _, url, album in sorted(candidates):
         if url:
             return url.replace('100x100bb', '1000x1000bb'), album
     return None, None

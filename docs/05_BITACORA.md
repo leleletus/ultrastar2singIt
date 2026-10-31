@@ -153,6 +153,17 @@
   `hang_trace.log` (pila de todos los hilos) si la ventana no responde en 10 s.
 - `install_linux_launcher.sh` (acceso en el menú) y `docs/08_USO_EN_LINUX.md`.
 
+### 2026-10-31 (tarde) — Lo que dice el código de Let's Sing 2026 y arreglos de datos
+- Volcado IL2CPP de Let's Sing 2026 v131072 (Il2CppDumper bajo Wine; `global-metadata.dat` sacado con nxdumptool).
+  Del código: idiomas = English/French/Spanish/German/Korean/Other; temas = Love/Deep/Party (fijos, no se pueden crear
+  nuevos sin mod); géneros = Pop/HipHop/Ballad/Rock/RnB/Electro/Country/Latin/Summer; `SpokenLanguages` y `Themes`
+  son listas. `SortTypeComparer.Compare` (desensamblado): "Título" ordena por `Singable.Id`, "Artista" por
+  `GameSong.Artist`, "Año" por `Year` y luego Id → B-56.
+- Primera actualización por MTP sin copiar todo (179 archivos, 12,8 MB); DBI no sobrescribe (B-62).
+- Prueba en la consola del usuario: letras y acentos bien; búsqueda de texto busca en artista y título; navegar por
+  letra en "Título" seguía al artista (B-56); portadas en blanco/recopilatorio (B-58); Swish Swish duplicada (B-59).
+- B-52…B-62 registrados; resumen en `09_HISTORIAL_BUGS.md`.
+
 <!-- Plantilla para nuevas entradas:
 ### AAAA-MM-DD — Título
 - Cambios: …
