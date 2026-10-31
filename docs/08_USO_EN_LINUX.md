@@ -78,6 +78,28 @@ celestes de la voz ya aparecen sin esperar.
 Para que los servicios sigan funcionando después de cerrar la sesión de KDE hace falta, una vez:
 `loginctl enable-linger $USER` (se deshace con `loginctl disable-linger $USER`).
 
+## Actualizar la Switch sin copiar todo el parche
+
+Después de arreglar unas pocas canciones no hace falta reconvertir ni copiar los ~30 GB:
+
+1. En el programa: clic derecho sobre cada canción arreglada → **Convertir solo esta** (actualiza el parche sin
+   vaciarlo; los videos no se tocan).
+2. En la Switch abrir **DBI → Run MTP responder** y conectar el cable USB.
+3. Ver qué se copiaría (no cambia nada):
+   ```
+   ~/ultrastar_official/venv/bin/python ~/ultrastar_official/tools/switch_update.py ~/LetsSing/output/0100EE4020D19003
+   ```
+4. Copiar: el mismo comando con `--apply` al final.
+
+La herramienta compara el parche con la "foto" de lo que tiene la Switch (`~/LetsSing/0100EE4020D19003.switch.json`,
+se actualiza tras cada copia) y copia solo los archivos distintos. Antes comprueba en la Switch una muestra de
+archivos (si no coinciden, la Switch tiene otro parche y no copia nada), guarda en
+`~/LetsSing/switch_backup_<fecha>/` cada archivo que reemplaza y verifica el tamaño de cada copia. No borra nada
+en la Switch. La primera vez hay que indicarle qué parche se copió entero, con
+`--baseline ~/LetsSing/archivo/foto_parche_2026-10-25.json` (foto del parche completo del 25 de octubre).
+Si alguna vez se copia el parche entero a mano, crear la foto nueva con el mismo comando pasando como
+`--baseline` un archivo hecho justo después de esa copia (o volver a copiar con la herramienta).
+
 ## Si la ventana deja de responder
 
 El programa guarda en `~/ultrastar_official/hang_trace.log` dónde estaba cada hilo cuando la ventana lleva más
