@@ -56,6 +56,7 @@ Estado al commit `4e1cb35`. "Evidencia" = verificado con prueba, con `error.log`
 | B-48 | ALTO | Tools/Caché | Copias del extractor con el ID del conversor tomadas como ya convertidas: portadas a tamaño completo en el parche, 28 GB de `.mp4` duplicados (R-12) | CERRADO (b9d454f + este commit) |
 | B-49 | MEDIO | Letras | Palabras pegadas a mitad de línea en canciones UltraStar ("sideto side"): el espacio de una nota sostenida `~ ` no pasaba a la letra | CERRADO (28276db, ajustado en este commit) |
 | B-50 | ALTO | Letras | 112 de 224 vxla oficiales v2.0: toda la letra pegada ("We'retalkingaway"), se mostraba `lyrics_cut`, que no tiene espacios | CERRADO (este commit) |
+| B-51 | ALTO | Sync Editor | Las letras no aparecían nunca ("Aquí aparecerán las letras"): un atributo tapaba el método `lyrics_offset_s` (desde `b074be4`) | CERRADO (este commit) |
 
 ---
 
@@ -379,3 +380,12 @@ Estado al commit `4e1cb35`. "Evidencia" = verificado con prueba, con `error.log`
   `VXLA_GENERATOR_VERSION = 5`. Prueba: `test_v2_shown_text_keeps_the_spaces_of_the_lyrics_layer`.
   Verificado en el parche completo: Take On Me → "We're talking away I don't know what…"; las uniones restantes
   dentro de una línea son sílabas en mayúsculas de una misma palabra (BOOM-BA-YAH, A-B-C de abcdefu).
+
+### B-51 · ALTO · Sync Editor sin letras
+- **Dónde**: `SyncEditor.py` (desde `b074be4`, soporte de #START).
+- **Causa**: el valor `self.lyrics_offset_s` (desplazamiento por #START) tenía el mismo nombre que el método
+  `lyrics_offset_s()`; el valor tapaba al método y cada refresco de la letra fallaba en silencio.
+- **Arreglo**: editor rehecho (`start_offset_s` + `shift_s()`), con carril de notas, controles de reproducción
+  (±5 s, ±0,1 s, líneas, primera letra, velocidad, volumen, línea de tiempo con clic), modo cantar con micrófono
+  (YIN, cualquier octava cuenta como el juego), copia `.bak` al guardar y, en las canciones con vxla oficial, sus
+  notas reales en modo solo lectura (el #GAP del txt no se usa ahí). Pruebas: `SyncEditorTest`.

@@ -127,6 +127,13 @@
   En 225 de 272 carpetas `audio.ogg` es idéntico al `<id>.ogg` convertido (copias de un script anterior; sin
   VIDEOGAP no afecta). Es la única canción de la biblioteca con `#VIDEOGAP`.
 
+### 2026-10-31 — Editor de sincronización nuevo
+- B-51 cerrado (las letras no aparecían). Editor rehecho como un pequeño editor de video: video, carril de notas
+  estilo juego, karaoke, transporte completo con atajos (Espacio, J/L, coma/punto, ↑/↓, Inicio, F, ←/→ para el GAP,
+  Ctrl+S) y modo cantar con micrófono para comprobar el tono de las notas.
+- Verificado sin pantalla con copias de BBHMM (aviso "la letra termina 15,7 s después del audio") y Take On Me
+  (vxla oficial, solo lectura); micrófono simulado una octava abajo: cuenta como acierto, igual que el juego.
+
 <!-- Plantilla para nuevas entradas:
 ### AAAA-MM-DD — Título
 - Cambios: …

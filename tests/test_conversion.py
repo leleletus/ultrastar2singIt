@@ -357,3 +357,29 @@ class VxlaRoundTripTest(TempDirTest):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class SyncEditorTest(unittest.TestCase):
+    def test_pitch_detection(self):
+        import numpy as np
+        os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
+        import SyncEditor
+        for hz, rate in ((110.0, 48000), (220.0, 44100), (440.0, 16000), (659.25, 48000)):
+            t = np.arange(int(rate * 0.05)) / rate
+            voice = 0.5 * np.sin(2 * np.pi * hz * t) + 0.2 * np.sin(2 * np.pi * 2 * hz * t)  # with a harmonic
+            self.assertAlmostEqual(SyncEditor.detect_pitch(voice, rate), hz, delta=hz * 0.01)
+        self.assertIsNone(SyncEditor.detect_pitch(np.zeros(2400), 48000))  # silence
+        self.assertAlmostEqual(SyncEditor.hz_to_midi(440.0), 69)
+        self.assertEqual(SyncEditor.fold_to(57, 70), 69)  # any octave counts, like the game
+
+    def test_txt_notes_and_lines(self):
+        os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
+        import SyncEditor
+        data = {'BPM': '240', 'notes': [[':', '0', '2', '5', 'side'], [':', '2', '2', '5', '~ '],
+                                        ['*', '4', '2', '7', 'to '], ['-', '6'], ['F', '8', '2', '0', 'yo']]}
+        notes, syllables, lines = SyncEditor.load_txt(data)
+        self.assertEqual([n.pitch for n in notes], [65, 65, 67, 60])
+        self.assertEqual([n.sung for n in notes], [True, True, True, False])
+        self.assertEqual([s[2] for s in syllables], ['side ', 'to ', 'yo'])
+        self.assertEqual(lines, [[0, 1], [2]])
+        self.assertAlmostEqual(notes[2].t, 4 * 60 / 240 / 4)
