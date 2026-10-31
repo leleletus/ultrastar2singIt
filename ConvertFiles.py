@@ -675,15 +675,50 @@ ARTIST_GENDERS_FILE = '_artist_genders.json'
 _artist_genders = {}
 
 
-def singer_gender(artist):
+GENDER_PITCH_MEN_MAX, GENDER_PITCH_WOMEN_MIN = 63.0, 59.0  # sung median pitch (MIDI) that contradicts a gender
+
+
+def singer_gender(artist, title='', median_pitch=None):
+    """Men / Women / Both from _artist_genders.json: the artist and the singers featured in the title must agree,
+    and the pitch of the voice must not contradict it (a DJ credited alone while a woman sings); else Both."""
     if not _artist_genders and _input_dir:
         try:
             with open(os.path.join(_input_dir, ARTIST_GENDERS_FILE), encoding='utf-8') as f:
                 _artist_genders.update(json.load(f))
         except (OSError, ValueError):
             _artist_genders[''] = 'Both'  # no file: do not try again
-    gender = _artist_genders.get(artist.strip())
-    return gender if gender in ('Men', 'Women', 'Both') else 'Both'
+    names = [artist.strip()]
+    m = re.search(r'[(\[]\s*(?:feat\.?|ft\.?|featuring|with)\s+([^)\]]+)[)\]]', title or '', re.I)
+    if m:
+        names += [p.strip() for p in re.split(r'\s*(?:,|&|\+| and | x )\s*', m.group(1)) if p.strip()]
+    genders = {_artist_genders.get(n) for n in names}
+    if len(genders) != 1 or not genders <= {'Men', 'Women'}:
+        return 'Both'
+    gender = genders.pop()
+    if median_pitch is not None and ((gender == 'Men' and median_pitch > GENDER_PITCH_MEN_MAX) or
+                                     (gender == 'Women' and median_pitch < GENDER_PITCH_WOMEN_MIN)):
+        return 'Both'
+    return gender
+
+
+def sung_median_pitch(vxla_path, voice_path, official):
+    """Median sung pitch (MIDI): the official notes, or the analyzed voice (the octave of UltraStar notes is not
+    reliable). None when unknown."""
+    import numpy as np
+    try:
+        if official:
+            layers, _ = OfficialVxla.read_layers(vxla_path)
+            pitches = [int(re.match(r'#p(\d+)', n['value']).group(1))
+                       for n in OfficialVxla.to_sing_it(layers, 3600.0)['notes']]
+            pitches = [p for p in pitches if p > 1]
+            return float(np.median(pitches)) if pitches else None
+        if voice_path and os.path.isfile(voice_path):
+            voice = np.load(voice_path)['pitch'].astype(float)
+            voice = voice[~np.isnan(voice)]
+            return float(np.median(voice)) if len(voice) > 500 else None
+    except Exception:
+        return None
+    return None
 
 
 def song_difficulty(vxla_path):
@@ -1607,7 +1642,11 @@ def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None,
             # Handle name.txt, then SongsDLC.tsv + meta xml (XML format) or the json file (JSON format)
             profile = None
             if uses_game_ids(cfg):  # Let's Sing 2026 only: older editions keep what they always had
-                profile = (song_difficulty(list_in_dir / vxla_file_name), singer_gender(txt_data.get('ARTIST', '')))
+                official = (list_in_dir / naming.OFFICIAL_VXLA_NAME).exists()
+                pitch = sung_median_pitch(list_in_dir / (naming.OFFICIAL_VXLA_NAME if official else vxla_file_name),
+                                          list_in_dir / (name_id + naming.VOICE_SUFFIX), official)
+                profile = (song_difficulty(list_in_dir / vxla_file_name),
+                           singer_gender(txt_data.get('ARTIST', ''), txt_data.get('TITLE', ''), pitch))
             handle_xml_or_json(dlc_id, core_id, json_file_name, list_in_dir, txt_data,
                                game_id, output_format, xml_file_name, cfg,
                                old_ids=[i for i in [name_id] + legacy_ids if i != game_id], profile=profile)

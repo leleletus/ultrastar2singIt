@@ -59,6 +59,12 @@ def ask(name):
     return None
 
 
+def featured(title):
+    """Singers named in a title: "Blame (feat. John Newman)" -> ["John Newman"]."""
+    m = re.search(r'[(\[]\s*(?:feat\.?|ft\.?|featuring|with)\s+([^)\]]+)[)\]]', title, re.I)
+    return [p.strip() for p in SPLIT.split(m.group(1)) if p.strip()] if m else []
+
+
 def gender_of(artist, known):
     """Men / Women / Both for an #ARTIST value; known caches single names."""
     def one(name):
@@ -93,7 +99,9 @@ def main():
         if d.is_dir():
             try:
                 txt = ConvertFiles.choose_txt_file([p for p in d.iterdir() if p.suffix.lower() == '.txt'])
-                artists.add(UltrastarToSingit.parse_file(txt).get('ARTIST', '').strip())
+                data = UltrastarToSingit.parse_file(txt)
+                artists.add(data.get('ARTIST', '').strip())
+                artists.update(featured(data.get('TITLE', '')))  # "Titanium (feat. Sia)": Sia sings too
             except Exception:
                 continue
     todo = sorted(a for a in artists if a and a not in result)
