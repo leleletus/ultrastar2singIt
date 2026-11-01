@@ -46,8 +46,8 @@ Estado al commit `4e1cb35`. "Evidencia" = verificado con prueba, con `error.log`
 | B-38 | MEDIO | Tono | Importación pesada de TensorFlow al cargar; Demucs no funciona empaquetado | CERRADO (8426e7e) |
 | B-39 | MEDIO | Rendimiento | Genius sin caché negativa: segundos de espera por canción sin conexión | CERRADO (cd87f8d) |
 | B-40 | MEDIO | Calidad | Las letras pierden tildes y ñ | CERRADO (cd87f8d) — confirmar en consola |
-| B-41 | ALTO | Build | El `.spec` excluye QtMultimedia, que la GUI importa | EN CURSO (spec corregido en 7fc2657; build sin probar) |
-| B-42 | MEDIO | Repo | requirements.txt y build.yml no versionados; requirements inutilizable | EN CURSO (.pyc fuera de git; requirements pendiente) |
+| B-41 | ALTO | Build | El `.spec` excluye QtMultimedia, que la GUI importa | CERRADO (7fc2657; build de PyInstaller probado en Linux 2026-11-01: la GUI arranca) |
+| B-42 | MEDIO | Repo | requirements.txt y build.yml no versionados; requirements inutilizable | CERRADO (4c68038: instalación limpia probada) |
 | B-43 | BAJO | Código muerto | `rename_folders_physically` con `return` en lugar de `continue` | CERRADO (30669e3) |
 | B-44 | MEDIO | Wine/Bink | binkc sin timeout ni diagnóstico; `wine` fijo | CERRADO (30669e3) |
 | B-45 | MEDIO | GUI | Cerrar la ventana con la conversión en marcha deja hilos vivos | CERRADO (7fc2657) |

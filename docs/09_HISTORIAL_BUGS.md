@@ -1,13 +1,11 @@
 # 09 — Historial de bugs
 
-Resumen al 2026-10-31: **62 bugs registrados, 59 cerrados, 3 pendientes**. El detalle de cada uno (causa, impacto, arreglo) está en [03_BUGS.md](03_BUGS.md); las regresiones del historial de git en [04_REGRESIONES.md](04_REGRESIONES.md) y el día a día en [05_BITACORA.md](05_BITACORA.md).
+Resumen al 2026-11-01: **62 bugs registrados, 61 cerrados, 1 pendientes**. El detalle de cada uno (causa, impacto, arreglo) está en [03_BUGS.md](03_BUGS.md); las regresiones del historial de git en [04_REGRESIONES.md](04_REGRESIONES.md) y el día a día en [05_BITACORA.md](05_BITACORA.md).
 
 ## Pendientes
 
 | ID | Severidad | Área | Problema | Estado |
 |---|---|---|---|---|
-| B-41 | ALTO | Build | El `.spec` excluye QtMultimedia, que la GUI importa | EN CURSO (spec corregido en 7fc2657; build sin probar) |
-| B-42 | MEDIO | Repo | requirements.txt y build.yml no versionados; requirements inutilizable | EN CURSO (.pyc fuera de git; requirements pendiente) |
 | B-61 | ALTO | GUI | La ventana se congeló una vez (hilo principal bloqueado, con el video de BBHMM abierto) | ABIERTO (vigilante hang_trace.log en 6e74b01) |
 
 ## Mejoras pendientes (no son bugs)
@@ -65,6 +63,8 @@ Resumen al 2026-10-31: **62 bugs registrados, 59 cerrados, 3 pendientes**. El de
 | B-38 | MEDIO | Tono | Importación pesada de TensorFlow al cargar; Demucs no funciona empaquetado | (8426e7e) |
 | B-39 | MEDIO | Rendimiento | Genius sin caché negativa: segundos de espera por canción sin conexión | (cd87f8d) |
 | B-40 | MEDIO | Calidad | Las letras pierden tildes y ñ | (cd87f8d) — confirmar en consola |
+| B-41 | ALTO | Build | El `.spec` excluye QtMultimedia, que la GUI importa | (7fc2657; build de PyInstaller probado en Linux 2026-11-01: la GUI arranca) |
+| B-42 | MEDIO | Repo | requirements.txt y build.yml no versionados; requirements inutilizable | (4c68038: instalación limpia probada) |
 | B-43 | BAJO | Código muerto | `rename_folders_physically` con `return` en lugar de `continue` | (30669e3) |
 | B-44 | MEDIO | Wine/Bink | binkc sin timeout ni diagnóstico; `wine` fijo | (30669e3) |
 | B-45 | MEDIO | GUI | Cerrar la ventana con la conversión en marcha deja hilos vivos | (7fc2657) |

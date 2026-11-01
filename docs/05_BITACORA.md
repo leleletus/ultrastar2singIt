@@ -170,6 +170,25 @@
 - Pendiente con el usuario: copiar el parche nuevo a la Switch (`switch_update.py --apply --prune`: copia todo con
   los nombres nuevos y quita los viejos que conoce la foto).
 
+### 2026-10-31 / 11-01 — Trabajo largo sin la consola
+- Revisión de voz de las 274 canciones UltraStar + 20 oficiales de referencia (Demucs, ~4 min por canción).
+  Calibración con las oficiales: los falsos "desfases" eran líneas sueltas (frases repetidas); ahora solo cuenta un
+  bloque de 3+ líneas desplazadas igual, y "dudosa" solo bajo 30 % de coincidencia (las oficiales van de 38 a 77 %).
+  Resultado: 278 bien, 11 con una parte desfasada, 1 entera (Daft Punk −1,1 s), 3 dudosas; 0 falsas alarmas de
+  desfase en las 20 oficiales. La columna Sinc. de la interfaz muestra el resultado de cada canción.
+- Datos para 2026: géneros reales (tienda iTunes, 419 canciones; antes 613 "Pop"), dificultad estimada de las notas
+  (ajustada con 59 canciones oficiales), voz por artista (MusicBrainz, invitados del título y control por el tono:
+  ante la duda "Both"), portadas originales (sin recopilatorios ni singles de otra canción; oficiales primero).
+- Validador del parche (`tools/validate_patch.py`): 675 canciones, 0 problemas. 729 `.bk2` intactos.
+- Bugs cerrados: B-20, B-35, B-41 (ejecutable de PyInstaller probado: la GUI arranca), B-42 (instalación limpia
+  probada; faltaba numpy). Queda B-61.
+- Incidente: el sistema cerró VS Code por falta de memoria. Causa: `/tmp` (y la carpeta de trabajo) está en RAM y
+  tenía 5,2 GB de archivos temporales, más dos separaciones de voz en paralelo y una compilación. Corregido: los
+  temporales de la separación van a `~/.cache/letssing_converter`, las tareas pesadas de una en una y con
+  `MemoryMax`.
+- Pendiente con el usuario: copiar el parche nuevo a la Switch (`switch_update.py --apply --prune`, ~30 GB por
+  los nombres nuevos); revisar a mano las 15 canciones del informe; mod (diseño en `10_MOD_SALTAR_INTRO.md`).
+
 <!-- Plantilla para nuevas entradas:
 ### AAAA-MM-DD — Título
 - Cambios: …
