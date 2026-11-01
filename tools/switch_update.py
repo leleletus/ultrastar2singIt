@@ -21,7 +21,6 @@ import hashlib
 import json
 import os
 import random
-import shutil
 import subprocess
 import sys
 import time
@@ -67,6 +66,9 @@ def main():
     parser.add_argument('--baseline', help="photo of the patch the Switch has (first time only)")
     parser.add_argument('--apply', action='store_true')
     parser.add_argument('--sample', type=int, default=25, help="unchanged files checked on the Switch")
+    parser.add_argument('--prune-first', action='store_true',
+                        help="with --apply: remove the old files before copying, for an SD card without room for both "
+                             "patches (the old files without an identical copy in the patch are backed up first)")
     parser.add_argument('--prune', action='store_true',
                         help="with --apply: also remove from the Switch the files of the photo that are no longer in "
                              "the patch (e.g. after the songs were renamed); only files this tool knows it put there")
@@ -123,6 +125,23 @@ def main():
         return
 
     backup = os.path.join(keep_dir, f"switch_backup_{time.strftime('%Y-%m-%d_%H%M%S')}")
+    if args.prune_first and removed:
+        # the console keeps its previous song list (songs_xx.json is copied last) but its songs lose their files
+        # until the copy ends: do not play meanwhile
+        in_patch = {tuple(v) for v in local.values()}
+        for k in removed:
+            url = f"{remote}/{k}"
+            if not (k.endswith('.bk2') and tuple(on_switch[k]) in in_patch):  # videos already in the patch: no copy
+                os.makedirs(os.path.dirname(os.path.join(backup, k)), exist_ok=True)
+                if kio('copy', url, 'file://' + os.path.join(backup, k)).returncode != 0 \
+                        and remote_size(url) is not None:
+                    sys.exit(f"Could not back up {k} from the Switch: nothing else removed.")
+            if kio('remove', url).returncode == 0 or remote_size(url) is None:
+                del on_switch[k]
+                with open(manifest_path, 'w', encoding='utf-8') as f:
+                    json.dump(on_switch, f)
+        print(f"   {len(removed)} old file(s) removed from the Switch first", flush=True)
+        removed = []
     for k in changed:
         url = f"{remote}/{k}"
         if k in on_switch:  # keep what the Switch had
@@ -132,8 +151,9 @@ def main():
         else:
             kio('mkdir', url.rsplit('/', 1)[0])
         result = kio('copy', '--overwrite', 'file://' + os.path.join(patch, k), url)
-        if result.returncode != 0 and k in on_switch:
-            # DBI's MTP responder refuses to overwrite: remove it (it is already backed up) and copy again
+        if result.returncode != 0 and (k in on_switch or remote_size(url) is not None):
+            # DBI's MTP responder refuses to overwrite: remove it (backed up, or a leftover the photo does not know)
+            # and copy again
             kio('remove', url)
             result = kio('copy', 'file://' + os.path.join(patch, k), url)
         got = remote_size(url)

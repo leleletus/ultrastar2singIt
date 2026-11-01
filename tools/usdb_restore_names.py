@@ -31,6 +31,10 @@ import naming  # noqa: E402
 import UltrastarToSingit  # noqa: E402
 
 
+# folder + file name: Windows fails on paths over 260 characters and the songs folder itself takes ~60
+MAX_NAMES = 190
+
+
 def duration(path):
     out = subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', str(path)],
                          capture_output=True, text=True).stdout.strip()
@@ -103,6 +107,10 @@ def plan_song(d):
     if cover and (d / cover).exists() and '[CO]' not in cover:
         renames.append(('COVER', 'cover', d / cover, d / f"{base} [CO]{Path(cover).suffix.lower()}"))
     renames = [r for r in renames if r[2] != r[3]]
+    for tag, kind, src, dst in renames:
+        if len(d.name) + len(dst.name) > MAX_NAMES:
+            notes.append(f"{kind}: {dst.name} would make a path too long for Windows, kept as {src.name}")
+    renames = [r for r in renames if len(d.name) + len(r[3].name) <= MAX_NAMES]
     for tag, kind, src, dst in renames:
         if dst.exists():
             notes.append(f"{kind}: {dst.name} already exists, not touched")
