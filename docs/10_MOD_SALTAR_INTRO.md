@@ -1,6 +1,7 @@
 # 10 — Mod para Let's Sing 2026: saltar el intro y terminar al acabar la letra
 
-Estado: **diseño listo, sin construir ni probar** (2026-10-31). Todo lo de abajo sale del código del juego, no de
+Estado: **construido (2026-11-01), sin probar en la consola**. Código en `mods/skip_intro/`; plan A elegido por el
+usuario: botón (ZR/ZL, SL/SR) durante el intro, salto a 3 s antes de la primera nota. Plan B si falla: automático. Todo lo de abajo sale del código del juego, no de
 suposiciones; las direcciones valen **solo** para la versión analizada.
 
 | | |
