@@ -7,6 +7,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import threading
 import xml.etree.cElementTree as Et
@@ -37,6 +38,7 @@ MUSIC_GENRE_LIST = ['Pop', 'Rap', 'Rock', 'Ballad', 'Electro']
 
 # Bump whenever the generated vxla changes, so cached vxla files are regenerated (videos are never touched)
 VXLA_GENERATOR_VERSION = 6
+STILL_BK2_BYTES_PER_S = 20 * 1024  # a .bk2 below this is a still image (a real clip is 100+ KB/s)
 
 # binkc under Wine sometimes "succeeds" with an empty file of a few hundred bytes
 MIN_VALID_BK2_BYTES = 16 * 1024
@@ -564,6 +566,15 @@ def create_video(file, list_in_dir, output_video_file_name, target_bitrate_kbps,
     return created
 
 
+def _big_temp_dir():
+    """Folder for the temporary copies of whole videos: on disk, not /tmp, which is often in RAM on Linux."""
+    if sys.platform == 'win32':
+        return None
+    path = os.path.join(os.path.expanduser('~'), '.cache', 'letssing_converter')
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
 def create_video_bink(file, list_in_dir, output_video_file_name, quality=None, duration=None,
                       compression_percentage=None):
     """Encode a .bk2 with RAD Video Tools. The result is written to the song folder only when binkc
@@ -571,14 +582,13 @@ def create_video_bink(file, list_in_dir, output_video_file_name, quality=None, d
     if not _rad_path:
         logger.error("RAD Video Tools path not configured - cannot create .bk2 video")
         return False
-    import sys
 
     file_format = '/V' + str(200)
     remove_sound = '/L-1'
     # generous timeout: a hung binkc must not block a worker thread forever
     timeout = max(1800, int((duration or 300) * 30))
 
-    with tempfile.TemporaryDirectory() as temp_dir:
+    with tempfile.TemporaryDirectory(dir=_big_temp_dir()) as temp_dir:  # one folder per encode (parallel workers)
         temp_dir_path = Path(temp_dir)
         temp_in = temp_dir_path / ("input" + Path(file).suffix.lower())
         temp_out = temp_dir_path / "output.bk2"
@@ -1211,6 +1221,17 @@ def adopt_legacy_cache(song_dir: Path, name_id: str, legacy_ids) -> None:
             if old.is_file() and not new.exists():
                 shutil.copy2(old, new)
                 logger.info(f"Reusing cached {old.name} as {new.name}")
+    # a folder renamed outside the converter (usdb_syncer moves a song to its "Artist - Title" folder when it
+    # downloads it again) keeps its video under the old ID: encoding it again would take hours
+    bk2 = song_dir / (name_id + naming.VIDEO_BK2_SUFFIX)
+    if not bk2.exists():
+        others = [p for p in song_dir.glob('*' + naming.VIDEO_BK2_SUFFIX) if p.is_file()]
+        if len(others) == 1:
+            try:
+                os.link(others[0], bk2)
+            except OSError:
+                shutil.copy2(others[0], bk2)
+            logger.info(f"Reusing the converted video {others[0].name} as {bk2.name}")
 
 
 def _vxla_cache_params(txt_path: Path, output_format, pitch_method, ignore_medley, keep_accents, song_duration,
@@ -1504,6 +1525,13 @@ def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None,
         if real_video is not None and output_format == XML_FORMAT and real_video.suffix.lower() == '.bk2':
             real_video = None  # ffmpeg can't decode Bink 2: XML games get the static video
 
+        if real_video is not None and not ignore_video and output_video_path.exists() \
+                and real_video.suffix.lower() != '.bk2' and real_video.stat().st_size > 5 * 2 ** 20 \
+                and output_video_path.stat().st_size < STILL_BK2_BYTES_PER_S * max(song_duration, 1):
+            # converted while the song had no video (the still cover), the real video was added afterwards
+            logger.warning(f"{output_video_file_name} looks like the still cover but {real_video.name} is a real "
+                           f"video: right click the song > 'Encode the video again from its source' (the current "
+                           f".bk2 is kept in _replaced_videos)")
         if real_video is not None and not ignore_video and not output_video_path.exists():
             _check_stop()
             duration = get_duration(real_video)

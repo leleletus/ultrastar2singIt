@@ -47,7 +47,7 @@ Cambios de pocas líneas, riesgo bajo, impacto alto.
 - B-31, B-32, B-33, B-34 → un único lector de vxla
 - B-41 build verificado; B-42 requirements mínimos y `.gitignore`
 - B-37 logging; B-38 imports perezosos; B-44 binkc robusto
-- Ordenar scripts sueltos (mover a `experimental_tools/` y parametrizar rutas)
+- ~~Ordenar scripts sueltos~~ hecho 2026-11-01: los útiles están en `tools/` con parámetros, los viejos se quitaron
 
 ## 2. Backlog funcional
 
@@ -65,7 +65,7 @@ Cambios de pocas líneas, riesgo bajo, impacto alto.
 | M-10 | Baja | Idioma del vxla según la canción | hoy `language="english"` fijo |
 | M-11 | Baja | Catálogo de DLC editable | importar desde `raw_data.xlsx` o editar en la GUI; añadir nuevas ediciones sin tocar código |
 | M-12 | Baja | Normalización de sonoridad medida | `loudnorm` de 2 pasadas con `linear=true` (no altera tiempos) o ganancia fija calculada; ver R-10 |
-| M-13 | Baja | Detección de desfase integrada | llevar `tools/desync_detector.py` a la GUI (columna con el desfase estimado) |
+| M-13 | Baja | Detección de desfase integrada | **Hecho**: columna Sinc. + `tools/sync_scan.py` (apartado 5 de la GUI) |
 
 ## 3. Mejoras de la interfaz gráfica
 

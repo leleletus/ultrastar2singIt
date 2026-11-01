@@ -81,6 +81,13 @@ def main():
     if not os.path.exists(baseline_path):
         sys.exit(f"No photo of the Switch patch ({manifest_path}): pass --baseline the first time, "
                  f"or copy the whole folder once and run this again.")
+    if args.apply:  # two copies at once would both write the photo and fight over the same files on the Switch
+        import fcntl
+        lock = open(manifest_path + '.lock', 'w')
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError:
+            sys.exit("Another update of the Switch is already running; wait for it to finish.")
     with open(baseline_path, encoding='utf-8') as f:
         on_switch = json.load(f)
 

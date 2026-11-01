@@ -33,7 +33,7 @@ LetsSingUltraStarConverter.py   punto de entrada: --cli → CLI (argparse) | sin
 └── version.py
 ```
 
-Scripts sueltos (no los usa la app): `tools/*.py` (salvo los dos del menú), `experimental_tools/*.py`, `fix_songs.py`,
+Scripts sueltos (no los usa la app): `tools/*.py` (los de mantenimiento se lanzan desde el apartado 5 de la GUI), `fix_songs.py`,
 `clean_output_files.py`, `clean_output_json.py`. Varios tienen rutas personales fijas (`/run/media/djvemo/EADE-F56A/...`).
 
 ## 3. Flujo de una conversión
@@ -116,7 +116,7 @@ así que cambiar opciones no regenera nada salvo con "Clear cache" o "Force re-g
 | Nombres de archivos generados (`_cover.avi`, `<id>.avi`, `_preview.ogg`…) | filtros de `files_avi`/`files_mp3`/`files_jpg` en ConvertFiles.py:713-717 y 751; `Gui.scan_input_folder` (Gui.py:864-867) y su lista `outputs` (Gui.py:896) que usa "Clear cache"; `get_required_files` (ConvertFiles.py:609); `tools/cache_recovery.py` |
 | Formato del vxla (`write_vxla_file`, `map_data`) | `tools/unpacker.py`, `tools/reverse_vxla.py`, `tools/LetSing_ExtractorPro.py` (lo leen al revés); caché por mtime (no se regenera solo) |
 | Corrección de tono (PitchAnalyzer) | constantes `PITCH_MIN/MAX` (ConvertFiles.py:30); el `-36` fijo en reverse_vxla/unpacker/ExtractorPro |
-| Cálculo de tiempos (BPM/GAP/VIDEOGAP) | `UltrastarToSingit.map_data`, `ConvertFiles.create_audio` (desplaza el audio por VIDEOGAP), `create_audio_preview`, `SyncEditor.update_lyrics` (ignora VIDEOGAP), `Gui.is_doubtful_sync`, `tools/desync_detector.py` |
+| Cálculo de tiempos (BPM/GAP/VIDEOGAP) | `UltrastarToSingit.map_data`, `ConvertFiles.create_audio` (desplaza el audio por VIDEOGAP), `create_audio_preview`, `SyncEditor.update_lyrics` (ignora VIDEOGAP), `Gui.is_doubtful_sync`, `tools/sync_scan.py` |
 | Claves de configuración | `config_default.yml`, `Gui.set_defaults` (carga), `Gui.save_config` (guarda), `LetsSingUltraStarConverter._run_cli` (flags), `ConvertFiles.main/convert_files` (lectura) |
 | Textos de la interfaz | `Gui.update_ui_language` + `locales/es.json` (las claves son el texto inglés literal) |
 | Columnas de `PreviewTable` | índices fijos en Gui.py (0 checkbox, 1 play, 2 nombre, 3 sync, 4-7 iconos, 8 orden) y `PreviewTable.on_header_clicked` (B-22) |
@@ -131,7 +131,7 @@ así que cambiar opciones no regenera nada salvo con "Clear cache" o "Force re-g
 3. Estado global en módulo (`_ffmpeg_path`, `_output_dir`…) → impide dos conversiones en el mismo proceso.
 4. `subprocess.run` sin `check`, sin timeout y con la salida descartada → los fallos de ffmpeg/binkc solo se detectan
    después, por ausencia de archivo.
-5. No hay pruebas automatizadas (`tools/mass_test.py` es un script con rutas fijas).
+5. Pruebas automatizadas en `tests/test_conversion.py` (`python -m unittest discover -s tests -t .`).
 6. GUI y lógica mezcladas en `Gui.py` (1 650 líneas): validación, escaneo de disco, parseo de txt, reproducción, config.
 7. `.gitignore` muy agresivo (`*/`, `*.txt`, `*.json`, `*.spec`): `requirements.txt` y `.github/workflows/build.yml`
    **no están versionados**; en cambio sí lo están `tools/__pycache__/*.pyc`.

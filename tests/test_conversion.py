@@ -151,6 +151,32 @@ class SourcesTest(TempDirTest):
         self.assertEqual(video.name, 'clip.mp4')
         self.assertEqual(cover.name, 'cover.jpg')
 
+    def test_usdb_syncer_folder(self):
+        # the layout usdb_syncer writes: everything named "Artist - Title", cover [CO] and background [BG]
+        d = self.tmp / 'Alan Walker & Ava Max - Alone, Pt. II'
+        base = d.name
+        txt = write(d / f'{base}.txt', f'#TITLE:Alone, Pt. II\n#ARTIST:Alan Walker & Ava Max\n#MP3:{base}.m4a\n'
+                                       f'#COVER:{base} [CO].jpg\n#BACKGROUND:{base} [BG].jpg\n#VIDEO:{base}.mp4\n'
+                                       '#BPM:352\n#GAP:25520\n: 0 4 60 Hi\nE\n')
+        for name in (f'{base}.m4a', f'{base}.mp4', f'{base} [CO].jpg', f'{base} [BG].jpg', 'xrWogBfImUs.usdb'):
+            write(d / name, 'x')
+        self.assertEqual(ConvertFiles.choose_txt_file(list(d.iterdir())), txt)
+        name_id = naming.construct_name_id_from_directory_name(d.name)
+        audio, video, cover = ConvertFiles.resolve_song_sources(d, UltrastarToSingit.parse_file(txt), [name_id])
+        self.assertEqual((audio.name, video.name, cover.name), (f'{base}.m4a', f'{base}.mp4', f'{base} [CO].jpg'))
+
+    def test_renamed_folder_keeps_its_converted_video(self):
+        # usdb_syncer renamed the folder: the .bk2 under the old ID is reused, never encoded again
+        d = self.tmp / 'New Artist - Song'
+        write(d / 'OAsong.bk2', 'video')
+        ConvertFiles.adopt_legacy_cache(d, 'NAsong', [])
+        self.assertEqual((d / 'NAsong.bk2').read_text(), 'video')
+        self.assertTrue((d / 'OAsong.bk2').exists())
+        write(d / 'Xsong.bk2', 'other')  # two candidates: nothing is guessed
+        (d / 'NAsong.bk2').unlink()
+        ConvertFiles.adopt_legacy_cache(d, 'NAsong', [])
+        self.assertFalse((d / 'NAsong.bk2').exists())
+
     def test_choose_txt_prefers_single_player(self):
         d = self.tmp / 'A - B'
         write(d / 'A - B [MULTI].txt', '#TITLE:B\n#BPM:300\n')

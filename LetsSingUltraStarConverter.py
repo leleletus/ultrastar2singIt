@@ -2,7 +2,9 @@ import sys
 
 
 def main():
-    if "--cli" in sys.argv or "-c" in sys.argv:
+    if len(sys.argv) > 2 and sys.argv[1] == "--tool":
+        _run_tool(sys.argv[2], sys.argv[3:])
+    elif "--cli" in sys.argv or "-c" in sys.argv:
         _run_cli()
     else:
         _run_gui()
@@ -115,6 +117,19 @@ def _run_cli():
         config.conversion_tweaks.dlc_songs.songs_dlc_tsv_path = args.songs_tsv_path
 
     ConvertFiles.main(config)
+
+
+def _run_tool(name, args):
+    """Runs tools/<name>.py (the library tools of the advanced options, started by the GUI in a separate process)."""
+    import importlib
+    import runpy
+    import ToolsPanel
+    if name not in {t.key for t in ToolsPanel.TASKS}:
+        sys.exit(f"unknown tool: {name}")
+    for sibling in {'usdb_sources', 'fix_covers'} - {name}:  # the tools import each other by their bare name
+        sys.modules.setdefault(sibling, importlib.import_module(f'tools.{sibling}'))
+    sys.argv = [name, *args]
+    runpy.run_module(f'tools.{name}', run_name='__main__')
 
 
 def _run_gui():

@@ -17,7 +17,7 @@ el código y qué arreglo ya la cubre; la columna "Verificar" es lo que hay que 
 | One Kiss | letra "dual", rápida y pegada | reconstruida desde DLC (posible dueto en el vxla oficial) + espacios no detectados (B-34) | `27f8a17`; duetos: el parser toma solo P1 (`cd87f8d`) | estructura de su vxla oficial (¿dos capas de notas?) |
 | Symphony | letra rápida y casi no se ve | reconstruida: las sílabas no se encontraban por tiempo exacto → quedaban como `~` y se ocultaban (B-34) | `27f8a17` (comparación con tolerancia) | volver a extraer y comparar |
 | Portadas repetidas | la misma portada en varias canciones | archivo temporal compartido entre hilos (B-02) | `30669e3` | **las portadas ya cacheadas siguen mal**: borrar solo los `.png` de esas canciones (Clear cache conserva los `.bk2`) |
-| Nombres/artistas inventados | datos de canción incorrectos | `experimental_tools/fix_dlc_artists_metadata.py` toma el **primer** resultado de iTunes a partir del ID en CamelCase | pendiente | contrastar con la letra (Genius) antes de corregir; ver plan abajo |
+| Nombres/artistas inventados | datos de canción incorrectos | el script viejo `fix_dlc_artists_metadata.py` (quitado) tomaba el **primer** resultado de iTunes a partir del ID en CamelCase | corregido con `rename_songs.py` y los `fix_*` | contrastar con la letra (Genius) antes de corregir; ver plan abajo |
 | Francés / apóstrofes "todo mal" | letras con caracteres perdidos | B-46 (letras borradas) + B-40 (tildes quitadas) | `cd87f8d` | si algún `.txt` ya fue reescrito sin acentos por un script anterior, hay que recuperar el original |
 
 ## Pasos con el disco conectado

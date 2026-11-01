@@ -59,3 +59,29 @@ My Songs/
  If the tags are missing, the chorus data will be scraped from genius.com, and failing this, a manual chorus lookup method will be used.
  The medley tags offer the simplest way of finding the chorus sections, but they are sometimes incorrect. Check this box if you want to use the other methods instead.</li>
 </ul>
+### Advanced options: library tools
+Section 5 of the left panel runs long maintenance tasks in the background, one at a time (no conversion while one runs).
+Pick a task, read its description and estimated time, then press <i>Run</i>; <i>Show progress</i> opens its live output.
+Tools that change your song folders only list what they would do until <i>Apply the changes</i> is checked (a .bak of
+every txt is kept). Converted .bk2 videos are never touched. Stopping a task loses nothing: running it again continues.
+<ul>
+<li><i>Check the patch</i> - checks every song of the converted patch before you copy it (seconds).</li>
+<li><i>Update the patch on the Switch</i> - copies only the changed files over MTP (Linux with KDE, DBI's MTP responder open).
+ Files replaced on the Switch are backed up first; the song list is copied last, so a disconnection never leaves a broken patch.</li>
+<li><i>Check the timing of every song against the voice</i> - separates the voice (Demucs) and compares it with the lyrics;
+ fills the Sync column and writes informe_sincronia.csv. Hours the first time (3-4 min per song), minutes afterwards.
+ Needs a lot of memory: on Linux it runs with a 6 GB limit so the rest of the PC keeps working.</li>
+<li><i>List USDB songs whose audio comes from another video</i>, <i>Fix covers</i>, <i>Fix years</i>, <i>Add genres</i>,
+ <i>Find singers' gender</i> - metadata fixes from the extracted games, USDB, MusicBrainz and the iTunes store (internet).</li>
+</ul>
+
+### Songs downloaded with usdb_syncer
+Point usdb_syncer's song folder and this program's input folder to the same folder. Downloaded songs are recognized as they are
+("Artist - Title" folders with their .txt, audio, video, [CO] cover and .usdb file). Downloading a song again in usdb_syncer
+rewrites its txt (fixes made here or in the Sync Editor are lost for that song) and may rename its folder; the converted .bk2 is
+reused after such a rename.
+
+### A song shows its cover instead of its video
+If a song was converted before its video was added, its .bk2 is the still cover and is never re-encoded on its own (the log warns about it).
+Right click the song > <i>Encode the video again from its source</i>: the current .bk2 is moved (not deleted) to _replaced_videos next to the
+songs folder and only that song is converted again.

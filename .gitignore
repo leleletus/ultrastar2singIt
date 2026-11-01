@@ -17,8 +17,6 @@ config.yml
 
 !locales/
 !locales/**
-!experimental_tools/
-!experimental_tools/**
 !docs/
 !docs/**
 

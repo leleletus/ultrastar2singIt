@@ -142,6 +142,11 @@ def main():
     todo = reference + todo
     print(f"{len(todo)} UltraStar songs to check ({len(dirs) - len(todo)} use the official vxla and are skipped)",
           flush=True)
+    # rows of an earlier (or stopped) scan are kept until their song is checked again
+    previous = {}
+    if os.path.exists(args.report):
+        with open(args.report, newline='', encoding='utf-8-sig') as f:
+            previous = {r['song']: r for r in csv.DictReader(f, delimiter=';') if r.get('song')}
     rows = []
     started = time.time()
     done = 0
@@ -167,12 +172,15 @@ def main():
             left = (time.time() - started) / done * (len(todo) - done)
             print(f"[{done}/{len(todo)}] {result['verdict']:12} {'(oficial) ' if kind == 'oficial' else ''}{d.name}  "
                   f"{result.get('detail', '')}  ({took:.0f} s, faltan ~{left / 60:.0f} min)", flush=True)
-            with open(args.report, 'w', newline='', encoding='utf-8-sig') as f:  # rewritten after every song
+            previous.pop(d.name, None)
+            tmp = args.report + '.tmp'
+            with open(tmp, 'w', newline='', encoding='utf-8-sig') as f:  # rewritten after every song
                 writer = csv.DictWriter(f, fieldnames=['song', 'kind', 'verdict', 'detail', 'match', 'lines_out'],
                                         delimiter=';', extrasaction='ignore')
                 writer.writeheader()
-                writer.writerows(sorted(rows, key=lambda r: (r['kind'] == 'oficial', order.get(r['verdict'], 9),
-                                                             r['song'])))
+                writer.writerows(sorted(rows + list(previous.values()),
+                                        key=lambda r: (r['kind'] == 'oficial', order.get(r['verdict'], 9), r['song'])))
+            os.replace(tmp, args.report)
     counts = {}
     for r in rows:
         counts[r['verdict']] = counts.get(r['verdict'], 0) + 1

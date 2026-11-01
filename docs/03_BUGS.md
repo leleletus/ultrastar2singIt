@@ -400,3 +400,43 @@ Estado al commit `4e1cb35`. "Evidencia" = verificado con prueba, con `error.log`
   (±5 s, ±0,1 s, líneas, primera letra, velocidad, volumen, línea de tiempo con clic), modo cantar con micrófono
   (YIN, cualquier octava cuenta como el juego), copia `.bak` al guardar y, en las canciones con vxla oficial, sus
   notas reales en modo solo lectura (el #GAP del txt no se usa ahí). Pruebas: `SyncEditorTest`.
+
+### B-63 · ALTO · usdb_syncer apuntaba al disco dañado
+- **Dónde**: configuración de usdb_syncer (`~/.config/bohning/usdb_syncer.conf`, `song_dir`), no el conversor.
+- **Causa**: tras rescatar la biblioteca a `~/LetsSing/songs` (2026-10-24) usdb_syncer seguía con
+  `/run/media/djvemo/EADE-F56A/songs_custom`: no veía las canciones y descargaría a una ruta que ya no existe.
+- **Arreglo**: `song_dir=/home/djvemo/LetsSing/songs` (copia `usdb_syncer.conf.antes_LetsSing_20261101`). usdb_syncer
+  encuentra cada canción por su `.usdb` (recorre toda la carpeta), así que reconoce las 271 sin importar el nombre de
+  la carpeta. Comprobado: el escáner del programa reconoce las 660 carpetas (271 de USDB + 389 de DLC/juegos).
+- **A saber**: las 271 descargadas antes tienen sus medios con nombre genérico (`audio.ogg`, `video.mp4`,
+  `cover.png`, R-12), no los que guarda su `.usdb`; si se vuelve a descargar una en usdb_syncer, este baja de nuevo
+  audio/video, **reescribe el txt** (se pierden #GENRE/#YEAR/#COVER y los ajustes del Sync Editor de esa canción) y
+  renombra la carpeta a "Artista - Título". Las canciones nuevas se convierten sin nada especial
+  (`SourcesTest.test_usdb_syncer_folder`).
+
+### B-64 · MEDIO · Detener la revisión de sincronía dejaba el informe a medias
+- **Dónde**: `tools/sync_scan.py`.
+- **Causa**: el informe se reescribía después de cada canción solo con las revisadas en esa pasada: al detenerla
+  (o con `--song`) se perdían las filas de las demás.
+- **Arreglo**: las filas anteriores se conservan hasta que su canción se revisa otra vez y el archivo se escribe
+  completo en un `.tmp` y se reemplaza de una vez. Comprobado deteniéndola a los 3 segundos: informe idéntico.
+
+### B-65 · MEDIO · Un .bk2 se volvería a codificar si usdb_syncer renombra la carpeta
+- **Dónde**: `ConvertFiles.adopt_legacy_cache`.
+- **Causa**: el `.bk2` de la caché se llama con el ID de la carpeta; usdb_syncer renombra la carpeta a su plantilla al
+  volver a descargar una canción (p. ej. una corregida con `rename_songs.py`) y el `.bk2` con el ID viejo no se usaba.
+- **Arreglo**: si falta `<id>.bk2` y en la carpeta hay **un solo** `.bk2`, se reutiliza (enlace duro o copia; el
+  original se queda). Con dos o más no se adivina. Prueba: `test_renamed_folder_keeps_its_converted_video`.
+
+### B-66 · ALTO · 28 canciones con la portada fija como video aunque tienen su videoclip
+- **Dónde**: biblioteca (anterior al 2026-10-21) + regla de no rehacer nunca un `.bk2`.
+- **Causa**: esas canciones se convirtieron cuando aún no tenían video (USDB no lo tenía: `skipped_unavailable`) y su
+  `.bk2` se hizo con la portada (~3 KB/s; un clip real ronda 200 KB/s). Después se añadió a mano el videoclip
+  recortado a la duración del audio (`video.mp4`), pero el conversor nunca vuelve a codificar un `.bk2` existente.
+  Ejemplos: La isla bonita (https://www.youtube.com/watch?v=zpzdgmqIHOQ), Mamma Mia, Bohemian Rhapsody, Alejandro.
+  Todas las copias (carpeta, `respaldo_bk2_2026-10-25`, `parche_anterior_2026-10`) tienen el mismo `.bk2` fijo: no se
+  borró ni reemplazó nada.
+- **Arreglo**: el conversor avisa en el registro cuando el `.bk2` pesa menos de 20 KB/s y hay un video real de más de
+  5 MB; clic derecho en la canción → "Volver a codificar el video desde su fuente…": el `.bk2` actual se **mueve** (no
+  se borra) a `_replaced_videos/<carpeta>/` junto a la carpeta de canciones y se convierte solo esa canción.
+  Pendiente: volver a codificar las 28 (lista en `~/.cache/letssing_converter/still_bk2_songs.txt`), con permiso.

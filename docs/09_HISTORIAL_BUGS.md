@@ -1,19 +1,20 @@
 # 09 — Historial de bugs
 
-Resumen al 2026-11-01: **62 bugs registrados, 61 cerrados, 1 pendientes**. El detalle de cada uno (causa, impacto, arreglo) está en [03_BUGS.md](03_BUGS.md); las regresiones del historial de git en [04_REGRESIONES.md](04_REGRESIONES.md) y el día a día en [05_BITACORA.md](05_BITACORA.md).
+Resumen al 2026-11-01: **66 bugs registrados, 64 cerrados, 2 pendientes**. El detalle de cada uno (causa, impacto, arreglo) está en [03_BUGS.md](03_BUGS.md); las regresiones del historial de git en [04_REGRESIONES.md](04_REGRESIONES.md) y el día a día en [05_BITACORA.md](05_BITACORA.md).
 
 ## Pendientes
 
 | ID | Severidad | Área | Problema | Estado |
 |---|---|---|---|---|
 | B-61 | ALTO | GUI | La ventana se congeló una vez (hilo principal bloqueado, con el video de BBHMM abierto) | ABIERTO (vigilante hang_trace.log en 6e74b01) |
+| B-66 | ALTO | Video | 28 canciones con la portada fija como `.bk2` aunque tienen su videoclip (`video.mp4` añadido después) | Aviso + acción "Volver a codificar el video" hechos; falta codificar las 28 (con permiso) |
 
 ## Mejoras pendientes (no son bugs)
 
 | Qué | Estado |
 |---|---|
 | Mod para Let's Sing 2026: saltar el intro (3 s antes de la letra) y terminar al acabar la letra | En investigación: volcado IL2CPP hecho; el juego ya tiene `Lyrics.firstNoteStartTime`, `TryGetLastNote`, `Seek` |
-| Revisión de sincronía de las 274 canciones UltraStar contra la voz (`tools/sync_scan.py`) | En marcha en segundo plano; informe en `~/LetsSing/informe_sincronia.csv` |
+| Revisión de sincronía de las 274 canciones UltraStar contra la voz (`tools/sync_scan.py`) | Hecha (278 ok, 11 parcial, 1 desfase, 3 dudosa); desde la app: 5. Opciones avanzadas |
 | Bitch Better Have My Money: audio de otra versión | Sincronizada a mano por partes; lo ideal es bajar el audio de https://youtu.be/B3eAMGXFw1o |
 | Varios idiomas por canción (el juego guarda una lista, p. ej. "Korean, English") | Por probar en la consola |
 | Tema real por canción (Love/Deep/Party) | Todas siguen con los tres (no hay datos oficiales de 2026 para calcularlo sin equivocarse); dificultad y voz ya se calculan (603b4cd) |
@@ -84,3 +85,6 @@ Resumen al 2026-11-01: **62 bugs registrados, 61 cerrados, 1 pendientes**. El de
 | B-59 | BAJO | Biblioteca | Swish Swish duplicada (normal y Album Version) | (movida a archivo/duplicados_quitados) |
 | B-60 | BAJO | Herramientas | Los registros de los servicios no se vaciaban al relanzar (systemd "file:") | (usar "truncate:") |
 | B-62 | MEDIO | Switch | DBI no sobrescribe archivos por MTP ("Access denied") | (e4aeb93: borrar ya respaldado y copiar) |
+| B-63 | ALTO | usdb_syncer | Su carpeta de canciones seguía en el disco dañado | (configuración corregida) |
+| B-64 | MEDIO | Herramientas | Detener sync_scan dejaba el informe solo con lo revisado en esa pasada | (este commit) |
+| B-65 | MEDIO | Caché | Un `.bk2` se volvería a codificar si usdb_syncer renombra la carpeta | (este commit) |

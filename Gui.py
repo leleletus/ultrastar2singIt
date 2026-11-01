@@ -3,6 +3,7 @@ import logging
 import json
 import os
 import re
+import shutil
 import sys
 import threading
 import time
@@ -24,6 +25,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QApplication, QCheckBox, QComb
 
 import GuiElement
 import SupportedFormats
+import ToolsPanel
 import data.repository.DlcRepository as repository
 import i18n
 import naming
@@ -897,6 +899,8 @@ class MainWindow(QMainWindow):
         self.tweaks_group.setChecked(False)
         self.t(self.tweaks_group.setToolTip, "Unchecked: the default settings are used.")
         left_layout.addWidget(self.tweaks_group)
+        self.tools_panel = ToolsPanel.ToolsPanel(self)
+        left_layout.addWidget(self.tools_panel)
         left_layout.addStretch()
 
         help_layout = QHBoxLayout()
@@ -1386,11 +1390,13 @@ class MainWindow(QMainWindow):
             (Icon.SYNC, "Fix sync...", lambda: self.open_sync_editor(row.path)),
             (Icon.FOLDER, "Open folder", lambda: open_in_file_manager(row.path)),
             (Icon.CONVERT_SELECTED, "Convert only this song", lambda: self.start_conversion(only=[row.directory])),
+            (Icon.REFRESH, "Encode the video again from its source...", lambda: self.reencode_video(row)),
         ]
+        busy = self.conversion_running or self.tools_panel.running()
         for icon, text, slot in actions:
             action = QAction(icon.get_icon(), tr(text), menu)
             action.triggered.connect(slot)
-            action.setEnabled(not self.conversion_running or text in ("Play / pause", "Open folder"))
+            action.setEnabled(not busy or text in ("Play / pause", "Open folder"))
             menu.addAction(action)
         if row.detail:
             menu.addSeparator()
@@ -1398,6 +1404,42 @@ class MainWindow(QMainWindow):
             info.setEnabled(False)
             menu.addAction(info)
         menu.exec(self.song_view.viewport().mapToGlobal(pos))
+
+    def reencode_video(self, row) -> None:
+        """For a song converted before its real video was added (its .bk2 is the still cover): the current .bk2 is
+        moved to _replaced_videos next to the songs folder (never deleted) and the song is converted again."""
+        import ConvertFiles
+        song_dir = Path(row.path)
+        txt = ConvertFiles.choose_txt_file([p for p in song_dir.iterdir() if p.suffix.lower() == '.txt'])
+        source = None
+        if txt is not None:
+            import UltrastarToSingit
+            source = ConvertFiles.resolve_song_sources(song_dir, UltrastarToSingit.parse_file(txt), row.name_ids)[1]
+        bk2 = song_dir / (row.name_id + naming.VIDEO_BK2_SUFFIX)
+        title = tr("Encode the video again from its source...").rstrip('.')
+        if source is None or source.suffix.lower() == naming.VIDEO_BK2_SUFFIX:
+            QMessageBox.information(self, title, tr("This song has no video file to encode (only a .bk2 or none)."))
+            return
+        if not bk2.exists():
+            self.start_conversion(only=[row.directory])
+            return
+        keep_dir = song_dir.parent.parent / '_replaced_videos' / song_dir.name
+        answer = QMessageBox.question(
+            self, title,
+            tr("The converted video ({size:.1f} MB) is moved, not deleted, to:\n{folder}\n\nand {source} "
+               "({source_size:.0f} MB) is encoded again. This can take a long time. Continue?").format(
+                size=bk2.stat().st_size / 2 ** 20, folder=keep_dir, source=source.name,
+                source_size=source.stat().st_size / 2 ** 20),
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if answer != QMessageBox.Yes:
+            return
+        keep_dir.mkdir(parents=True, exist_ok=True)
+        stamp = time.strftime('%Y%m%d-%H%M%S')
+        for old in (bk2, song_dir / (row.name_id + naming.VIDEO_INTERMEDIATE_SUFFIX)):
+            if old.exists():
+                shutil.move(old, keep_dir / f"{old.stem}.{stamp}{old.suffix}")
+                self.log(tr("Moved {file} to {folder}").format(file=old.name, folder=keep_dir))
+        self.start_conversion(only=[row.directory])
 
     # ------------------------------------------------------------------ audio preview / sync editor
     def song_txt_file(self, directory_path: str):
@@ -1656,6 +1698,15 @@ class MainWindow(QMainWindow):
             self.include_dlc_checkbox_refresh()
             self.dlc_json_name_input_fv()
             self.update_clear_cache_enabled()
+        self.on_tool_state_changed()
+
+    def on_tool_state_changed(self) -> None:
+        """A library tool started or ended: no conversion while it runs (they share the song folders)."""
+        busy = self.tools_panel.running()
+        if not self.conversion_running:
+            for w in (self.start_button, self.convert_checked_button):
+                w.setEnabled(not busy)
+        self.tools_panel.update_buttons()
 
     def start_checked_conversion(self):
         rows = self.song_model.checked_rows()
@@ -1663,7 +1714,7 @@ class MainWindow(QMainWindow):
             self.start_conversion(only=[r.directory for r in rows])
 
     def start_conversion(self, only=None) -> None:
-        if self.conversion_running:
+        if self.conversion_running or self.tools_panel.running():
             return
         if only is not None and not isinstance(only, list):
             only = None  # called from a signal with a 'checked' argument
@@ -1821,6 +1872,16 @@ class MainWindow(QMainWindow):
                 return
             self.stop_conversion()
             self._worker.wait(15000)
+        if self.tools_panel.running():
+            answer = QMessageBox.question(
+                self, tr("Tool running"),
+                tr("A library tool is running. Stop it and close the program?\n\n"
+                   "Running it again later continues where it stopped."),
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+            if answer != QMessageBox.Yes:
+                event.ignore()
+                return
+            self.tools_panel.stop()
         self.media_player.stop()
         self.save_window_state()
         event.accept()

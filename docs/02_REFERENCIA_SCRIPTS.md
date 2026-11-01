@@ -177,17 +177,9 @@ Formato: `línea` · función · qué hace · notas (bugs relacionados entre cor
 | `unpacker.py` | menú Tools → vxla → txt | **roto**: `NameError safe_artist` (l.102); BPM inconsistente; formato de notas no coincide [B-32] |
 | `reverse_vxla.py` | script, rutas fijas | `NameError name_id` (l.154) si hay video [B-33] |
 | `LetSing_ExtractorPro.py` | CLI `--megapack --output` | solo capa `notes`; detección de espacios casi nula [B-34] |
-| `desync_detector.py` | script (Demucs + CREPE) | se ejecuta al importar; lee `config.yml` del CWD; escribe `reporte_desync.md` |
-| `merge_dlc_json.py` | script, rutas fijas | fusiona megapack en `songs_int_combined.json` |
-| `mass_test.py` | script, rutas fijas | no es una prueba real; compara nº de notas |
+| `validate_patch.py`, `switch_update.py`, `sync_scan.py`, `usdb_sources.py`, `fix_covers.py`, `fix_years.py`, `fix_genres.py`, `artist_genders.py` | CLI y apartado 5 de la GUI (`ToolsPanel.py`) | ver `docs/11_GUIA_DE_PRUEBAS.md` |
 
-## experimental_tools/ y scripts sueltos de la raíz
+Quitados el 2026-11-01 (siguen en el historial de git, `git show fb416d5:<ruta>`): `desync_detector.py` (sustituido
+por `sync_scan.py`), `mass_test.py` (sustituido por `tests/`), `merge_dlc_json.py` (lo hace el conversor con
+"Copiar DLC"), `experimental_tools/` entero y `README_PULL_REQUEST.md`.
 
-| Script | Notas |
-|---|---|
-| `clean_audio_cache.py` | borra **todos** los `.ogg` que no sean el `#MP3` — riesgo de borrar originales con `#AUDIO` (formato 1.1) |
-| `compare_durations.py` | m4a vs ogg (detectar desfase introducido por la conversión) |
-| `fix_dlc_artists_metadata.py` | repara "Unknown Artist" con tabla fija + iTunes |
-| `rebuild_audio.py` | lanza `ConvertFiles.main` con la config |
-| `fix_songs.py`, `clean_output_files.py`, `clean_output_json.py` (raíz, sin versionar) | limpiezas puntuales con IDs y rutas fijas; candidatos a borrar o mover a `experimental_tools/` |
-| `audios.txt` / `covers.txt` (raíz) | listados de IDs: audio con estilo DLC oficial (`24KMagic`) vs portadas con estilo de este conversor (`BM24kmagic`) — evidencia de la discrepancia de IDs al mezclar con el megapack |
