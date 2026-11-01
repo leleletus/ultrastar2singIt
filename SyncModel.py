@@ -300,7 +300,8 @@ def song_verdict(report, line_times, audio_end, lyrics_end):
     if runs:
         parts = ', '.join(f"{int(t // 60)}:{t % 60:04.1f} ({e * 1000:+.0f} ms, {n} líneas)" for t, e, n in runs[:4])
         return 'parcial', f"{moved} de {len(rows)} líneas fuera de tiempo: {parts}"
-    return ('ok' if mean_now >= 0.45 else 'dudosa'), f"coincidencia {mean_now:.0%}"
+    # official songs (game timing) match 38-77 %: only far below that is the voice really missing
+    return ('ok' if mean_now >= 0.30 else 'dudosa'), f"coincidencia {mean_now:.0%}"
 
 
 # ---------------------------------------------------------------------------------------------- saving
