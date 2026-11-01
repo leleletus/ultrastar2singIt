@@ -436,7 +436,11 @@ Estado al commit `4e1cb35`. "Evidencia" = verificado con prueba, con `error.log`
   Ejemplos: La isla bonita (https://www.youtube.com/watch?v=zpzdgmqIHOQ), Mamma Mia, Bohemian Rhapsody, Alejandro.
   Todas las copias (carpeta, `respaldo_bk2_2026-10-25`, `parche_anterior_2026-10`) tienen el mismo `.bk2` fijo: no se
   borró ni reemplazó nada.
-- **Arreglo**: el conversor avisa en el registro cuando el `.bk2` pesa menos de 20 KB/s y hay un video real de más de
-  5 MB; clic derecho en la canción → "Volver a codificar el video desde su fuente…": el `.bk2` actual se **mueve** (no
-  se borra) a `_replaced_videos/<carpeta>/` junto a la carpeta de canciones y se convierte solo esa canción.
-  Pendiente: volver a codificar las 28 (lista en `~/.cache/letssing_converter/still_bk2_songs.txt`), con permiso.
+- **Arreglo** (autorizado por el usuario como única excepción a "nunca rehacer un .bk2"): si el `.bk2` convertido pesa
+  menos de 20 KB/s (`is_still_bk2`) y la carpeta tiene un video con movimiento (`has_motion`: ffmpeg freezedetect, o el
+  tamaño si es un `.bk2` oficial), el `.bk2` y su `.avi` intermedio se **mueven** a `_replaced_videos/<carpeta>/` junto
+  a la carpeta de canciones y se codifica el video. La tabla marca esas canciones (triángulo en Video, "Solo
+  problemas"). Clic derecho → "Volver a codificar el video desde su fuente…" lo fuerza. Recodificadas las 27 con video
+  propio (`video.mp4` recortado a mano, intacto); Merry Christmas toma su `.bk2` oficial de Let's Sing 2024; Swish Swish
+  (Album Version) tiene como video una imagen. Las 16 que no tienen video: `~/LetsSing/VIDEOS_PENDIENTES.md`.
+  Pruebas: `test_still_bk2_is_moved_aside_never_deleted`.

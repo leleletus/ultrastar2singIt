@@ -1,4 +1,4 @@
-"""Gives back to songs downloaded with usdb_syncer the file names usdb_syncer uses, so it recognizes them again.
+"""Names the files of every song as usdb_syncer does ("Artist - Title.ext"), so usdb_syncer recognizes its songs.
 
 Usage:
     python tools/usdb_restore_names.py <songs folder>            # only lists
@@ -7,6 +7,7 @@ Usage:
 Older scripts renamed the media of every USDB song to generic names: the original audio became <id>.m4a, the txt
 pointed to audio.ogg (a copy of the converted audio), the video was video.mp4 and the cover cover.png. usdb_syncer then
 believes its files are missing and, if the song is downloaded again, writes its own video over a video cut by hand.
+Songs taken from the games (no .usdb): audio.ogg, video.mp4 and the cover get the same "Artist - Title" names.
 For every folder with a .usdb file:
   - audio: <id>.m4a (same length as the txt's audio) -> "<Artist - Title>.m4a"; #MP3 points to it; audio.ogg is
     deleted only when it is a byte-identical copy of the converted <id>.ogg;
@@ -63,11 +64,11 @@ def set_tag(lines, tag, value):
 def plan_song(d):
     """List of (kind, source Path, target Path) renames and extra deletions for one folder."""
     usdb_file = next(d.glob('*.usdb'), None)
-    if usdb_file is None:
-        return None
     txt = ConvertFiles.choose_txt_file([p for p in d.iterdir() if p.suffix.lower() == '.txt'])
+    if txt is None:
+        return None
     data = UltrastarToSingit.parse_file(txt)
-    usdb = json.loads(usdb_file.read_text(encoding='utf-8'))
+    usdb = json.loads(usdb_file.read_text(encoding='utf-8')) if usdb_file else {}
     ids = [naming.construct_name_id_from_directory_name(d.name)] + naming.legacy_name_ids(d.name)
     base = d.name
     renames, deletes, notes = [], [], []
@@ -78,7 +79,10 @@ def plan_song(d):
         return d / name
 
     mp3 = (data.get('MP3') or '').strip()
-    if mp3 == 'audio.ogg':
+    if mp3 == 'audio.ogg' and usdb_file is None:  # songs taken from the games: their audio is the official one
+        if (d / mp3).exists():
+            renames.append(('MP3', 'audio', d / mp3, d / (base + '.ogg')))
+    elif mp3 == 'audio.ogg':
         originals = list(d.glob('*.m4a'))  # the download, renamed to the converter's ID by an older script
         if len(originals) == 1:
             src = originals[0]
@@ -118,6 +122,8 @@ def apply_song(d, plan):
         size = src.stat().st_size
         os.rename(src, dst)
         assert dst.stat().st_size == size
+        if usdb_file is None:
+            continue
         entry = usdb.get(kind) or {}
         entry.update({'fname': dst.name, 'mtime': mtime_us(dst)})
         entry.setdefault('status', 'success')
@@ -127,6 +133,8 @@ def apply_song(d, plan):
     os.replace(tmp, txt)
     for p in deletes:
         p.unlink()
+    if usdb_file is None:
+        return
     tmp = usdb_file.with_name(usdb_file.name + '.tmp')
     tmp.write_text(json.dumps(usdb, ensure_ascii=False), encoding='utf-8')
     os.replace(tmp, usdb_file)
@@ -138,12 +146,13 @@ def main():
     parser.add_argument('--apply', action='store_true')
     parser.add_argument('--skip', action='append', default=[], help="folder to leave as it is (can be repeated)")
     args = parser.parse_args()
-    total = changed = 0
+    total = changed = usdb_songs = 0
     for d in sorted(p for p in Path(args.songs).iterdir() if p.is_dir() and p.name not in args.skip):
         plan = plan_song(d)
         if plan is None:
             continue
         total += 1
+        usdb_songs += plan[1] is not None
         _, _, _, renames, deletes, notes = plan
         for note in notes:
             print(f"   ! {d.name}: {note}")
@@ -154,7 +163,8 @@ def main():
               + (f"; deletes copy {', '.join(p.name for p in deletes)}" if deletes else ""), flush=True)
         if args.apply:
             apply_song(d, plan)
-    print(f"\n{changed} of {total} USDB songs {'renamed' if args.apply else 'to rename (run again with --apply)'}")
+    print(f"\n{changed} of {total} songs ({usdb_songs} from USDB) "
+          f"{'renamed' if args.apply else 'to rename (run again with --apply)'}")
 
 
 if __name__ == '__main__':

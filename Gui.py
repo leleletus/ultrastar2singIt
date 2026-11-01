@@ -118,6 +118,7 @@ class SongRow:
     doubtful_sync: bool = False
     sync_note: str = ''  # result of the voice check (tools/sync_scan.py), when the song was checked
     official_vxla: bool = False
+    still_video: bool = False  # the converted .bk2 is the still cover, not a video
     order: int = 0
     checked: bool = False
     state: str = ''  # '', running, ok, skipped, failed, stopped
@@ -194,6 +195,15 @@ def scan_song_folders(input_path: str, video_suffix: str, sync_cache: dict, only
         row.cached_image = (name_id + naming.COVER_SUFFIX) in all_files
         row.cached_txt = (name_id + naming.VXLA_SUFFIX) in all_files
         row.official_vxla = naming.OFFICIAL_VXLA_NAME in all_files
+        if row.cached_video and video_suffix == naming.VIDEO_BK2_SUFFIX:
+            try:
+                with open(os.path.join(directory_path, name_id + naming.VXLA_META_SUFFIX), encoding='utf-8') as f:
+                    duration = json.load(f).get('duration')
+                if duration:
+                    row.still_video = ConvertFiles.is_still_bk2(Path(directory_path) / (name_id + video_suffix),
+                                                                duration)
+            except (OSError, ValueError):
+                pass
 
         txt_files = [Path(directory_path) / x for x in source_files if x.lower().endswith('.txt')]
         txt_path = ConvertFiles.choose_txt_file(txt_files) if txt_files else None
@@ -361,6 +371,13 @@ class SongTableModel(QAbstractTableModel):
                 return r.detail or text
         icons = {COL_VIDEO: (r.has_video, r.cached_video), COL_AUDIO: (r.has_audio, r.cached_audio),
                  COL_IMAGE: (r.has_image, r.cached_image), COL_LYRICS: (r.has_txt, r.cached_txt)}
+        if col == COL_VIDEO and r.still_video:
+            if role == Qt.DecorationRole:
+                return GuiElement.combine_icons(Icon.ALERT_TRIANGLE.get_icon(), Icon.FILE_CHECK.get_icon())
+            if role == Qt.ToolTipRole:
+                return tr("The converted video is the still cover. Put the song's video in its folder (named like "
+                          "the folder, e.g. \"{name}.mp4\") and convert it: the still .bk2 is replaced (the old one "
+                          "is kept in _replaced_videos).").format(name=r.directory)
         if col in icons and role == Qt.DecorationRole:
             return self._file_icon(*icons[col])
         if col == COL_LYRICS and role == Qt.ToolTipRole and r.official_vxla:
@@ -384,7 +401,7 @@ class SongTableModel(QAbstractTableModel):
             if col == COL_STATUS:
                 return self._status(r)[0]
             if col in icons:
-                return int(icons[col][0]) + 2 * int(icons[col][1])
+                return int(icons[col][0]) + 2 * int(icons[col][1]) - (3 if col == COL_VIDEO and r.still_video else 0)
             if col == COL_SYNC:
                 return int(r.doubtful_sync)
             return r.order
@@ -412,7 +429,7 @@ class SongFilterModel(QSortFilterProxyModel):
     def filterAcceptsRow(self, source_row, source_parent):
         if self.only_problems:
             r = self.sourceModel().rows[source_row]
-            if r.state not in ('skipped', 'failed') and not r.doubtful_sync:
+            if r.state not in ('skipped', 'failed') and not r.doubtful_sync and not r.still_video:
                 return False
         return super().filterAcceptsRow(source_row, source_parent)
 
@@ -926,7 +943,7 @@ class MainWindow(QMainWindow):
         top.addWidget(self.search_input, stretch=1)
         self.only_problems_checkbox = QCheckBox()
         self.t(self.only_problems_checkbox.setText, "Only problems")
-        self.t(self.only_problems_checkbox.setToolTip, "Show only songs with errors, skipped songs or possible desync.")
+        self.t(self.only_problems_checkbox.setToolTip, "Show only songs with errors, skipped songs, possible desync or a still image as video.")
         self.only_problems_checkbox.toggled.connect(self.on_only_problems)
         top.addWidget(self.only_problems_checkbox)
         self.check_all_checkbox = QCheckBox()

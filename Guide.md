@@ -82,6 +82,8 @@ rewrites its txt (fixes made here or in the Sync Editor are lost for that song) 
 reused after such a rename.
 
 ### A song shows its cover instead of its video
-If a song was converted before its video was added, its .bk2 is the still cover and is never re-encoded on its own (the log warns about it).
-Right click the song > <i>Encode the video again from its source</i>: the current .bk2 is moved (not deleted) to _replaced_videos next to the
-songs folder and only that song is converted again.
+Songs converted before they had a video got the still cover as their .bk2 (an orange triangle in the Video column; they are
+listed with <i>Only problems</i>). Put the song's video in its folder, named like the folder (e.g. "Artist - Title.mp4"), and
+convert the song: when the converted .bk2 is the still cover and the folder has a real video, the old .bk2 is moved (never
+deleted) to _replaced_videos next to the songs folder and the video is encoded. Any other converted .bk2 is never encoded again.
+Right click > <i>Encode the video again from its source</i> forces it for one song.

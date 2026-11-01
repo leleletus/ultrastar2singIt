@@ -177,6 +177,28 @@ class SourcesTest(TempDirTest):
         ConvertFiles.adopt_legacy_cache(d, 'NAsong', [])
         self.assertFalse((d / 'NAsong.bk2').exists())
 
+    def test_still_bk2_is_moved_aside_never_deleted(self):
+        songs = self.tmp / 'songs'
+        d = songs / 'A - Song'
+        write(d / 'Asong.bk2', 'x' * 1000)       # ~5 bytes per second: the still cover
+        write(d / 'Asong.avi', 'cover frames')   # its intermediate, made from the cover too
+        self.assertTrue(ConvertFiles.is_still_bk2(d / 'Asong.bk2', 200))
+        write(d / 'clip.bk2', 'x' * (1024 * 1024))  # 100 KB per second over 10 s: a real clip
+        self.assertFalse(ConvertFiles.is_still_bk2(d / 'clip.bk2', 10))
+        write(d / 'official.bk2', 'x' * (100 * 1024 * 200))
+        self.assertTrue(ConvertFiles.has_motion(d / 'official.bk2', 200))  # a .bk2 source is judged by its size
+        old_input = ConvertFiles._input_dir
+        ConvertFiles._input_dir = str(songs)
+        try:
+            kept = ConvertFiles.keep_replaced_video(d / 'Asong.bk2', d.name)
+        finally:
+            ConvertFiles._input_dir = old_input
+        self.assertFalse((d / 'Asong.bk2').exists())
+        self.assertFalse((d / 'Asong.avi').exists())
+        self.assertEqual(kept.parent, self.tmp / '_replaced_videos' / 'A - Song')
+        self.assertEqual(kept.read_text(), 'x' * 1000)
+        self.assertEqual(len(list(kept.parent.iterdir())), 2)
+
     def test_choose_txt_prefers_single_player(self):
         d = self.tmp / 'A - B'
         write(d / 'A - B [MULTI].txt', '#TITLE:B\n#BPM:300\n')

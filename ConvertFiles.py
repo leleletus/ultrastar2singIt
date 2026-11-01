@@ -566,6 +566,32 @@ def create_video(file, list_in_dir, output_video_file_name, target_bitrate_kbps,
     return created
 
 
+def is_still_bk2(path, duration):
+    """A .bk2 made from the still cover: a real clip takes 100+ KB per second, a still image ~3."""
+    return path.stat().st_size < STILL_BK2_BYTES_PER_S * max(duration or 0, 1)
+
+
+def has_motion(video, duration):
+    """The source video moves (not a still image or a cover with sound). A .bk2 source is judged by its size,
+    ffmpeg can't decode Bink 2."""
+    if video.suffix.lower() == naming.VIDEO_BK2_SUFFIX:
+        return not is_still_bk2(video, duration)
+    return video.stat().st_size > 5 * 2 ** 20 and not is_video_still_image(video)
+
+
+def keep_replaced_video(bk2, dir_long_name):
+    """Moves a .bk2 that is about to be encoded again to <songs>/../_replaced_videos/<song>/ (never deletes it)."""
+    import time
+    keep_dir = Path(_input_dir).parent / '_replaced_videos' / dir_long_name
+    keep_dir.mkdir(parents=True, exist_ok=True)
+    target = keep_dir / f"{bk2.stem}.{time.strftime('%Y%m%d-%H%M%S')}{bk2.suffix}"
+    shutil.move(bk2, target)
+    intermediate = bk2.with_suffix(naming.VIDEO_INTERMEDIATE_SUFFIX)
+    if intermediate.exists():  # made from the still cover too
+        shutil.move(intermediate, keep_dir / f"{intermediate.stem}.{time.strftime('%Y%m%d-%H%M%S')}{intermediate.suffix}")
+    return target
+
+
 def _big_temp_dir():
     """Folder for the temporary copies of whole videos: on disk, not /tmp, which is often in RAM on Linux."""
     if sys.platform == 'win32':
@@ -1525,13 +1551,14 @@ def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None,
         if real_video is not None and output_format == XML_FORMAT and real_video.suffix.lower() == '.bk2':
             real_video = None  # ffmpeg can't decode Bink 2: XML games get the static video
 
-        if real_video is not None and not ignore_video and output_video_path.exists() \
-                and real_video.suffix.lower() != '.bk2' and real_video.stat().st_size > 5 * 2 ** 20 \
-                and output_video_path.stat().st_size < STILL_BK2_BYTES_PER_S * max(song_duration, 1):
-            # converted while the song had no video (the still cover), the real video was added afterwards
-            logger.warning(f"{output_video_file_name} looks like the still cover but {real_video.name} is a real "
-                           f"video: right click the song > 'Encode the video again from its source' (the current "
-                           f".bk2 is kept in _replaced_videos)")
+        if real_video is not None and not ignore_video and output_video_path.suffix == naming.VIDEO_BK2_SUFFIX \
+                and output_video_path.exists() and is_still_bk2(output_video_path, song_duration) \
+                and has_motion(real_video, song_duration):
+            # converted while the song had no video (the still cover) and a real video was added afterwards: the
+            # only case where a converted .bk2 is replaced. It is moved aside, never deleted.
+            kept = keep_replaced_video(output_video_path, dir_long_name)
+            logger.warning(f"{output_video_file_name} was the still cover and {real_video.name} is a real video: "
+                           f"encoding it again (the old .bk2 is kept in {kept.parent})")
         if real_video is not None and not ignore_video and not output_video_path.exists():
             _check_stop()
             duration = get_duration(real_video)
