@@ -8,7 +8,7 @@ suposiciones; las direcciones valen **solo** para la versión analizada.
 | Juego | Let's Sing 2026, base `0100EE4020D18000` + actualización v131072 |
 | Build ID del ejecutable (`main`) | `1C344DD17322D4FA3E8F50063340C7D0` |
 | Motor | Unity IL2CPP, metadata v31 |
-| Volcado | `~/LetsSing/juegos/Let's Sing 2026/extraido/il2cpp_dump/` (dump.cs, script.json, il2cpp.h) |
+| Volcado | `~/LetsSing/juegos/Let's Sing 2026/extraido/il2cpp_dump/` (dump.cs, script.json, il2cpp.h); scripts de análisis (desensamblar, buscar llamadas) y Il2CppDumper en `extraido/herramientas_analisis/` |
 
 Cómo se obtuvo: `global-metadata.dat` sacado en la consola con nxdumptool (RomFS con la actualización);
 `exefs/main` extraído del NSP de la actualización con hactool; Il2CppDumper v6.7.46 bajo Wine. Para desensamblar:

@@ -199,7 +199,10 @@ def voice_track(vocals_path):
 
 def analyze_voice(audio_path, cache_path):
     """Isolates the voice of audio_path and saves its loudness and pitch to cache_path."""
-    with tempfile.TemporaryDirectory() as tmp:
+    # on disk, not in /tmp: /tmp is often in RAM and the separated tracks of a song take hundreds of MB
+    work_root = os.path.join(os.path.expanduser('~'), '.cache', 'letssing_converter')
+    os.makedirs(work_root, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=work_root) as tmp:
         energy, pitch = voice_track(isolate_voice(audio_path, tmp))
     tmp_path = cache_path + '.tmp.npz'
     np.savez_compressed(tmp_path, energy=energy.astype(np.float16), pitch=pitch.astype(np.float16),
