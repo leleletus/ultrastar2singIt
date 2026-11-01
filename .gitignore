@@ -30,3 +30,4 @@ config.yml
 **/__pycache__/
 *.pyc
 hang_trace.log
+encode_stats.json
