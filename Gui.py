@@ -1408,6 +1408,7 @@ class MainWindow(QMainWindow):
             (Icon.FOLDER, "Open folder", lambda: open_in_file_manager(row.path)),
             (Icon.CONVERT_SELECTED, "Convert only this song", lambda: self.start_conversion(only=[row.directory])),
             (Icon.REFRESH, "Encode the video again from its source...", lambda: self.reencode_video(row)),
+            (Icon.FOLDER, "Add a video (file or link)...", lambda: self.add_video(row)),
         ]
         busy = self.conversion_running or self.tools_panel.running()
         for icon, text, slot in actions:
@@ -1421,6 +1422,25 @@ class MainWindow(QMainWindow):
             info.setEnabled(False)
             menu.addAction(info)
         menu.exec(self.song_view.viewport().mapToGlobal(pos))
+
+    def add_video(self, row) -> None:
+        """Cuts a music video (a file or a YouTube link) to the song's audio and saves it in the song folder."""
+        from PySide6.QtWidgets import QInputDialog
+        title = tr("Add a video (file or link)...").rstrip('.')
+        text, ok = QInputDialog.getText(
+            self, title, tr("YouTube link of the video, or leave it empty to choose a file.\n\nIts sound is compared "
+                            "with the song to cut it at the right second; if the video is another version of the song "
+                            "nothing is saved. The current video is kept in _replaced_videos."))
+        if not ok:
+            return
+        source = text.strip()
+        if not source:
+            source, _ = QFileDialog.getOpenFileName(self, title, row.path,
+                                                    "Video (*.mp4 *.mkv *.webm *.avi *.mov *.flv *.mpeg);;All Files (*)")
+            if not source:
+                return
+        # the tool saves nothing when the video does not follow the song or is a still image
+        self.tools_panel.run_tool('align_video', [row.path, source, '--apply'], title)
 
     def reencode_video(self, row) -> None:
         """For a song converted before its real video was added (its .bk2 is the still cover): the current .bk2 is

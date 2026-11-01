@@ -59,6 +59,9 @@ Abre el programa con el icono de KDE o con `~/ultrastar_official/start_linux.sh`
 - **Volver a codificar un video**: clic derecho en *Madonna - La isla bonita (Radio Edit)* → *Volver a codificar el
   video desde su fuente…*. Pide confirmación, mueve el `.bk2` actual a `~/LetsSing/_replaced_videos/` y convierte
   solo esa canción (unos minutos). Luego, apartado 5 → *Actualizar el parche en la Switch* con *Aplicar los cambios*.
+- **Añadir un video**: clic derecho en una canción de `~/LetsSing/VIDEOS_PENDIENTES.md` → *Añadir un video (archivo o
+  enlace)…* → pega el enlace; la ventana dice en qué segundo empieza la canción y si encaja; luego *Convertir solo esta
+  canción*.
 - **usdb_syncer**: ábrelo con `usdb_syncer`; en sus ajustes la carpeta de canciones debe ser
   `/home/djvemo/LetsSing/songs`. Descarga una canción nueva, pulsa *Actualizar* en el programa: debe aparecer en la
   tabla y convertirse con *Convertir solo esta canción*.

@@ -362,6 +362,22 @@ class ToolsPanel(QGroupBox):
         self.next_step()
         self.main.on_tool_state_changed()
 
+    def run_tool(self, key, args, title, changes_songs=True):
+        """Runs one tool that is not in the list (e.g. align_video from the song table) with the same window."""
+        if self.running() or self.main.conversion_running:
+            return False
+        self.steps = [(key, list(args), False)]
+        self.current = Task(key, title, '', '', changes_songs=changes_songs)
+        self.stopped = False
+        self.window.text.clear()
+        self.window.setWindowTitle(tr(title))
+        self.started = time.monotonic()
+        self.timer.start()
+        self.show_window()
+        self.next_step()
+        self.main.on_tool_state_changed()
+        return True
+
     def next_step(self):
         key, args, heavy = self.steps.pop(0)
         program, arguments = tool_command(key, args)

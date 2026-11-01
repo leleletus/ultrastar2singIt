@@ -87,3 +87,5 @@ listed with <i>Only problems</i>). Put the song's video in its folder, named lik
 convert the song: when the converted .bk2 is the still cover and the folder has a real video, the old .bk2 is moved (never
 deleted) to _replaced_videos next to the songs folder and the video is encoded. Any other converted .bk2 is never encoded again.
 Right click > <i>Encode the video again from its source</i> forces it for one song.
+Right click > <i>Add a video (file or link)</i> takes a YouTube link or a video file, compares its sound with the song, cuts it at the
+right second and saves it as "Artist - Title.mp4" in the song folder (nothing is saved if it is another version of the song or a still image).

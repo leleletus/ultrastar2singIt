@@ -7,11 +7,11 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=[('config_default.yml', '.'), ('Guide.md', '.'), ('data/repository/data.db', 'data/repository'), ('assets', 'assets'), ('locales', 'locales')],
-    hiddenimports=['tools.validate_patch', 'tools.switch_update', 'tools.sync_scan', 'tools.usdb_sources', 'tools.fix_covers', 'tools.fix_years', 'tools.fix_genres', 'tools.artist_genders', 'tools.usdb_restore_names', 'tools.clean_song_folders'],
+    hiddenimports=['tools.validate_patch', 'tools.switch_update', 'tools.sync_scan', 'tools.usdb_sources', 'tools.fix_covers', 'tools.fix_years', 'tools.fix_genres', 'tools.artist_genders', 'tools.usdb_restore_names', 'tools.clean_song_folders', 'tools.align_video'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['tensorflow', 'crepe', 'librosa', 'soundfile', 'numpy', 'PySide6.QtWebEngineWidgets', 'PySide6.Qt3DCore', 'PySide6.QtQml', 'PySide6.QtQuick', 'PySide6.QtOpenGL', 'PySide6.QtBluetooth', 'PySide6.QtDesigner', 'PySide6.QtHelp', 'PySide6.QtSql', 'PySide6.QtTest', 'PySide6.QtXml'],
+    excludes=['tensorflow', 'crepe', 'librosa', 'soundfile', 'PySide6.QtWebEngineWidgets', 'PySide6.Qt3DCore', 'PySide6.QtQml', 'PySide6.QtQuick', 'PySide6.QtOpenGL', 'PySide6.QtBluetooth', 'PySide6.QtDesigner', 'PySide6.QtHelp', 'PySide6.QtSql', 'PySide6.QtTest', 'PySide6.QtXml'],
     noarchive=False,
     optimize=0,
 )
