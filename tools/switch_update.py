@@ -51,6 +51,16 @@ def kio(*args, timeout=600):
     return subprocess.run(['kioclient', '--noninteractive', *args], capture_output=True, text=True, timeout=timeout)
 
 
+def make_dirs(remote, relative, made):
+    """Creates on the Switch every folder of relative's path, top first (MTP can't make a/b/c if a/b is missing)."""
+    parts = relative.split('/')[:-1]
+    for i in range(1, len(parts) + 1):
+        folder = '/'.join(parts[:i])
+        if folder not in made:
+            kio('mkdir', f"{remote}/{folder}")
+            made.add(folder)
+
+
 def remote_size(url):
     result = kio('stat', url, timeout=60)
     for line in result.stdout.splitlines():
@@ -125,6 +135,7 @@ def main():
         return
 
     backup = os.path.join(keep_dir, f"switch_backup_{time.strftime('%Y-%m-%d_%H%M%S')}")
+    made = set()
     if args.prune_first and removed:
         # the console keeps its previous song list (songs_xx.json is copied last) but its songs lose their files
         # until the copy ends: do not play meanwhile
@@ -149,7 +160,7 @@ def main():
             if kio('copy', url, 'file://' + os.path.join(backup, k)).returncode != 0:
                 sys.exit(f"Could not back up {k} from the Switch: stopped before changing anything else.")
         else:
-            kio('mkdir', url.rsplit('/', 1)[0])
+            make_dirs(remote, k, made)
         result = kio('copy', '--overwrite', 'file://' + os.path.join(patch, k), url)
         if result.returncode != 0 and (k in on_switch or remote_size(url) is not None):
             # DBI's MTP responder refuses to overwrite: remove it (backed up, or a leftover the photo does not know)
