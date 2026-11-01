@@ -895,6 +895,13 @@ class MainWindow(QMainWindow):
         mt_layout.addWidget(self.multithread_checkbox)
         mt_layout.addWidget(self.threads_label)
         mt_layout.addWidget(self.multithread_workers)
+        self.recommended_button = QPushButton()
+        self.recommended_button.setFlat(True)
+        self.recommended_button.clicked.connect(
+            lambda: self.multithread_workers.setValue(self.recommended_button.property('workers') or 1))
+        mt_layout.addWidget(self.recommended_button)
+        self._texts.append((lambda _t: self.update_recommended_workers(), ''))
+        self.update_recommended_workers()
         mt_layout.addStretch()
         tweaks_layout.addLayout(mt_layout)
         max_video_layout = QHBoxLayout()
@@ -1737,6 +1744,24 @@ class MainWindow(QMainWindow):
             self.update_clear_cache_enabled()
         self.on_tool_state_changed()
 
+    def update_recommended_workers(self) -> None:
+        """'Recommended: N' next to the threads: the number of songs at once that encodes the most video per minute on
+        this PC (measured after a few conversions, else from the CPU threads and the free memory)."""
+        import ConvertFiles
+        workers, info = ConvertFiles.recommended_workers()
+        if len(info['measured']) >= 2:
+            why = tr("measured on this PC, minutes of video per minute: {values}").format(
+                values=', '.join(tr("{n} at once {t:.2f}").format(n=n, t=t) for n, t in sorted(info['measured'].items())))
+            if info['exploring']:
+                why += "; " + tr("still rising, worth trying {n}").format(n=workers)
+        else:
+            why = tr("{cpus} processor threads, ~8 per video; measured after a few conversions").format(cpus=info['cpus'])
+        self.recommended_button.setProperty('workers', workers)
+        self.recommended_button.setText(tr("Recommended: {n}").format(n=workers))
+        self.recommended_button.setToolTip(
+            tr("Click to use it. Videos are encoded fastest with this many songs at once ({why}). More songs at once "
+               "do not finish sooner when the processor is already full.").format(why=why))
+
     def on_tool_state_changed(self) -> None:
         """A library tool started or ended: no conversion while it runs (they share the song folders)."""
         busy = self.tools_panel.running()
@@ -1845,6 +1870,7 @@ class MainWindow(QMainWindow):
     def on_conversion_finished(self, summary=None) -> None:
         self.tick_timer.stop()
         self.conversion_running = False
+        self.update_recommended_workers()
         self.set_controls_enabled(True)
         self.scan_input_folder()
 

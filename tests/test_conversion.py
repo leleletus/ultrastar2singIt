@@ -569,3 +569,28 @@ class DlcRepositoryTest(TempDirTest):
             self.assertEqual((entity.dlc_json_name, entity.core_edition), ('songs_int', '2026'))
         finally:
             DlcRepository.DB_PATH = old
+
+
+class RecommendedWorkersTest(TempDirTest):
+    def _stats(self, speeds):
+        cpus = os.cpu_count()
+        rows = [{'running': n, 'video_s': 100 * v, 'wall_s': 100, 'cpus': cpus} for n, v in speeds for _ in range(3)]
+        (self.tmp / ConvertFiles.ENCODE_STATS_FILE).write_text(json.dumps(rows))
+
+    def test_best_number_of_songs_at_once(self):
+        old = ConvertFiles.app_dir
+        ConvertFiles.app_dir = lambda: str(self.tmp)
+        try:
+            # throughput 1.0, 1.8, 1.65: two at once is the top of the curve
+            self._stats([(1, 1.0), (2, 0.9), (3, 0.55)])
+            workers, info = ConvertFiles.recommended_workers()
+            self.assertEqual(workers, 2)
+            self.assertFalse(info['exploring'])
+            # only 1 and 2 measured and still rising by more than 10%: try one more
+            self._stats([(1, 1.0), (2, 0.9)])
+            workers, info = ConvertFiles.recommended_workers()
+            if os.cpu_count() >= 12:
+                self.assertEqual(workers, 3)
+                self.assertTrue(info['exploring'])
+        finally:
+            ConvertFiles.app_dir = old

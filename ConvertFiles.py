@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import xml.etree.cElementTree as Et
 from pathlib import Path
 from xml.dom import minidom
@@ -581,7 +582,6 @@ def has_motion(video, duration):
 
 def keep_replaced_video(bk2, dir_long_name):
     """Moves a .bk2 that is about to be encoded again to <songs>/../_replaced_videos/<song>/ (never deletes it)."""
-    import time
     keep_dir = Path(_input_dir).parent / '_replaced_videos' / dir_long_name
     keep_dir.mkdir(parents=True, exist_ok=True)
     target = keep_dir / f"{bk2.stem}.{time.strftime('%Y%m%d-%H%M%S')}{bk2.suffix}"
@@ -590,6 +590,61 @@ def keep_replaced_video(bk2, dir_long_name):
     if intermediate.exists():  # made from the still cover too
         shutil.move(intermediate, keep_dir / f"{intermediate.stem}.{time.strftime('%Y%m%d-%H%M%S')}{intermediate.suffix}")
     return target
+
+
+ENCODE_STATS_FILE = 'encode_stats.json'
+_encode_lock = threading.Lock()
+_encodes_running = 0
+
+
+def _record_encode(video_seconds, wall_seconds, running):
+    """Remembers how fast a .bk2 was encoded and how many were encoded at the same time (for recommended_workers)."""
+    path = os.path.join(app_dir(), ENCODE_STATS_FILE)
+    with _encode_lock:
+        try:
+            with open(path, encoding='utf-8') as f:
+                stats = json.load(f)
+        except (OSError, ValueError):
+            stats = []
+        stats.append({'running': running, 'video_s': round(video_seconds, 1), 'wall_s': round(wall_seconds, 1),
+                      'cpus': os.cpu_count()})
+        try:
+            with open(path + '.tmp', 'w', encoding='utf-8') as f:
+                json.dump(stats[-300:], f)
+            os.replace(path + '.tmp', path)
+        except OSError:
+            pass
+
+
+def recommended_workers():
+    """(songs to convert at the same time, {'cpus', 'measured': {n: video minutes per minute}, 'exploring'}). Throughput f(n) = n x encoding speed with n encodes at once;
+    the best n is where one more encode stops adding throughput. Measured on this PC once there are encodes with two
+    different n; until then, from the CPU threads (binkc uses ~8) and the free memory (~1.5 GB per song)."""
+    cpus = os.cpu_count() or 4
+    guess = max(1, cpus // 8)
+    try:
+        with open('/proc/meminfo', encoding='ascii') as f:
+            free_gb = next(int(line.split()[1]) for line in f if line.startswith('MemAvailable:')) / 2 ** 20
+        guess = max(1, min(guess, int(free_gb // 1.5)))
+    except (OSError, StopIteration, ValueError):
+        pass
+    try:
+        with open(os.path.join(app_dir(), ENCODE_STATS_FILE), encoding='utf-8') as f:
+            stats = [x for x in json.load(f) if x.get('cpus') == cpus and x.get('wall_s', 0) > 0]
+    except (OSError, ValueError):
+        stats = []
+    speeds = {}
+    for x in stats:
+        speeds.setdefault(int(x['running']), []).append(x['video_s'] / x['wall_s'])
+    throughput = {n: n * sorted(v)[len(v) // 2] for n, v in speeds.items() if len(v) >= 2}
+    if len(throughput) < 2:
+        return guess, {'cpus': cpus, 'measured': throughput, 'exploring': False}
+    best = max(throughput, key=throughput.get)
+    if best == max(throughput) and best + 1 <= cpus // 4:
+        smaller = [n for n in throughput if n < best]
+        if smaller and throughput[best] > 1.1 * throughput[max(smaller)]:  # still rising: try one more
+            return best + 1, {'cpus': cpus, 'measured': throughput, 'exploring': True}
+    return best, {'cpus': cpus, 'measured': throughput, 'exploring': False}
 
 
 def _big_temp_dir():
@@ -642,13 +697,25 @@ def create_video_bink(file, list_in_dir, output_video_file_name, quality=None, d
         bink_args.append('/#')
 
         logger.info(f"Converting video {os.path.basename(str(file))} to {output_video_file_name} with binkc...")
-        result = _run(bink_args, timeout=timeout, capture=True)
+        global _encodes_running
+        with _encode_lock:
+            _encodes_running += 1
+            running = _encodes_running
+        started = time.monotonic()
+        try:
+            result = _run(bink_args, timeout=timeout, capture=True)
+        finally:
+            with _encode_lock:
+                _encodes_running -= 1
+        wall = time.monotonic() - started
 
         final_out = list_in_dir / output_video_file_name
         size = temp_out.stat().st_size if temp_out.exists() else 0
         if size >= MIN_VALID_BK2_BYTES:
             shutil.copy2(temp_out, final_out)
             logger.info(f"Successfully created {output_video_file_name}")
+            if duration and quality is None:  # only real videos: still covers encode in seconds
+                _record_encode(duration, wall, running)
             return True
 
         details = ' | '.join(line.strip() for line in ((result.stdout or '') + (result.stderr or '')).splitlines()

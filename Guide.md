@@ -59,6 +59,12 @@ My Songs/
  If the tags are missing, the chorus data will be scraped from genius.com, and failing this, a manual chorus lookup method will be used.
  The medley tags offer the simplest way of finding the chorus sections, but they are sometimes incorrect. Check this box if you want to use the other methods instead.</li>
 </ul>
+### Songs at once (threads)
+Next to <i>Threads</i> the program shows <i>Recommended: N</i> (click it to use it). Every encoded video is timed: once there are
+conversions with two different numbers of songs at once, N is the one that encodes the most minutes of video per minute on this PC
+(more songs at once stop helping when the processor is full). Before that it is guessed from the processor threads (each video
+encode uses about 8) and the free memory.
+
 ### Advanced options: library tools
 Section 5 of the left panel runs long maintenance tasks in the background, one at a time (no conversion while one runs).
 Pick a task, read its description and estimated time, then press <i>Run</i>; <i>Show progress</i> opens its live output.

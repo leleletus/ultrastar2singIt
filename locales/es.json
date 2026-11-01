@@ -325,5 +325,11 @@
   "The converted video is the still cover. Put the song's video in its folder (named like the folder, e.g. \"{name}.mp4\") and convert it: the still .bk2 is replaced (the old one is kept in _replaced_videos).": "El video convertido es la portada fija. Pon el video de la canción en su carpeta (con el nombre de la carpeta, p. ej. \"{name}.mp4\") y conviértela: el .bk2 fijo se reemplaza (el viejo se guarda en _replaced_videos).",
   "Show only songs with errors, skipped songs, possible desync or a still image as video.": "Mostrar solo canciones con errores, omitidas, con posible desfase o con imagen fija como video.",
   "Add a video (file or link)...": "Añadir un video (archivo o enlace)...",
-  "YouTube link of the video, or leave it empty to choose a file.\n\nIts sound is compared with the song to cut it at the right second; if the video is another version of the song nothing is saved. The current video is kept in _replaced_videos.": "Enlace de YouTube del video, o déjalo vacío para elegir un archivo.\n\nSe compara su sonido con la canción para recortarlo en el segundo justo; si el video es otra versión de la canción no se guarda nada. El video actual se guarda en _replaced_videos."
+  "YouTube link of the video, or leave it empty to choose a file.\n\nIts sound is compared with the song to cut it at the right second; if the video is another version of the song nothing is saved. The current video is kept in _replaced_videos.": "Enlace de YouTube del video, o déjalo vacío para elegir un archivo.\n\nSe compara su sonido con la canción para recortarlo en el segundo justo; si el video es otra versión de la canción no se guarda nada. El video actual se guarda en _replaced_videos.",
+  "Recommended: {n}": "Recomendado: {n}",
+  "Click to use it. Videos are encoded fastest with this many songs at once ({why}). More songs at once do not finish sooner when the processor is already full.": "Haz clic para usarlo. Con esta cantidad de canciones a la vez los videos se codifican más rápido ({why}). Más canciones a la vez no acaban antes cuando el procesador ya está lleno.",
+  "measured on this PC, minutes of video per minute: {values}": "medido en este PC, minutos de video por minuto: {values}",
+  "{n} at once {t:.2f}": "{n} a la vez {t:.2f}",
+  "still rising, worth trying {n}": "aún sube, conviene probar {n}",
+  "{cpus} processor threads, ~8 per video; measured after a few conversions": "{cpus} hilos del procesador, ~8 por video; se mide tras unas conversiones"
 }
