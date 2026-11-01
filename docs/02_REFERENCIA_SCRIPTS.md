@@ -177,7 +177,7 @@ Formato: `línea` · función · qué hace · notas (bugs relacionados entre cor
 | `unpacker.py` | menú Tools → vxla → txt | **roto**: `NameError safe_artist` (l.102); BPM inconsistente; formato de notas no coincide [B-32] |
 | `reverse_vxla.py` | script, rutas fijas | `NameError name_id` (l.154) si hay video [B-33] |
 | `LetSing_ExtractorPro.py` | CLI `--megapack --output` | solo capa `notes`; detección de espacios casi nula [B-34] |
-| `validate_patch.py`, `switch_update.py`, `sync_scan.py`, `usdb_sources.py`, `fix_covers.py`, `fix_years.py`, `fix_genres.py`, `artist_genders.py` | CLI y apartado 5 de la GUI (`ToolsPanel.py`) | ver `docs/11_GUIA_DE_PRUEBAS.md` |
+| `validate_patch.py`, `switch_update.py`, `sync_scan.py`, `usdb_sources.py`, `fix_covers.py`, `fix_years.py`, `fix_genres.py`, `artist_genders.py`, `usdb_restore_names.py`, `clean_song_folders.py` | CLI y apartado 5 de la GUI (`ToolsPanel.py`) | ver `docs/11_GUIA_DE_PRUEBAS.md` |
 
 Quitados el 2026-11-01 (siguen en el historial de git, `git show fb416d5:<ruta>`): `desync_detector.py` (sustituido
 por `sync_scan.py`), `mass_test.py` (sustituido por `tests/`), `merge_dlc_json.py` (lo hace el conversor con

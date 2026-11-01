@@ -98,6 +98,8 @@ Abre el programa con el icono de KDE o con `~/ultrastar_official/start_linux.sh`
 | Corregir años de relleno | minutos (internet) | Con "Aplicar": #YEAR (.bak) |
 | Añadir género | ~3 s por canción sin género | Con "Aplicar": #GENRE (.bak) |
 | Hombre/mujer de cada cantante | ~1-2 s por artista nuevo | `_artist_genders.json` |
+| Devolver los nombres de usdb_syncer | segundos | Con "Aplicar": renombra audio/video/portada, txt (.bak) y .usdb |
+| Quitar restos de las carpetas | segundos | Con "Aplicar": borra logs, temporales, portadas/audios sin usar, `.bk2` duplicados idénticos |
 
 Las tareas corren de una en una, como proceso aparte (la ventana no se congela). Detener una no pierde nada:
 al volver a ejecutarla sigue donde se quedó. Los `.bk2` nunca se tocan.

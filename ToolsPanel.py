@@ -92,6 +92,17 @@ TASKS = [
          "Without #GENRE every song is Pop in the game. Takes the genre of the iTunes store when artist and title "
          "match exactly; songs that already have #GENRE are never changed.",
          "About 3 seconds per song without genre.", options=[APPLY], changes_songs=True),
+    Task('usdb_restore_names', "Give USDB songs back the file names of usdb_syncer",
+         "Older scripts renamed the audio, video and cover of USDB songs to generic names (audio.ogg, video.mp4, "
+         "cover.png): usdb_syncer then thinks its files are missing and could write its video over one cut by hand. "
+         "Renames them back to \"Artist - Title\" names, points the txt to them and updates the .usdb file. Only "
+         "renames: nothing is converted again.", "Seconds.", options=[APPLY], changes_songs=True),
+    Task('clean_song_folders', "Remove leftovers from the song folders",
+         "Deletes ffmpeg logs, voice separation leftovers, half-written files, the .avi intermediate of finished "
+         "videos, covers and audio the txt no longer uses and .bk2 files that are an identical copy of the song's "
+         ".bk2. Never touches the txt, the .usdb, the files the txt uses (your videos included) nor the song's .bk2.",
+         "Seconds.", options=[APPLY, Option('--bak', "Also delete the .bak copies of the txt files")],
+         changes_songs=True),
     Task('artist_genders', "Find whether each singer is a man or a woman (internet)",
          "Asks MusicBrainz for every artist and writes _artist_genders.json in the songs folder, used by the "
          "singer filter of Let's Sing 2026. Groups and anything not certain stay Both. Already known artists are "
