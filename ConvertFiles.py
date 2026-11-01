@@ -580,6 +580,14 @@ def has_motion(video, duration):
     return video.stat().st_size > 5 * 2 ** 20 and not is_video_still_image(video)
 
 
+def moving_video(song_dir, name_ids, besides, duration):
+    """The biggest video of the folder, other than `besides`, that is not a still image (or None)."""
+    videos = sorted((p for p in song_dir.iterdir() if p.is_file() and p != besides
+                     and p.suffix.lower() in SupportedFormats.VIDEO_EXTENSIONS
+                     and not _is_converter_file(p.name, name_ids)), key=lambda p: -p.stat().st_size)
+    return next((p for p in videos if has_motion(p, duration)), None)
+
+
 def keep_replaced_video(bk2, dir_long_name):
     """Moves a .bk2 that is about to be encoded again to <songs>/../_replaced_videos/<song>/ (never deletes it)."""
     keep_dir = Path(_input_dir).parent / '_replaced_videos' / dir_long_name
@@ -1618,6 +1626,14 @@ def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None,
         if real_video is not None and output_format == XML_FORMAT and real_video.suffix.lower() == '.bk2':
             real_video = None  # ffmpeg can't decode Bink 2: XML games get the static video
 
+        if real_video is not None and not ignore_video and output_video_path.suffix == naming.VIDEO_BK2_SUFFIX \
+                and output_video_path.exists() and is_still_bk2(output_video_path, song_duration) \
+                and not has_motion(real_video, song_duration):
+            # the txt points to a still video: a video added by hand with any other name is used instead
+            moving = moving_video(list_in_dir, name_ids, real_video, song_duration)
+            if moving is not None:
+                logger.info(f"{real_video.name} is a still image: using {moving.name}, which moves")
+                real_video = moving
         if real_video is not None and not ignore_video and output_video_path.suffix == naming.VIDEO_BK2_SUFFIX \
                 and output_video_path.exists() and is_still_bk2(output_video_path, song_duration) \
                 and has_motion(real_video, song_duration):

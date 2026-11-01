@@ -2,12 +2,14 @@
 
 Usage:
     python tools/clean_song_folders.py <songs folder>                  # only lists
-    python tools/clean_song_folders.py <songs folder> --apply          # deletes
+    python tools/clean_song_folders.py <songs folder> --apply          # moves them to the bin
     python tools/clean_song_folders.py <songs folder> --apply --bak    # also the .bak copies of the txt files
 
-Deleted:
+Nothing is deleted: the files go to <songs folder>/../_papelera/<date>/<song>/ (same folders), to be emptied by hand
+once everything is checked. Moved:
   - ffmpeg two-pass logs (passlog-*.log, *.mbtree), demucs_out folders, half-written *.tmp files;
-  - the x264 intermediate <id>.avi when the song already has its real .bk2 (it is only used to make the .bk2);
+  - the x264 intermediate <id>.avi when the song already has its real .bk2 (it is only used to make the .bk2), and
+    the still videos made from the cover (<id>_cover.avi / _cover.mp4) once the .bk2 is a real video;
   - covers and audio files the txt no longer uses when it uses another one that exists (e.g. cover.png after
     tools/fix_covers.py, audio.ogg after tools/usdb_restore_names.py);
   - a .bk2 with an old ID only when it is byte-identical to the song's current .bk2 (a duplicate).
@@ -16,9 +18,11 @@ Never deleted: the txt, the .usdb, the files the txt points to (audio, video, co
 """
 import argparse
 import filecmp
+import json
 import os
 import shutil
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -29,6 +33,16 @@ import UltrastarToSingit  # noqa: E402
 
 IMAGES = {'.jpg', '.jpeg', '.png', '.webp', '.bmp'}
 AUDIO = {'.ogg', '.mp3', '.m4a', '.wav', '.opus', '.flac', '.aac', '.webm'}
+
+
+def real_video_bk2(d, name_id, bk2):
+    """The .bk2 is a real video (not the still cover): judged by its size for the length of the song."""
+    try:
+        with open(d / (name_id + naming.VXLA_META_SUFFIX), encoding='utf-8') as f:
+            duration = json.load(f).get('duration')
+    except (OSError, ValueError):
+        duration = None
+    return bool(duration) and not ConvertFiles.is_still_bk2(bk2, duration)
 
 
 def leftovers(d, with_bak=False):
@@ -58,8 +72,9 @@ def leftovers(d, with_bak=False):
             out.append((p, 'half-written file'))
         elif with_bak and n.endswith('.bak'):
             out.append((p, 'backup copy of the txt'))
-        elif n == name_id + naming.VIDEO_INTERMEDIATE_SUFFIX:
-            if bk2.exists() and bk2.stat().st_size > ConvertFiles.STILL_BK2_BYTES_PER_S * 60:
+        elif n in (name_id + naming.VIDEO_INTERMEDIATE_SUFFIX, name_id + naming.STILL_VIDEO_SUFFIX,
+                   name_id + naming.STILL_VIDEO_MP4_SUFFIX):
+            if bk2.exists() and real_video_bk2(d, name_id, bk2):
                 out.append((p, 'intermediate of a finished .bk2'))
         elif p.suffix.lower() == naming.VIDEO_BK2_SUFFIX:
             if p != bk2 and bk2.exists() and p.stat().st_size == bk2.stat().st_size \
@@ -84,6 +99,7 @@ def main():
     args = parser.parse_args()
     count, size = 0, 0
     by_reason = {}
+    bin_dir = Path(args.songs).resolve().parent / '_papelera' / time.strftime('%Y-%m-%d_%H%M%S')
     for d in sorted(p for p in Path(args.songs).iterdir() if p.is_dir()):
         for p, reason in leftovers(d, args.bak):
             bytes_ = sum(f.stat().st_size for f in p.rglob('*') if f.is_file()) if p.is_dir() else p.stat().st_size
@@ -93,10 +109,13 @@ def main():
             by_reason[reason] = (n + 1, s + bytes_)
             print(f"   {reason:35} {bytes_ / 2**20:8.1f} MB  {d.name}/{p.name}", flush=True)
             if args.apply:
-                shutil.rmtree(p) if p.is_dir() else p.unlink()
+                target = bin_dir / d.name / p.name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(p, target)
     for reason, (n, s) in sorted(by_reason.items(), key=lambda x: -x[1][1]):
         print(f"{n:5} {reason} ({s / 2**30:.2f} GB)")
-    print(f"\n{count} file(s), {size / 2**30:.2f} GB {'deleted' if args.apply else 'can go (run again with --apply)'}")
+    print(f"\n{count} file(s), {size / 2**30:.2f} GB "
+          f"{f'moved to {bin_dir}' if args.apply else 'can go (run again with --apply)'}")
 
 
 if __name__ == '__main__':

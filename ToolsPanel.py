@@ -98,10 +98,11 @@ TASKS = [
          "Renames them back to \"Artist - Title\" names, points the txt to them and updates the .usdb file. Only "
          "renames: nothing is converted again.", "Seconds.", options=[APPLY], changes_songs=True),
     Task('clean_song_folders', "Remove leftovers from the song folders",
-         "Deletes ffmpeg logs, voice separation leftovers, half-written files, the .avi intermediate of finished "
-         "videos, covers and audio the txt no longer uses and .bk2 files that are an identical copy of the song's "
-         ".bk2. Never touches the txt, the .usdb, the files the txt uses (your videos included) nor the song's .bk2.",
-         "Seconds.", options=[APPLY, Option('--bak', "Also delete the .bak copies of the txt files")],
+         "Moves to the bin (_papelera next to the songs folder, nothing is deleted) ffmpeg logs, voice separation "
+         "leftovers, half-written files, the intermediates of finished videos, covers and audio the txt no longer "
+         "uses and .bk2 files that are an identical copy of the song's .bk2. Never touches the txt, the .usdb, the "
+         "files the txt uses (your videos included) nor the song's .bk2.",
+         "Seconds.", options=[APPLY, Option('--bak', "Also the .bak copies of the txt files")],
          changes_songs=True),
     Task('artist_genders', "Find whether each singer is a man or a woman (internet)",
          "Asks MusicBrainz for every artist and writes _artist_genders.json in the songs folder, used by the "

@@ -594,3 +594,20 @@ class RecommendedWorkersTest(TempDirTest):
                 self.assertTrue(info['exploring'])
         finally:
             ConvertFiles.app_dir = old
+
+
+class MovingVideoTest(TempDirTest):
+    def test_video_added_by_hand_with_any_name_is_used(self):
+        d = self.tmp / 'A - Song'
+        still = write(d / 'video.mp4', 'x' * 100)                      # what the txt points to: a still image
+        mine = write(d / 'my cut of the clip.mkv', 'x' * 50)           # added by hand, other name and format
+        write(d / 'Asong.avi', 'x' * 500)                              # the converter's own intermediate
+        write(d / 'Asong_cover.mp4', 'x' * 500)
+        old = ConvertFiles.has_motion
+        ConvertFiles.has_motion = lambda video, duration: video.name != 'video.mp4'
+        try:
+            self.assertEqual(ConvertFiles.moving_video(d, ['Asong'], still, 200), mine)
+            mine.unlink()
+            self.assertIsNone(ConvertFiles.moving_video(d, ['Asong'], still, 200))
+        finally:
+            ConvertFiles.has_motion = old
