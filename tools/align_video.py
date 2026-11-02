@@ -9,8 +9,9 @@ The sound of the video is compared with the song's audio to find where the song 
 often have an intro, a skit or a longer cut). The offset is measured at the start, middle and end of the song: if they
 disagree the video is another version of the song and nothing is saved. With --apply the video is cut to the audio
 (no sound: the game plays the song's own audio), saved as "<folder>.mp4", the txt's #VIDEO points to it and the
-video it replaces is moved to _replaced_videos next to the songs folder. A link is downloaded with the yt-dlp of
-usdb_syncer. The next conversion encodes the .bk2 again only if the current one is the still cover.
+video it replaces is moved to _replaced_videos next to the songs folder. A link is downloaded with yt-dlp (the
+YT_DLP environment variable, the yt-dlp of the PATH, the one installed with usdb_syncer by pipx or the Python
+module yt_dlp, in that order). The next conversion encodes the .bk2 again only if the current one is the still cover.
 """
 import argparse
 import os
@@ -31,7 +32,19 @@ import UltrastarToSingit  # noqa: E402
 
 RATE = 4000      # Hz, enough for the rhythm of the music
 HOP = 40         # samples: 100 envelope values per second
-YT_DLP = os.path.expanduser('~/.local/share/pipx/venvs/usdb-syncer/bin/yt-dlp')
+USDB_SYNCER_YT_DLP = os.path.expanduser('~/.local/share/pipx/venvs/usdb-syncer/bin/yt-dlp')
+
+
+def yt_dlp_command():
+    """How to run yt-dlp on this PC (see the module docstring for the order)."""
+    for candidate in (os.environ.get('YT_DLP'), shutil.which('yt-dlp'), USDB_SYNCER_YT_DLP):
+        if candidate and os.path.isfile(candidate):
+            return [candidate]
+    try:
+        import yt_dlp  # noqa: F401
+        return [sys.executable, '-m', 'yt_dlp']
+    except ImportError:
+        sys.exit("yt-dlp not found: install it (pip install yt-dlp) or set YT_DLP to its path")
 
 
 def envelope(path, seconds=None):
@@ -82,7 +95,7 @@ def measure(audio, video, parts=4):
 
 def download(url, folder):
     out = Path(folder) / 'downloaded.%(ext)s'
-    subprocess.run([YT_DLP, '-q', '--no-playlist', '-f', 'bv*[height<=720]+ba/b[height<=720]/b', '--merge-output-format',
+    subprocess.run([*yt_dlp_command(), '-q', '--no-playlist', '-f', 'bv*[height<=720]+ba/b[height<=720]/b', '--merge-output-format',
                     'mp4', '-o', str(out), url], check=True)
     return next(Path(folder).glob('downloaded.*'))
 

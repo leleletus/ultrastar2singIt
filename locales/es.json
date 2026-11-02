@@ -336,5 +336,7 @@
   "The game's video (.bk2) is a real music video, but the video file of this folder is a still image (or missing) and this editor can't play .bk2 files: here you see the still image.": "El video del juego (.bk2) es un videoclip real, pero el video de esta carpeta es una imagen fija (o no hay) y este editor no puede reproducir archivos .bk2: aquí ves la imagen fija.",
   "Click a note to select it and drag it up or down (or Shift+Up/Down) to change its pitch by semitones. Save to keep it.": "Haz clic en una nota para seleccionarla y arrástrala arriba o abajo (o Shift+↑/↓) para cambiar su tono por semitonos. Guarda para conservarlo.",
   "Only pending": "Solo pendientes",
-  "Show only songs not converted yet (e.g. new songs downloaded with usdb_syncer): then 'Check all visible' and 'Convert checked'.": "Mostrar solo las canciones aún sin convertir (p. ej. las nuevas bajadas con usdb_syncer): luego 'Marcar todas las visibles' y 'Convertir marcadas'."
+  "Show only songs not converted yet (e.g. new songs downloaded with usdb_syncer): then 'Check all visible' and 'Convert checked'.": "Mostrar solo las canciones aún sin convertir (p. ej. las nuevas bajadas con usdb_syncer): luego 'Marcar todas las visibles' y 'Convertir marcadas'.",
+  "First copy: the Switch has no patch of this DLC yet": "Primera copia: la Switch todavía no tiene el parche de este DLC",
+  "Copies the whole patch, only when the DLC folder on the Switch is missing or empty (a folder with files is never touched).": "Copia el parche entero, solo si la carpeta del DLC en la Switch no existe o está vacía (nunca toca una carpeta con archivos)."
 }

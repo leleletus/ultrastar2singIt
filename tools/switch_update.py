@@ -4,13 +4,14 @@ Usage:
     python tools/switch_update.py <local patch folder> [--remote URL] [--baseline foto.json]           # only lists
     python tools/switch_update.py <local patch folder> [--remote URL] [--baseline foto.json] --apply   # copies
 
-<local patch folder> is the DLC folder of the output, e.g. ~/LetsSing/output/0100EE4020D19003.
+<local patch folder> is the DLC folder of the output, e.g. <output folder>/0100EE4020D19003.
 --remote defaults to the same folder on the SD card through DBI's MTP responder.
 
 A "photo" (size + hash of every file) of what the Switch has is kept next to the patch
 (next to the output folder: <output>/../<dlc>.switch.json, the converter empties <output>) and written
 after every update. The first time, --baseline gives the photo of the
-patch that was copied to the Switch. Before copying, a sample of the files that did not change is checked on the
+patch that was copied to the Switch, or --first-copy copies the whole patch when the Switch has none for this DLC
+yet (its folder is missing or empty; a folder with files is never touched). Before copying, a sample of the files that did not change is checked on the
 Switch: if their sizes differ, the Switch has another patch and nothing is copied (copy the whole folder instead).
 Every file replaced on the Switch is first saved to <output>/../switch_backup_<date>/. Nothing is deleted on the
 Switch (files of songs removed from the patch are only listed); a file is removed only to be replaced, after its
@@ -89,6 +90,9 @@ def main():
     parser.add_argument('--prune-first', action='store_true',
                         help="with --apply: remove the old files before copying, for an SD card without room for both "
                              "patches (the old files without an identical copy in the patch are backed up first)")
+    parser.add_argument('--first-copy', action='store_true',
+                        help="no photo yet and the Switch has no patch of this DLC (its folder is missing or empty): "
+                             "copy the whole patch")
     parser.add_argument('--prune', action='store_true',
                         help="with --apply: also remove from the Switch the files of the photo that are no longer in "
                              "the patch (e.g. after the songs were renamed); only files this tool knows it put there")
@@ -100,9 +104,10 @@ def main():
     keep_dir = os.path.dirname(os.path.dirname(patch))  # outside the output folder, which gets emptied
     manifest_path = os.path.join(keep_dir, dlc + '.switch.json')
     baseline_path = args.baseline or manifest_path
-    if not os.path.exists(baseline_path):
-        sys.exit(f"No photo of the Switch patch ({manifest_path}): pass --baseline the first time, "
-                 f"or copy the whole folder once and run this again.")
+    first_copy = not os.path.exists(baseline_path)
+    if first_copy and (args.baseline or not args.first_copy):
+        sys.exit(f"No photo of the Switch patch ({baseline_path}): the first time pass --baseline <photo>, or "
+                 f"--first-copy if the Switch has no patch of this DLC yet.")
     if args.apply:  # two copies at once would both write the photo and fight over the same files on the Switch
         import fcntl
         lock = open(manifest_path + '.lock', 'w')
@@ -110,8 +115,11 @@ def main():
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError:
             sys.exit("Another update of the Switch is already running; wait for it to finish.")
-    with open(baseline_path, encoding='utf-8') as f:
-        on_switch = json.load(f)
+    if first_copy:
+        on_switch = {}
+    else:
+        with open(baseline_path, encoding='utf-8') as f:
+            on_switch = json.load(f)
 
     local = photo(patch)
     changed = sorted(k for k in local if on_switch.get(k) != local[k])
@@ -127,8 +135,22 @@ def main():
     if not changed and not (removed and args.prune):
         return
 
+    listing = kio('ls', remote + '/', timeout=60)
+    if first_copy:
+        entries = [e for e in listing.stdout.splitlines() if e.strip() not in ('', '.', '..')]
+        if listing.returncode == 0 and entries:
+            sys.exit(f"{remote} already has {len(entries)} item(s) (e.g. {entries[:3]}): --first-copy only copies to a "
+                     f"folder that is missing or empty. Empty it in DBI first, or pass --baseline.")
+        if listing.returncode != 0 and kio('ls', remote.rsplit('/', 1)[0] + '/', timeout=60).returncode != 0:
+            sys.exit(f"Can't open {remote.rsplit('/', 1)[0]}: is the Switch connected with DBI in MTP mode?")
+        print(f"First copy: {remote} is {'empty' if listing.returncode == 0 else 'not there yet'}.")
+        if not args.apply:
+            print("Run again with --apply to copy.")
+            return
+        if listing.returncode != 0:
+            kio('mkdir', remote)
     # is the Switch really at the photo? check a sample of the unchanged files
-    if kio('ls', remote + '/', timeout=60).returncode != 0:
+    elif listing.returncode != 0:
         sys.exit(f"Can't open {remote}: is the Switch connected with DBI in MTP mode?")
     # what the photo says the Switch has (unchanged files first; after a rename almost everything changes)
     unchanged = [k for k in local if k not in changed and k in on_switch]

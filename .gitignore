@@ -7,6 +7,10 @@ error.log
 *.spec
 */
 config.yml
+config.yml.*
+
+# the game mods have their own repositories (see docs/10_MOD_SALTAR_INTRO.md)
+mods/
 
 !data/
 !data/**

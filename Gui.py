@@ -1271,7 +1271,8 @@ class MainWindow(QMainWindow):
             self.rad_path.setText(str(self.cfg.tools.rad_path))
             return
         if sys.platform != "win32":
-            candidate = os.path.expanduser("~/.wine/drive_c/Program Files (x86)/RADVideo/radvideo64.exe")
+            prefix = os.environ.get("WINEPREFIX") or os.path.expanduser("~/.wine")
+            candidate = os.path.join(prefix, "drive_c", "Program Files (x86)", "RADVideo", "radvideo64.exe")
         else:
             candidate = r"C:\Program Files (x86)\RADVideo\radvideo64.exe"
         if os.path.exists(candidate):

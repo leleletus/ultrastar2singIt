@@ -62,8 +62,11 @@ TASKS = [
          "(songs_xx.json) is copied last, so if the cable comes out the console keeps the previous complete patch; "
          "run it again to continue. The patch is checked first.",
          "Seconds for a few songs; hours if the whole patch changed (~30 GB at 3-10 MB/s).", target='patch',
-         options=[APPLY, Option('--prune', "Remove from the Switch the files of songs no longer in the patch",
-                                tooltip="Only after everything was copied; they are saved to the backup first.")],
+         options=[APPLY, Option('--first-copy', "First copy: the Switch has no patch of this DLC yet",
+                                tooltip="Copies the whole patch, only when the DLC folder on the Switch is missing or "
+                                        "empty (a folder with files is never touched)."),
+                  Option('--prune', "Remove from the Switch the files of songs no longer in the patch",
+                         tooltip="Only after everything was copied; they are saved to the backup first.")],
          needs=('kioclient',)),
     Task('sync_scan', "Check the timing of every song against the voice",
          "Separates the voice of every song (Demucs) and compares it with the lyrics line by line. Writes "
