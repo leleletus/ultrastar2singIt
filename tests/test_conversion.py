@@ -621,3 +621,12 @@ class PreviewWindowTest(TempDirTest):
         self.assertEqual(ConvertFiles.preview_window(broken, 200, {}), (0.0, 30.0))   # unreadable: song start
         self.assertEqual(ConvertFiles.preview_window(broken, 200, {'PREVIEWSTART': '190'}), (170.0, 30.0))
         self.assertEqual(ConvertFiles.preview_window(broken, 20, {}), (0.0, 20))
+
+
+class PitchEditTest(unittest.TestCase):
+    def test_only_the_edited_pitches_change(self):
+        import SyncModel
+        lines = ['#BPM:300', '#GAP:1000', ': 0 4 5 Hel', ': 4 4 7 lo ', '- 10', '* 12 4 -2 world', 'E']
+        out = SyncModel.rewrite_txt(lines, 1000, None, expected_notes=3, note_pitches={1: 9, 2: -1})
+        self.assertEqual(out, ['#BPM:300', '#GAP:1000', ': 0 4 5 Hel', ': 4 4 9 lo ', '- 10', '* 12 4 -1 world', 'E'])
+        self.assertEqual(SyncModel.rewrite_txt(lines, 1000), lines)   # nothing asked: nothing changes

@@ -520,6 +520,7 @@ class MainWindow(QMainWindow):
         self.init_elements()
         self.build_menus()
         self.build_layout()
+        self.fit_left_panel()
         self.build_shortcuts()
 
         self.tick_timer = QTimer(self)
@@ -564,9 +565,19 @@ class MainWindow(QMainWindow):
         self._texts.append((setter, text))
         setter(tr(text))
 
+    def fit_left_panel(self):
+        """The left panel is never narrower than its content (no horizontal scroll bar; texts change with the
+        language)."""
+        scroll = getattr(self, 'left_scroll', None)
+        if scroll is None or scroll.widget() is None:
+            return
+        needed = scroll.widget().minimumSizeHint().width() + scroll.verticalScrollBar().sizeHint().width() + 6
+        scroll.setMinimumWidth(max(380, needed))
+
     def update_ui_language(self):
         for setter, text in self._texts:
             setter(tr(text))
+        self.fit_left_panel()
         self.song_model.headerDataChanged.emit(Qt.Horizontal, 0, len(HEADERS) - 1)
         self.song_model.layoutChanged.emit()
         self.update_counts()
@@ -783,6 +794,8 @@ class MainWindow(QMainWindow):
         scroll.setWidgetResizable(True)
         scroll.setWidget(self.create_left_panel())
         scroll.setMinimumWidth(380)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.left_scroll = scroll
         splitter.addWidget(scroll)
         splitter.addWidget(self.create_right_panel())
         splitter.setStretchFactor(0, 2)
@@ -886,8 +899,11 @@ class MainWindow(QMainWindow):
         grid.addWidget(self.songs_dlc_browse, 1, 2)
         tweaks_layout.addLayout(grid)
 
-        for w in (self.pitch_correction_checkbox, self.still_video_checkbox, self.ignore_medley_checkbox,
-                  self.keep_accents_checkbox, self.genius_checkbox, self.force_reconvert_checkbox,
+        # "ignore medley tags" and "keep accents" stay at their defaults (use MEDLEY, keep accents): not shown
+        for w in (self.ignore_medley_checkbox, self.keep_accents_checkbox):
+            w.setVisible(False)
+        for w in (self.pitch_correction_checkbox, self.still_video_checkbox, self.genius_checkbox,
+                  self.force_reconvert_checkbox,
                   self.clear_output_checkbox):
             tweaks_layout.addWidget(w)
         mt_layout = QHBoxLayout()
@@ -925,6 +941,8 @@ class MainWindow(QMainWindow):
         left_layout.addWidget(self.tweaks_group)
         self.tools_panel = ToolsPanel.ToolsPanel(self)
         left_layout.addWidget(self.tools_panel)
+        for group in (self.tweaks_group, self.tools_panel):
+            group.toggled.connect(lambda _on: QTimer.singleShot(0, self.fit_left_panel))
         left_layout.addStretch()
 
         help_layout = QHBoxLayout()
@@ -1293,13 +1311,13 @@ class MainWindow(QMainWindow):
             "pitch_correction": "slow" if slow else "fast",
             "vocal_isolation": slow,
             "max_video_size": int(self.max_video_size.text()) if self.max_video_size.text().strip().isdigit() else None,
-            "no_medley": self.ignore_medley_checkbox.isChecked(),
+            "no_medley": False,  # hidden option: always the default
             "force_reconvert": self.force_reconvert_checkbox.isChecked(),
             "still_video": self.still_video_checkbox.isChecked(),
             "multithreading": self.multithread_checkbox.isChecked(),
             "clear_output": self.clear_output_checkbox.isChecked(),
             "multithreading_workers": self.multithread_workers.value(),
-            "keep_accents": self.keep_accents_checkbox.isChecked(),
+            "keep_accents": True,  # hidden option: always the default
             "genius_lookup": self.genius_checkbox.isChecked(),
         }
         config_dict["language"] = getattr(self.cfg, 'language', 'en')

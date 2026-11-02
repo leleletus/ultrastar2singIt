@@ -309,12 +309,14 @@ def song_verdict(report, line_times, audio_end, lyrics_end):
 
 # ---------------------------------------------------------------------------------------------- saving
 _NOTE_LINE = re.compile(r'^(\s*[:*FRG]\s+)(-?\d+)(\s.*)?$')
+_NOTE_REST = re.compile(r'^(\s+-?\d+\s+)(-?\d+)(.*)$')
 _BREAK_LINE = re.compile(r'^(\s*-\s*)(-?\d+)(\s+(-?\d+))?(.*)$')
 
 
-def rewrite_txt(lines, gap_ms, line_beats=None, expected_notes=None):
+def rewrite_txt(lines, gap_ms, line_beats=None, expected_notes=None, note_pitches=None):
     """The txt lines with #GAP set and, when line_beats is given, the notes of every lyrics line i moved by
     line_beats[i] beats (page breaks follow the line after them). Same line numbering as load_txt.
+    note_pitches: {note index (order of load_txt): new UltraStar pitch} changes only those pitches.
     Raises ValueError when the file cannot be changed safely."""
     out = list(lines)
     gap_line = f"#GAP:{int(round(gap_ms))}"
@@ -332,8 +334,10 @@ def rewrite_txt(lines, gap_ms, line_beats=None, expected_notes=None):
                 break
         out.insert(insert_at, gap_line)
 
-    if not line_beats or not any(line_beats):
+    if (not line_beats or not any(line_beats)) and not note_pitches:
         return out
+    line_beats = line_beats or [0]
+    note_pitches = note_pitches or {}
     headers = {l.split(':', 1)[0].strip().upper(): l.split(':', 1)[-1].strip().upper() for l in out if l.startswith('#')}
     if headers.get('#RELATIVE') == 'YES' or any(l.strip()[:2] in ('P1', 'P2') for l in out if not l.startswith('#')):
         raise ValueError("relative or duet files: only #GAP can be changed")
@@ -353,7 +357,13 @@ def rewrite_txt(lines, gap_ms, line_beats=None, expected_notes=None):
                 j, prefix, beat, rest = open_break
                 out[j] = f"{prefix}{min(beat, start)}{rest}"  # the break stays between the two lines
                 open_break = None
-            out[i] = f"{m.group(1)}{start}{m.group(3) or ''}"
+            rest = m.group(3) or ''
+            if count in note_pitches:  # " <length> <pitch> <text>": only the pitch changes
+                p = _NOTE_REST.match(rest)
+                if not p:
+                    raise ValueError(f"note {count + 1} has no pitch to change")
+                rest = f"{p.group(1)}{int(note_pitches[count])}{p.group(3)}"
+            out[i] = f"{m.group(1)}{start}{rest}"
             last_end = start + length if last_end is None or not has_notes else max(last_end, start + length)
             count += 1
             has_notes = True
