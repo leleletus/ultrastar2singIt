@@ -239,6 +239,23 @@
   SDL, con el micrófono automático o fijado por nombre. Es una limitación de la emulación de la entrada de audio.
   En la consola real, un micrófono USB va por esa misma ruta (`MicrophoneFmod`).
 
+### 2026-11-02 — Modo Feat (B-73) y secciones de Genius
+- En Feat el juego se cerraba con cualquier canción convertida. Comparando las 15 oficiales del DLC 3 con el código
+  (`Singable.AssetType`, `FeatSegment`, `SongBeats`): faltaba `vxla_feat/<id>_feat.vxla` y `"coopfriendly": "Coop"`
+  significa "tiene segunda voz". Todo en `docs/13_MODO_FEAT.md`.
+- `FeatVxla.py`: letra feat como las oficiales (15/15 capas idénticas), segmentos que cubren la canción con cortes en
+  inicio de página (estribillos juntos; estrofas por sección y por la pausa más larga: 96/133 cortes oficiales),
+  segunda voz y beats (numpy + ffmpeg; tempo 12/15, pulsos 76 %). Líneas repetidas como estribillo si no hay otra
+  fuente; tramos juntos a menos de 8 s se unen.
+- `SongSections.py`: secciones y cantantes de Genius (también por línea: normal / cursiva / negrita), caché
+  `<txt>_genius_sections.json`. Duetos de UltraStar: voz `P2`.
+- Probado en la consola: Sofia y Un año sin lluvia en Feat (antes se cerraban). Citron no sirve para probar Feat: pide
+  mantener una nota en el micrófono antes de empezar.
+- Las 660 convertidas dos veces (la segunda en 75 s, todo en caché): 0 errores, 724 `.bk2` intactos, validador sin
+  problemas. Tramos juntos por canción: 3 la más común (321), mediana 26 s; 5 sin ninguno; 106 con segunda voz.
+- Encontrado B-72: la búsqueda de estribillos antigua no lee cabeceras de Genius con nombres enlazados (75 canciones).
+- Pruebas: 61 OK.
+
 <!-- Plantilla para nuevas entradas:
 ### AAAA-MM-DD — Título
 - Cambios: …

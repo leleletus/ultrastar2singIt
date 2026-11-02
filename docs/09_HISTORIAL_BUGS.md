@@ -1,12 +1,13 @@
 # 09 — Historial de bugs
 
-Resumen al 2026-11-01: **71 bugs registrados, 70 cerrados, 1 pendiente**. El detalle de cada uno (causa, impacto, arreglo) está en [03_BUGS.md](03_BUGS.md); las regresiones del historial de git en [04_REGRESIONES.md](04_REGRESIONES.md) y el día a día en [05_BITACORA.md](05_BITACORA.md).
+Resumen al 2026-11-02: **73 bugs registrados, 71 cerrados, 2 pendientes**. El detalle de cada uno (causa, impacto, arreglo) está en [03_BUGS.md](03_BUGS.md); las regresiones del historial de git en [04_REGRESIONES.md](04_REGRESIONES.md) y el día a día en [05_BITACORA.md](05_BITACORA.md).
 
 ## Pendientes
 
 | ID | Severidad | Área | Problema | Estado |
 |---|---|---|---|---|
 | B-61 | ALTO | GUI | La ventana se congeló una vez (hilo principal bloqueado, con el video de BBHMM abierto) | ABIERTO (vigilante hang_trace.log en 6e74b01) |
+| B-72 | MEDIO | Letras | La búsqueda de estribillos en Genius no lee cabeceras con nombres enlazados (75 canciones) | ABIERTO (el modo Feat ya usa SongSections) |
 
 ## Mejoras pendientes (no son bugs)
 
@@ -19,7 +20,7 @@ Resumen al 2026-11-01: **71 bugs registrados, 70 cerrados, 1 pendiente**. El det
 | Bitch Better Have My Money: audio de otra versión | Sincronizada a mano por partes; lo ideal es bajar el audio de https://youtu.be/B3eAMGXFw1o |
 | Varios idiomas por canción (el juego guarda una lista, p. ej. "Korean, English") | Por probar en la consola |
 | Tema real por canción (Love/Deep/Party) | Todas siguen con los tres (no hay datos oficiales de 2026 para calcularlo sin equivocarse); dificultad y voz ya se calculan (603b4cd) |
-| Archivos `beats/<id>.json` y `vxla_feat` que traen los DLC oficiales de 2026 | Sin generar (el juego funciona sin ellos) |
+| Archivos `beats/<id>.json` y `vxla_feat` que traen los DLC oficiales de 2026 | Hechos (B-73, `docs/13_MODO_FEAT.md`); falta la segunda voz de los duetos oficiales antiguos |
 
 ## Cerrados
 
@@ -95,3 +96,4 @@ Resumen al 2026-11-01: **71 bugs registrados, 70 cerrados, 1 pendiente**. El det
 | B-69 | ALTO | Mod | El mod cerraba el juego: faltaban llamadas al sistema en main.npdm | (2be952a) |
 | B-70 | MEDIO | Audio | Vista previa en el intro (segundo 60 fijo) | (5083880: desde el coro) |
 | B-71 | MEDIO | Sincronía | Something About Us con la letra 1,08 s tarde | (2be952a) |
+| B-73 | ALTO | Feat | El modo Feat cerraba el juego: faltaba vxla_feat; "Coop" sin segunda voz | (este commit; FeatVxla.py, SongSections.py) |

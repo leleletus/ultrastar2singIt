@@ -81,6 +81,7 @@ envejecen con cada cambio: para la línea actual, `grep -n "def <nombre>" <archi
 | 1375 | `_copy_dlc_base_media` | copia los medios del DLC base al parche (opción "Incluir canciones del DLC") |
 | 1408 | `_find_name_id_collisions` | dos carpetas con el mismo ID: la segunda se omite |
 | 1421 | `convert_files` | bucle de canciones (secuencial o hilos) y `_convert_song` (ver 01 §3); devuelve el resumen ok/omitidas/fallidas |
+| — | `uses_feat_mode` / `feat_sources` | 2026: qué sabe la letra feat además del vxla (estructura oficial, Genius, P2) |
 | 1840 | `main` | resolve → rutas → ajustes por defecto si están desactivados → vaciar salida (o `only_dirs`) → convertir |
 
 ## UltrastarToSingit.py (836) — UltraStar → vxla
@@ -97,6 +98,7 @@ envejecen con cada cambio: para la línea actual, `grep -n "def <nombre>" <archi
 | 492 / 551 | `genius_search_for_correct_path` / `genius_get_choruses` | estribillos de Genius con caché (también "no encontrado") y modo sin conexión [B-39] |
 | 660 / 706 | `recover_repeats_from_txt` / `match_choruses_to_beats` | repeticiones del estribillo y su posición en beats |
 | 788 | `write_vxla_file` | capas segments (JSON) / structure+challenge (XML), pages, passages, lyrics, notes_full |
+| — | `is_duet` / `voice_layers` | dueto con P2 / notas, letra y páginas de la voz 2, con los tiempos y el tono del vxla |
 | 829 | `main` | parse → map → write |
 
 ## OfficialVxla.py (131) — vxla oficial de canciones de DLC
@@ -107,6 +109,25 @@ envejecen con cada cambio: para la línea actual, `grep -n "def <nombre>" <archi
 | 36 | `read_layers` | capas `{nombre: [(t1, t2, valor)]}` y versión (v2/v3) |
 | 76 | `to_sing_it` | v2/v3 → estructura de `write_vxla_file`; el texto visible sale de la capa `lyrics` [B-50] |
 | 119 | `convert` | escribe el vxla de la canción desde `letssing_original.vxla` |
+
+## FeatVxla.py — modo Feat de Let's Sing 2026
+
+| Elemento | Qué hace |
+|---|---|
+| `build_segments` | segmentos que cubren la canción, cortes al inicio de página: estribillos `feat`, estrofas por cambio de sección y luego por la pausa más larga (8–22 s) |
+| `pauses_before_pages` | silencio antes de cada página (para elegir dónde cortar) |
+| `feat_layers` / `write_feat_vxla` | capas de la letra feat desde el vxla normal (sin `#g`, segunda voz de P2 o de Genius); devuelve segmentos y notas de la voz 2 |
+| `song_beats` / `write_beats` | beats con numpy + ffmpeg: `_analyze` (flujo mel y espectro), `_tempo_period`, `_track` (Ellis 2007), `_spectrum_bands`; `ONSET_DELAY_S` corrige 65 ms |
+| `COOP_MIN_NOTES` | notas de la voz 2 para `"coopfriendly": "Coop"` |
+
+## SongSections.py — secciones y cantantes (Genius)
+
+| Elemento | Qué hace |
+|---|---|
+| `parse_lyrics` | página de Genius → secciones (`kind`, cantantes con su formato, líneas con su formato normal/cursiva/negrita) |
+| `get_sections` | con caché `<txt>_genius_sections.json`; reutiliza la URL de `<txt>_genius_cache.json` |
+| `song_singers` | (voz 1, voz 2) desde el artista y el título (`&`, `,`, `feat.`, `ft.`, `(feat. X)`) |
+| `align_pages` | cada página de la canción → (sección, tipo, voces), en orden; una página puede ser media línea de Genius |
 
 ## PitchAnalyzer.py (201) — corrección de tono
 
@@ -204,7 +225,7 @@ Todas se ejecutan con `python tools/<script>.py --help`. Las que cambian archivo
 
 | Script | Uso | Notas |
 |---|---|---|
-| `validate_patch.py` | revisa un parche JSON (2024+) antes de copiarlo | solo lee |
+| `validate_patch.py` | revisa un parche JSON (2024+) antes de copiarlo; en 2026 exige `vxla_feat` y avisa sin `beats` | solo lee |
 | `switch_update.py` | copia a la Switch por MTP (KDE `kioclient` + DBI) solo lo que cambió | foto `<dlc>.switch.json`, `--first-copy` (Switch sin parche), respaldo antes de reemplazar, `--prune`/`--prune-first`, reintentos [B-62, B-67, B-68] |
 | `sync_scan.py` | revisa toda la biblioteca contra la voz (Demucs), informe CSV y `<id>.sync.json` | continúa donde quedó; `--only-analyzed` [B-64] |
 | `sync_check.py` | lo mismo para una canción, con propuesta de GAP | solo lee |
@@ -231,7 +252,7 @@ por `sync_scan.py`), `mass_test.py` (sustituido por `tests/`), `merge_dlc_json.p
 
 ## tests/test_conversion.py (632)
 
-51 pruebas (`python -m unittest discover -s tests -t .`): nombres e IDs, parser y codificaciones, tono por octavas,
+60 pruebas (`python -m unittest discover -s tests -t .`): nombres e IDs, parser y codificaciones, tono por octavas,
 fuentes y caché (incluido usdb_syncer y `.bk2` protegidos), escudo de salida, registro con hilos, #START/#END,
 espacios y pasajes, vxla oficial, ida y vuelta vxla → txt → vxla, modelo de sincronía, idioma, IDs de juego,
-dificultad/voz, base de datos, hilos recomendados, vista previa y edición de tono.
+dificultad/voz, base de datos, hilos recomendados, vista previa, edición de tono, modo Feat y secciones de Genius.

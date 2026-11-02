@@ -109,6 +109,8 @@ META_XML_SUFFIX = '_meta.xml'           # song metadata for XML games
 AUTO_COVER_SUFFIX = '_autocover.png'     # placeholder cover (artist + title) for songs without any image
 VOICE_SUFFIX = '.voice.npz'              # isolated voice analysis of the sync editor (loudness and pitch)
 SYNC_REPORT_SUFFIX = '.sync.json'        # result of tools/sync_scan.py for the GUI (verdict and detail)
+VXLA_FEAT_SUFFIX = '_feat.vxla'          # lyrics/notes of the Feat mode (Let's Sing 2026, Songs/vxla_feat)
+BEATS_SUFFIX = '.beats.json'             # beat times for the effects of Let's Sing 2026 (Songs/beats/<id>.json)
 
 GENERATED_SUFFIXES = (
     AUDIO_PREVIEW_SUFFIX, AUDIO_SUFFIX,
@@ -116,6 +118,7 @@ GENERATED_SUFFIXES = (
     VXLA_META_SUFFIX, VXLA_SUFFIX, PREVIEW_META_SUFFIX, AUDIO_META_SUFFIX,
     STILL_VIDEO_SUFFIX, STILL_VIDEO_MP4_SUFFIX, AUTO_COVER_SUFFIX, META_XML_SUFFIX,
     VIDEO_MP4_SUFFIX, VIDEO_BK2_SUFFIX, VIDEO_INTERMEDIATE_SUFFIX, VOICE_SUFFIX, SYNC_REPORT_SUFFIX,
+    VXLA_FEAT_SUFFIX, BEATS_SUFFIX,
 )
 
 # Official Let's Sing lyrics/notes copied into a song folder (tools/attach_official_vxla.py). It is a source

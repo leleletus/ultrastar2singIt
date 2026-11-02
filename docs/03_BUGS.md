@@ -78,6 +78,8 @@ estado de cada bug está en la tabla). "Evidencia" = verificado con prueba, con 
 | B-69 | ALTO | Mod | El mod cerraba el juego: faltaban llamadas al sistema en main.npdm | CERRADO (2be952a) |
 | B-70 | MEDIO | Audio | Vista previa en el intro (segundo 60 fijo) | CERRADO (5083880: desde el coro) |
 | B-71 | MEDIO | Sincronía | Something About Us con la letra 1,08 s tarde | CERRADO (2be952a) |
+| B-72 | MEDIO | Letras | La búsqueda de estribillos en Genius no lee cabeceras con nombres enlazados ("[Coro: Luis Fonsi," partida en líneas): 75 canciones con página y sin estribillos | ABIERTO (el modo Feat ya usa SongSections) |
+| B-73 | ALTO | Feat | El modo Feat cerraba el juego: faltaba vxla_feat y todas decían "coopfriendly": "Coop" sin segunda voz | CERRADO (este commit; solo 2026) |
 
 ---
 
@@ -489,4 +491,21 @@ estado de cada bug está en la tabla). "Evidencia" = verificado con prueba, con 
 - **Causa**: la revisión de voz la marcó como "desfase" y quedó para revisión manual en vez de corregirse.
 - **Arreglo**: `#GAP` −1080 ms (coincidencia con la voz 30% → 75%, veredicto ok). Video oficial alineado con
   `tools/align_video.py`.
+
+### B-72 · MEDIO · Estribillos de Genius perdidos
+- **Dónde**: `UltrastarToSingit.genius_get_choruses`.
+- **Causa**: el texto de la página se saca con `get_text(separator="\n")`; cuando una cabecera lleva nombres con
+  enlace (`[Coro: <a>Luis Fonsi</a>, <a>Demi Lovato</a>]`) queda partida en varias líneas y la expresión de
+  `[Chorus…]` no la encuentra. 75 de las 597 cachés con página tienen `"choruses": []` (Sofia, Échame la culpa…).
+- **Impacto**: en esas canciones los estribillos (y sus notas doradas del modo clásico) salen de la detección
+  automática, que a veces da trozos de 3–5 s.
+- **Arreglo propuesto**: leer la página como `SongSections.parse_lyrics` (`<br>` → salto de línea). Cambia el vxla de
+  esas canciones: hacerlo con una subida de `VXLA_GENERATOR_VERSION` y probarlo en la consola.
+
+### B-73 · ALTO · El modo Feat cerraba el juego
+- **Dónde**: `ConvertFiles` (no generaba `Songs/vxla_feat` ni `Songs/beats`) y `handle_xml_or_json` (`coopfriendly`).
+- **Causa**: el juego carga `Singable.AssetType.VxlaFeat` en Feat; las canciones oficiales traen
+  `<id>_feat.vxla` (y `beats/<id>.json`). `"Coop"` marca las canciones con segunda voz.
+- **Arreglo**: `FeatVxla.py` + `SongSections.py` (ver `13_MODO_FEAT.md`); `coopfriendly` = `"Coop"` solo con segunda
+  voz; `validate_patch.py` exige `vxla_feat` en 2026. Probado en la consola: Sofia y Un año sin lluvia en Feat.
 

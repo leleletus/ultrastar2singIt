@@ -121,12 +121,13 @@ _NOTE_RE = re.compile(r'^([:*FRG])\s*(-?\d+)\s+(-?\d+)\s+(-?\d+)(?: (.*))?$')
 _PAGE_RE = re.compile(r'^-\s*(-?\d+)(?:\s+(-?\d+))?')
 _PLAYER_RE = re.compile(r'^P\s*(\d+)', re.IGNORECASE)
 
-def parse_file(filename):
+def parse_file(filename, voice=1):
     """Parse an UltraStar txt.
 
     Tags are stored upper-case with stripped values. Notes are lists of strings:
     [type, start_beat, length, pitch, lyric] (lyric may be '') and page breaks ['-', beat].
-    RELATIVE files are converted to absolute beats; for duets only player 1 is kept.
+    RELATIVE files are converted to absolute beats; for duets only `voice` (P1 or P2, plus the P3 lines that both
+    sing) is kept.
     """
     data = {
         "notes": [],
@@ -160,7 +161,7 @@ def parse_file(filename):
             player = int(player_match.group(1))
             offset = 0
             continue
-        if player not in (1, 3):
+        if player not in (voice, 3):
             continue
 
         note_match = _NOTE_RE.match(line.rstrip('\r\n'))
@@ -825,6 +826,21 @@ def write_vxla_file(sing_it, filename, directory, song_duration, output_type):
 
     with open(os.path.join(directory, filename), "wb") as f:
         f.write(xmlstr.encode(encoding, errors='xmlcharrefreplace'))
+
+def is_duet(input_file_name):
+    """True if the txt has a second singer (P2 lines)."""
+    return any(_PLAYER_RE.match(line.strip()) and int(_PLAYER_RE.match(line.strip()).group(1)) == 2
+               for line in read_text_file(input_file_name).splitlines() if line.strip()[:1] == 'P')
+
+
+def voice_layers(input_file_name, song_duration, pitch_corr=0, voice=2, keep_accents=True, time_offset=0.0):
+    """(notes, lyrics, pages) intervals of one singer of a duet, timed and pitched like the song's vxla."""
+    us_data = parse_file(input_file_name, voice=voice)
+    sing_it = map_data(us_data, song_duration, pitch_corr, input_file_name=input_file_name, ignore_medley=True,
+                       keep_accents=keep_accents, time_offset=time_offset)
+    as_tuples = lambda rows: [(r["t1"], r["t2"], r["value"]) for r in rows]
+    return as_tuples(sing_it["notes"]), as_tuples(sing_it["text"]), as_tuples(sing_it["pages"])
+
 
 def main(input_file_name, song_duration, pitch_corr=0, s='', directory='', output_type=JSON, ignore_medley=False,
          keep_accents=True, time_offset=0.0):

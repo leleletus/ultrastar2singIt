@@ -29,6 +29,7 @@ Se activa por la edición del juego (`cfg.core.edition`, de `data.db`). Las dem�
 | Géneros del juego (HipHop, RnB, Latin…) | `ConvertFiles.match_genre` | "Rap" no existe en 2026 |
 | Dificultad calculada de las notas | `ConvertFiles.song_difficulty` | ajustada con 59 canciones oficiales |
 | Voz (Men/Women/Both) | `ConvertFiles.singer_gender` + `<canciones>/_artist_genders.json` | filtro de cantante |
+| Modo Feat: `vxla_feat/<id>_feat.vxla`, `beats/<id>.json`, `coopfriendly` | `FeatVxla.py`, `SongSections.py`, `ConvertFiles.feat_sources` (`FEAT_EDITIONS`) | sin la letra feat el juego se cierra en Feat (B-73); ver `13_MODO_FEAT.md` |
 
 Dentro de la carpeta de cada canción la caché sigue usando el `name_id` de siempre. El ID de juego solo se usa para
 los nombres de los archivos dentro del parche.
@@ -47,6 +48,8 @@ LetsSingUltraStarConverter.py   entrada: --cli → CLI (argparse) | --tool <nomb
 │   ├── naming.py               name_id (caché), ID de juego (2026), IDs antiguos, sufijos de los archivos generados
 │   ├── UltrastarToSingit.py    parser UltraStar → vxla (notas, letras, páginas, pasajes, estribillos medley/Genius/auto)
 │   ├── OfficialVxla.py         reutiliza el vxla oficial de una canción de DLC (letssing_original.vxla)
+│   ├── FeatVxla.py             modo Feat de 2026: letra feat (segmentos, segunda voz) y beats (numpy + ffmpeg)
+│   ├── SongSections.py         secciones y cantantes de cada línea según Genius (caché <txt>_genius_sections.json)
 │   ├── PitchAnalyzer.py        tono: fast (por octavas) | slow (CREPE, Demucs opcional) | #LETSSINGPITCHOFFSET
 │   ├── SupportedFormats.py     extensiones aceptadas
 │   └── data/repository/DlcRepository.py + data.db   catálogo de juegos/DLC 2018–2026 (TitleIDs, json_name, edición)
@@ -90,8 +93,10 @@ Gui.start_conversion(only=None | [carpetas])
            8. vxla: letssing_original.vxla → OfficialVxla.convert; si no, PitchAnalyzer + UltrastarToSingit.main;
               solo si cambia la firma (<id>.vxla.meta.json) o "Forzar"
            9. preview_window → create_audio_preview (#PREVIEWSTART, primer coro o primera nota)
+           9b. 2026: feat_sources (estructura oficial, Genius, P2 de duetos) → FeatVxla.write_feat_vxla (<id>_feat.vxla,
+              siempre desde el vxla actual) y write_beats (<id>.beats.json, si el audio cambió)
           10. validate_converted_files → si falta algo, SongError (la canción se omite, no rompe las demás)
-          11. copia al parche (con el ID de juego) y DESPUÉS registro (registry_lock): name.txt + TSV/meta.xml o JSON;
+          11. copia al parche (con el ID de juego; en 2026 también vxla_feat/ y beats/) y DESPUÉS registro (registry_lock): name.txt + TSV/meta.xml o JSON;
               si el registro falla se borran las copias de esa canción
          song_callback(carpeta, running|ok|skipped|failed|stopped) → estado de la fila en la tabla
        log_summary → convertidas / omitidas / fallidas con motivo
@@ -117,6 +122,9 @@ Los archivos convertidos se guardan junto a la canción con el prefijo `name_id`
 | `<id>.avi`, `<id>_cover.avi`, `<id>_cover.mp4` | intermedios | falta | sí |
 | `<id>.voice.npz` | SyncModel.analyze_voice (editor / sync_scan) | cambia el audio | sí |
 | `<id>.sync.json` | tools/sync_scan.py | cambia el txt | sí |
+| `<id>_feat.vxla` (2026) | FeatVxla.write_feat_vxla | en cada conversión (es rápido) | sí |
+| `<id>.beats.json` (2026) | FeatVxla.write_beats | falta o el `.ogg` es más nuevo | sí |
+| `<txt>_genius_sections.json` | SongSections.get_sections | — (también guarda "no encontrado", 30 días) | no |
 | `<txt>_genius_cache.json` | genius_get_choruses | — (también guarda "no encontrado") | sí |
 | `letssing_original.vxla` | tools/attach_official_vxla.py | — (es una fuente, no caché) | no |
 
@@ -157,7 +165,7 @@ Fuera de las carpetas de canciones:
 | ffmpeg / ffprobe | audio, imágenes, video x264, duraciones, detección de imagen fija | `tools.ffmpeg_path`, si no `ffmpeg` del PATH, `<programa>/ffmpeg/bin/ffmpeg.exe`, `C:\ffmpeg\bin`; ffprobe junto a ffmpeg o en el PATH |
 | RAD Video Tools `radvideo64.exe binkc` | `.bk2` para 2024+ | `tools.rad_path`; si no, `Program Files (x86)/RADVideo/` (en Linux dentro de `$WINEPREFIX`, por defecto `~/.wine`) |
 | Wine (Linux) | ejecutar binkc | `tools.wine_path` o `wine` del PATH; necesita `gst-plugins-good` (README_Linux.md) |
-| Genius (web) | estribillos | opcional ("Buscar estribillos en internet"); caché también de "no encontrado" |
+| Genius (web) | estribillos; secciones y cantantes para el modo Feat | opcional ("Buscar estribillos en internet"); caché también de "no encontrado" |
 | CREPE / TensorFlow / librosa | tono "slow" | `requirements-slow.txt` o `plugins/`; importación perezosa |
 | Demucs (+ torch) | análisis de voz (editor, sync_scan), tono slow con aislamiento | `requirements-slow.txt`; `python -m demucs` (no funciona en el ejecutable empaquetado) |
 | yt-dlp | "Añadir un video" con enlace | `YT_DLP`, PATH, el de usdb_syncer (pipx) o el módulo `yt_dlp` |
@@ -176,6 +184,7 @@ Python: `requirements.txt` (programa), `requirements-slow.txt` (IA de voz/tono, 
 | `naming.construct_name_id_from_directory_name` | **no cambiarlo**: nombra la caché (`.bk2`) de todas las canciones. Si hiciera falta, añadir la versión vieja a `legacy_name_ids` (y `adopt_legacy_cache` la reutiliza) y probar `NamingTest` |
 | `naming.game_song_id` / `game_ids_for` | IDs ya instalados en la consola (puntuaciones, favoritos); `_remove_old_patch_copies`; `tools/switch_update.py --prune` |
 | Sufijos de archivos generados (`naming.py`) | `GENERATED_SUFFIXES`, `is_generated_file`, `resolve_song_sources`, `Gui.scan_song_folders`, Limpiar caché, `tools/clean_song_folders.py`, `tools/cache_recovery.py` |
+| Letra feat / segmentos (`FeatVxla`, `SongSections`) | medir de nuevo contra las oficiales (`13_MODO_FEAT.md`, tabla de fiabilidad); `FeatVxlaTest`, `SongSectionsTest`; `tools/validate_patch.py` |
 | Formato del vxla (`write_vxla_file`, `map_data`, `OfficialVxla`) | subir `VXLA_GENERATOR_VERSION`; lectores inversos `tools/LetSing_ExtractorPro.py`, `tools/reverse_vxla.py`, `tools/unpacker.py`; `SyncModel.load_official`; `VxlaRoundTripTest` |
 | Corrección de tono (PitchAnalyzer) | `PITCH_MIN/MAX` (ConvertFiles.py); `#LETSSINGPITCHOFFSET` que escriben los extractores; `PitchTest` |
 | Tiempos (BPM/GAP/VIDEOGAP/#START/#END) | `UltrastarToSingit.map_data`, `ConvertFiles.audio_window`/`create_audio`/`preview_window`, `SyncModel` (editor y sync_scan) |

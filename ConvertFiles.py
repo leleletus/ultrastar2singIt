@@ -15,9 +15,11 @@ import xml.etree.cElementTree as Et
 from pathlib import Path
 from xml.dom import minidom
 
+import FeatVxla
 import naming
 import OfficialVxla
 import PitchAnalyzer
+import SongSections
 import SupportedFormats
 import UltrastarToSingit
 import data.repository.DlcRepository as repository
@@ -777,6 +779,9 @@ def parse_year(txt_data) -> int:
 REAL_LANGUAGE_EDITIONS = ('2026',)
 # Editions whose "Title" list is sorted by the song ID: the patch uses naming.game_song_id (title first) there.
 GAME_ID_EDITIONS = ('2026',)
+# editions with the Feat mode: each song needs Songs/vxla_feat/<id>_feat.vxla (the game closes without it) and
+# Songs/beats/<id>.json (effects only); its second voice is empty, so the song is not "coopfriendly"
+FEAT_EDITIONS = ('2026',)
 
 
 # Difficulty and singer of a song (Let's Sing 2026 filters by them; before every song said "VeryEasy" and "Both").
@@ -860,6 +865,27 @@ def song_difficulty(vxla_path):
 
 def uses_game_ids(cfg) -> bool:
     return str(getattr(getattr(cfg, 'core', None), 'edition', '')) in GAME_ID_EDITIONS
+
+
+def uses_feat_mode(cfg) -> bool:
+    return str(getattr(getattr(cfg, 'core', None), 'edition', '')) in FEAT_EDITIONS
+
+
+def feat_sources(txt_path, txt_data, song_duration, official_vxla, keep_accents, lyrics_offset, online):
+    """What FeatVxla.write_feat_vxla knows about the song besides its vxla: the official structure (DLC songs),
+    the Genius sections and singers (cached; internet only the first time and when `online`) and the second
+    singer of an UltraStar duet (P2)."""
+    artist, title = txt_data.get('ARTIST', ''), txt_data.get('TITLE', '')
+    sources = {'singers': SongSections.song_singers(artist, title),
+               'genius': SongSections.get_sections(txt_path, artist, title, online=online)}
+    if official_vxla.is_file():
+        layers, _ = OfficialVxla.read_layers(official_vxla)
+        sources['sections'] = [t1 for t1, t2, v in layers.get('structure', [])]
+    elif UltrastarToSingit.is_duet(txt_path):
+        pitch = PitchAnalyzer.get_pitch_correction_suggestion_fast(txt_data, min_pitch=PITCH_MIN, max_pitch=PITCH_MAX)
+        sources['voice2'] = UltrastarToSingit.voice_layers(txt_path, song_duration, pitch, voice=2,
+                                                           keep_accents=keep_accents, time_offset=lyrics_offset)
+    return sources
 
 
 def game_ids_for(dir_names, cfg) -> dict:
@@ -964,8 +990,8 @@ def _remove_old_patch_copies(songs_dir, old_ids, song_dir, current_ids):
     removed, never a file named with the game ID of any song, and a video only when the song folder has the same
     file (the cache is never touched)."""
     places = (('audio', naming.AUDIO_SUFFIX), ('audio_preview', naming.AUDIO_PREVIEW_SUFFIX),
-              ('covers', naming.COVER_SUFFIX), ('vxla', naming.VXLA_SUFFIX),
-              ('videos', naming.VIDEO_BK2_SUFFIX), ('videos', naming.VIDEO_MP4_SUFFIX))
+              ('covers', naming.COVER_SUFFIX), ('vxla', naming.VXLA_SUFFIX), ('vxla_feat', naming.VXLA_FEAT_SUFFIX),
+              ('beats', '.json'), ('videos', naming.VIDEO_BK2_SUFFIX), ('videos', naming.VIDEO_MP4_SUFFIX))
     for old_id in old_ids:
         if old_id.lower() in current_ids:
             continue
@@ -985,7 +1011,7 @@ def _remove_old_patch_copies(songs_dir, old_ids, song_dir, current_ids):
 
 
 def handle_xml_or_json(dlc_id, core_id, json_file_name, list_in_dir, txt_data,
-                       name_id, output_format, xml_file_name, cfg, old_ids=(), profile=None):
+                       name_id, output_format, xml_file_name, cfg, old_ids=(), profile=None, coop=False):
     """Creates <id>_meta.xml (XML games); registers the song in SongsDLC.tsv or songs_xx.json."""
     title, artist, year, genre, bpm = build_song_metadata(
         txt_data, getattr(getattr(cfg, 'core', None), 'edition', None))
@@ -1004,7 +1030,8 @@ def handle_xml_or_json(dlc_id, core_id, json_file_name, list_in_dir, txt_data,
             "genre": genre,
             "theme": "Love, Deep, Party",
             "difficulty": profile[0] if profile else "VeryEasy",
-            "coopfriendly": "Coop",
+            # in FEAT_EDITIONS "Coop" marks the songs with a second voice in their feat vxla, as the official ones
+            "coopfriendly": ("Coop" if coop else "") if uses_feat_mode(cfg) else "Coop",
             "language": song_language(txt_data, os.fspath(list_in_dir))
             if str(getattr(getattr(cfg, 'core', None), 'edition', '')) in REAL_LANGUAGE_EDITIONS
             else GAME_LANGUAGE_FALLBACK,
@@ -1750,6 +1777,26 @@ def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None,
                 with open(preview_meta, 'w', encoding='utf-8') as f:
                     json.dump(wanted, f)
 
+        # --- Feat mode (Let's Sing 2026): its vxla, always rebuilt from the current one (cheap), and the beats ---
+        feat_path = list_in_dir / (name_id + naming.VXLA_FEAT_SUFFIX)
+        beats_path = list_in_dir / (name_id + naming.BEATS_SUFFIX)
+        coop = False
+        if uses_feat_mode(cfg):
+            try:
+                sources = feat_sources(txt_path, txt_data, song_duration, official_vxla, keep_accents, lyrics_offset,
+                                       genius_lookup)
+                segments, voice2_notes = FeatVxla.write_feat_vxla(vxla_path, feat_path, song_duration, **sources)
+                coop = voice2_notes >= FeatVxla.COOP_MIN_NOTES
+                logger.info(f"Feat mode: {sum(v == FeatVxla.CHORUS for *_, v in segments)} part(s) sung together, "
+                            f"{len(segments)} in all, second voice: {voice2_notes} notes")
+            except Exception as e:
+                logger.error(f"No Feat mode lyrics for {dir_long_name} (the game closes if it is sung in Feat): {e}")
+            if not beats_path.exists() or beats_path.stat().st_mtime < ogg_path.stat().st_mtime:
+                try:
+                    FeatVxla.write_beats(ogg_path, name_id, beats_path, ffmpeg=_ffmpeg_path)
+                except Exception as e:
+                    logger.warning(f"No beats for {dir_long_name} (only the effects that follow the music): {e}")
+
         # Validate that all required converted files were created successfully
         required = get_required_files(name_id, output_format, list_in_dir)
         missing = validate_converted_files(required)
@@ -1771,6 +1818,8 @@ def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None,
             (list_in_dir / vxla_file_name, os.path.join(songs_dir, 'vxla', in_patch(vxla_file_name))),
             (video_for_patch, os.path.join(songs_dir, 'videos', in_patch(output_video_file_name))),
         ]
+        if uses_feat_mode(cfg) and feat_path.exists():
+            copies.append((feat_path, os.path.join(songs_dir, 'vxla_feat', in_patch(feat_path.name))))
         if output_format == XML_FORMAT:
             os.makedirs(os.path.join(songs_dir, 'covers_duet'), exist_ok=True)
             copies += [
@@ -1784,6 +1833,14 @@ def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None,
                 os.makedirs(os.path.dirname(destination), exist_ok=True)
                 shutil.copy2(os.fspath(source), destination)
                 copied.append(destination)
+            if uses_feat_mode(cfg) and beats_path.exists():
+                # the file names the song by its ID inside the patch
+                beats = _read_json(beats_path)
+                if beats:
+                    destination = os.path.join(songs_dir, 'beats', game_id + '.json')
+                    os.makedirs(os.path.dirname(destination), exist_ok=True)
+                    _atomic_write_text(destination, json.dumps(dict(beats, song=game_id), indent=0))
+                    copied.append(destination)
 
             # Handle name.txt, then SongsDLC.tsv + meta xml (XML format) or the json file (JSON format)
             profile = None
@@ -1795,7 +1852,7 @@ def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None,
                            singer_gender(txt_data.get('ARTIST', ''), txt_data.get('TITLE', ''), pitch))
             handle_xml_or_json(dlc_id, core_id, json_file_name, list_in_dir, txt_data,
                                game_id, output_format, xml_file_name, cfg,
-                               old_ids=[i for i in [name_id] + legacy_ids if i != game_id], profile=profile)
+                               old_ids=[i for i in [name_id] + legacy_ids if i != game_id], profile=profile, coop=coop)
             if output_format == XML_FORMAT:
                 shutil.copy2(os.fspath(list_in_dir / xml_file_name), os.path.join(base_dlc_dir, 'romfs'))
             add_data_to_name_txt(dlc_id, game_id, output_format, dlc_json_name, cfg)

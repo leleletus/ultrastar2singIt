@@ -75,7 +75,9 @@ folder is cleared any video without a copy in its song folder is rescued.
 
 **Let's Sing 2026** (only this edition; older ones are generated as before): the "Title" list of the game is sorted
 by the song ID, so the patch uses title-first IDs; real language (English/French/Spanish/German/Korean/Other), genre
-(HipHop, RnB, Latin...), difficulty (estimated from the notes) and singer. What the game's code says and how the
+(HipHop, RnB, Latin...), difficulty (estimated from the notes) and singer. **Feat mode** works with converted songs: each one gets
+the Feat lyrics the game needs (choruses sung together, the second singer's lines from UltraStar duets or from the
+sections of Genius) and its beats ([`docs/13_MODO_FEAT.md`](docs/13_MODO_FEAT.md)). What the game's code says and how the
 skip-intro mod works: [`docs/10_MOD_SALTAR_INTRO.md`](docs/10_MOD_SALTAR_INTRO.md).
 
 **GUI**: fast song table with per-song status, convert only the checked songs or a single one, coloured log,

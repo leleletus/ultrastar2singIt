@@ -630,3 +630,139 @@ class PitchEditTest(unittest.TestCase):
         out = SyncModel.rewrite_txt(lines, 1000, None, expected_notes=3, note_pitches={1: 9, 2: -1})
         self.assertEqual(out, ['#BPM:300', '#GAP:1000', ': 0 4 5 Hel', ': 4 4 9 lo ', '- 10', '* 12 4 -1 world', 'E'])
         self.assertEqual(SyncModel.rewrite_txt(lines, 1000), lines)   # nothing asked: nothing changes
+
+
+class FeatVxlaTest(TempDirTest):
+    """Feat mode of Let's Sing 2026 (rules taken from the 15 official songs of DLC 3)."""
+
+    def test_segments_cover_the_song_and_cut_at_page_starts(self):
+        import FeatVxla
+        pages = [4.0 * i for i in range(30)]                       # a page every 4 s, song of 120 s
+        segments = FeatVxla.build_segments(pages, [(41.2, 69.5), (90.3, 110.0)], 120.0)
+        self.assertEqual(segments[0][0], 0.0)
+        self.assertEqual(segments[-1][1], 120.0)
+        for (a1, b1, _), (a2, b2, _) in zip(segments, segments[1:]):
+            self.assertEqual(b1, a2)                              # no gaps
+            self.assertIn(a2, pages)                              # every cut at a page start
+        choruses = [(a, b) for a, b, v in segments if v == 'feat']
+        self.assertEqual(choruses, [(40.0, 72.0), (88.0, 112.0)])  # the pages that hold each chorus
+        verses = [(a, b) for a, b, v in segments if v == '']
+        self.assertTrue(all(b - a >= 7.0 or b == 120.0 for a, b in verses))
+
+    def test_no_chorus_and_no_pages(self):
+        import FeatVxla
+        self.assertEqual(FeatVxla.build_segments([], [], 60.0), [(0.0, 60.0, '')])
+        segments = FeatVxla.build_segments([0.0, 5.0, 10.0, 15.0, 20.0, 25.0], [], 30.0)
+        self.assertTrue(all(v == '' for *_, v in segments))
+        self.assertEqual((segments[0][0], segments[-1][1]), (0.0, 30.0))
+
+    def test_feat_vxla_like_the_official_files(self):
+        import FeatVxla, OfficialVxla
+        vxla = write(self.tmp / 'Sng.vxla', '<?xml version="1.0" encoding="UTF-8"?>\n<AnnotationFile version="3.0">\n'
+                     '<IntervalLayer datatype="STRING" name="segments"><Interval t1="8.000" t2="16.000" value="feat" />'
+                     '</IntervalLayer>\n<IntervalLayer datatype="STRING" name="pages">'
+                     + ''.join(f'<Interval t1="{4 * i}.000" t2="{4 * i + 4}.000" value="" />' for i in range(6)) +
+                     '</IntervalLayer>\n<IntervalLayer datatype="STRING" name="passages"><Interval t1="0.000" '
+                     't2="4.000" value="long" /></IntervalLayer>\n<IntervalLayer datatype="STRING" name="lyrics">'
+                     '<Interval t1="1.000" t2="2.000" value="Canción &quot;sí&quot; " /></IntervalLayer>\n'
+                     '<IntervalLayer datatype="STRING" name="notes_full"><Interval t1="1.000" t2="2.000" '
+                     'value="#p60#.Can#g5" /><Interval t1="9.000" t2="10.000" value="#p62#.ción#h#g5" />'
+                     '</IntervalLayer>\n</AnnotationFile>\n')
+        out = self.tmp / 'Sng_feat.vxla'
+        FeatVxla.write_feat_vxla(vxla, out, 24.0)
+        raw = out.read_bytes()
+        self.assertIn(b'\r\n', raw)
+        layers, version = OfficialVxla.read_layers(out)
+        self.assertEqual(version, '3.0')
+        self.assertEqual(list(layers), list(FeatVxla.LAYER_ORDER))  # no passages, a second voice, language
+        self.assertEqual([v for *_, v in layers['notes_full']], ['#p60#.Can', '#p62#.ción#h'])  # no golden notes
+        self.assertEqual(layers['lyrics'], [(1.0, 2.0, 'Canción "sí" ')])
+        self.assertEqual((layers['notes2_full'], layers['lyrics2'], layers['pages2']), ([], [], []))
+        segments = layers['segments']
+        self.assertEqual((segments[0][0], segments[-1][1]), (0.0, 24.0))
+        self.assertIn((8.0, 16.0, 'feat'), segments)
+        self.assertEqual(OfficialVxla.song_id_from_name(out.name), 'Sng')
+
+    def test_beats_of_a_click_track(self):
+        import numpy as np
+        import FeatVxla
+        y = np.zeros(int(FeatVxla.SR * 40), dtype=np.float32)
+        clicks = np.arange(2.0, 38.0, 0.6)                          # 100 bpm
+        burst = (np.random.default_rng(1).standard_normal(400) * np.hanning(400)).astype(np.float32)
+        for t in clicks:
+            i = int(t * FeatVxla.SR)
+            y[i:i + 400] += burst
+        env, spectrum = FeatVxla._analyze(y)
+        period = FeatVxla._tempo_period(env)
+        beats = FeatVxla._track(env, period) / FeatVxla.FPS + FeatVxla.ONSET_DELAY_S
+        self.assertAlmostEqual(60 * FeatVxla.FPS / period, 100, delta=3)
+        hits = [np.min(np.abs(beats - t)) <= 0.05 for t in clicks[1:-1]]
+        self.assertGreater(np.mean(hits), 0.9)
+        bands, selection = FeatVxla._spectrum_bands(spectrum)
+        self.assertEqual((bands[0]['startIndex'], bands[-1]['endIndex']), (0, FeatVxla.SPECTRUM_BINS - 1))
+        self.assertEqual(len(selection), 5)
+
+    def test_choruses_from_repeated_lines_and_close_parts_merged(self):
+        import FeatVxla
+        texts = ['Verse one here now', 'Another verse line', 'This is the chorus line', 'Sing it all together',
+                 'Second verse is here', 'More of the verse', 'This is the chorus line', 'Sing it all together']
+        pages = [(5.0 * i, 5.0 * i + 5, '') for i in range(8)]
+        self.assertEqual(FeatVxla.repeated_lines(pages, texts), [(10.0, 20.0), (30.0, 40.0)])
+        merged = FeatVxla.build_segments([p[0] for p in pages], [(10.0, 20.0), (22.0, 30.0)], 40.0)
+        self.assertIn((10.0, 30.0, 'feat'), merged)                  # a 2 s gap is not a verse: one chorus
+
+    def test_feat_mode_only_for_2026(self):
+        self.assertTrue(ConvertFiles.uses_feat_mode(munchify({'core': {'edition': '2026'}})))
+        self.assertFalse(ConvertFiles.uses_feat_mode(munchify({'core': {'edition': '2025'}})))
+        self.assertTrue(naming.is_generated_file('ABsong_feat.vxla', ['ABsong']))
+        self.assertTrue(naming.is_generated_file('ABsong.beats.json', ['ABsong']))
+
+
+class SongSectionsTest(unittest.TestCase):
+    """Sections and singers of a Genius lyrics page (SongSections), used for the Feat mode of Let's Sing 2026."""
+    PAGE = ('<div class="Lyrics__Container-abc"><div class="LyricsHeader__Container">Tiếng Việt Read More</div>'
+            '[Letra de "Song"]<br>[Verso 1: <a href="#">Luis Fonsi</a>]<br>Tengo en esta historia<br>'
+            'Ya entendí muy bien<br><br>[Coro: Luis Fonsi, <i>Demi Lovato</i> &amp; <b>Ambos</b>]<br>'
+            '<i>No eres tú, soy yo</i><br>No te quiero hacer sufrir<br><b>Échame la culpa</b></div>')
+
+    def test_page_sections_singers_and_line_styles(self):
+        import SongSections
+        sections = SongSections.parse_lyrics(self.PAGE.encode())
+        self.assertEqual([s['kind'] for s in sections], ['verse', 'chorus'])
+        self.assertEqual(sections[0]['singers'], [['Luis Fonsi', 'plain']])
+        self.assertEqual(sections[1]['singers'], [['Luis Fonsi', 'plain'], ['Demi Lovato', 'italic'], ['Ambos', 'bold']])
+        self.assertEqual(sections[1]['lines'], [['No eres tú, soy yo', 'italic'], ['No te quiero hacer sufrir', 'plain'],
+                                                ['Échame la culpa', 'bold']])
+
+    def test_singers_of_the_artist_and_title(self):
+        import SongSections
+        self.assertEqual(SongSections.song_singers('Luis Fonsi & Demi Lovato'), (['Luis Fonsi'], ['Demi Lovato']))
+        self.assertEqual(SongSections.song_singers('Sofia Reyes ft. Jason Derulo & De La Ghetto'),
+                         (['Sofia Reyes'], ['Jason Derulo', 'De La Ghetto']))
+        self.assertEqual(SongSections.song_singers('Clean Bandit', 'Rockabye (feat. Sean Paul & Anne-Marie)'),
+                         (['Clean Bandit'], ['Sean Paul', 'Anne-Marie']))
+        self.assertEqual(SongSections.song_singers('Adele'), (['Adele'], []))
+
+    def test_each_line_gets_the_voice_of_its_singer(self):
+        import SongSections
+        sections = SongSections.parse_lyrics(self.PAGE.encode())
+        pages = ['Tengo en esta historia', 'Ya entendí', 'muy bien', 'No eres tú, soy yo', 'No te quiero hacer sufrir',
+                 'Échame la culpa', 'algo que no está']
+        info = SongSections.align_pages(pages, sections, ['Luis Fonsi'], ['Demi Lovato'])
+        self.assertEqual([x and (x[1], sorted(x[2])) for x in info],
+                         [('verse', [1]), ('verse', [1]), ('verse', [1]), ('chorus', [2]), ('chorus', [1]),
+                          ('chorus', [1, 2]), None])
+
+    def test_feat_vxla_takes_choruses_and_second_voice_from_genius(self):
+        import FeatVxla, SongSections
+        sections = SongSections.parse_lyrics(self.PAGE.encode())
+        texts = ['Tengo en esta historia ', 'Ya entendí muy bien ', 'No eres tú, soy yo ', 'No te quiero hacer sufrir ',
+                 'Échame la culpa ']
+        pages = [(4.0 * i, 4.0 * i + 4, '') for i in range(5)]
+        layers = {'pages': pages, 'segments': [],
+                  'lyrics': [(4.0 * i + 0.5, 4.0 * i + 3, t) for i, t in enumerate(texts)],
+                  'notes_full': [(4.0 * i + 0.5, 4.0 * i + 3, f'#p60#.n{i}') for i in range(5)]}
+        feat = FeatVxla.feat_layers(layers, 20.0, genius=sections, singers=(['Luis Fonsi'], ['Demi Lovato']))
+        self.assertIn((8.0, 20.0, 'feat'), feat['segments'])                  # the chorus is sung together
+        self.assertEqual([v for *_, v in feat['notes2_full']], ['#p60#.n2', '#p60#.n4'])  # Demi's and both lines
+        self.assertEqual([p[0] for p in feat['pages2']], [8.0, 16.0])
