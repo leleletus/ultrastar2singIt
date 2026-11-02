@@ -27,7 +27,7 @@ SECTION_VERSION = 2
 _KINDS = (
     ('prechorus', r'pre[- ]?(chorus|coro|estribillo|refrain|refr[aã]o|ritornello)'),
     ('postchorus', r'post[- ]?(chorus|coro|estribillo|refrain)'),
-    ('chorus', r'chorus|coro|estribillo|refrain|refr[aã]o|ritornello|refrein|refren|hook|nakarat|припев'),
+    ('chorus', r'chorus|coro|estribillo|refrain|refr[aã]o|ritornello|refrein|refren|hook|nakarat|припев|サビ'),
     ('bridge', r'bridge|puente|pont|ponte|br[uü]cke'),
     ('verse', r'verse|verso|estrofa|couplet|strophe|strofa|vers\b|parte|part\b'),
     ('intro', r'intro'),

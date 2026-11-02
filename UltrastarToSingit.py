@@ -12,7 +12,6 @@ import chardet
 import requests
 import unicodedata
 from Levenshtein import distance as levenshtein_distance
-from bs4 import BeautifulSoup
 
 XML = 'xml'
 JSON = 'json'
@@ -549,17 +548,56 @@ def genius_search_for_correct_path(artist, title):
     log_debug("No song matches found on Genius.")
     return None
 
+GENIUS_PARSER = 2   # 2: the page is read like SongSections (headers with linked names were lost before, B-72)
+
+
+def choruses_from_sections(sections):
+    """Chorus texts (one per chorus of the page) from SongSections.parse_lyrics sections."""
+    texts = ['\n'.join(text for text, _ in s['lines']) for s in sections or [] if s['kind'] == 'chorus']
+    return [t for t in texts if len(t) > 10]
+
+
+def upgrade_genius_cache(input_file_name):
+    """A chorus cache written by the old page reader with a page but no chorus is read again (B-72): from the page
+    SongSections already cached, else from Genius. Returns the GENIUS_PARSER of the cache, or None when it was not
+    upgraded (so the vxla of every other song stays as it is)."""
+    import SongSections
+    input_path = Path(input_file_name)
+    cache_file = input_path.parent / f"{input_path.stem}_genius_cache.json"
+    try:
+        data = json.loads(cache_file.read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return None
+    if data.get('reread'):
+        return data.get('parser')
+    if data.get('parser') or not data.get('url') or data.get('choruses'):
+        return None
+    sections = None
+    try:
+        cached = json.loads(input_path.with_name(input_path.stem + SongSections.CACHE_SUFFIX).read_text(encoding='utf-8'))
+        if cached.get('version') == SongSections.SECTION_VERSION and cached.get('url') == data['url']:
+            sections = cached.get('sections')
+    except (OSError, ValueError):
+        pass
+    if sections is None:
+        if _genius_offline:
+            return None
+        try:
+            resp = requests.get(data['url'], headers=GENIUS_HEADERS, timeout=10)
+        except requests.exceptions.RequestException as e:
+            logger.warning(f"Genius page {data['url']} not read again: {e}")
+            return None
+        if resp.status_code != 200:
+            return None
+        sections = SongSections.parse_lyrics(resp.content)
+    _write_genius_cache(cache_file, {'url': data['url'], 'choruses': choruses_from_sections(sections),
+                                     'parser': GENIUS_PARSER, 'reread': True})
+    return GENIUS_PARSER
+
+
 def genius_get_choruses(input_file_name, artist=None, title=None, use_cache=True):
     input_path = Path(input_file_name)
     cache_file = input_path.parent / f"{input_path.stem}_genius_cache.json"
-
-# International chorus terms
-    terms = [
-        'Chorus', 'Refrain', 'Estribillo', 'Refrão', 'Refrao', 
-        'Ritornello', 'Refrein', 'Refren', 'Nakarat', 'Припев', 'サビ'
-    ]
-
-    terms_pattern = '|'.join(terms)
 
     if not artist or not title:
         parts = input_path.stem.split(' - ')
@@ -637,25 +675,9 @@ def genius_get_choruses(input_file_name, artist=None, title=None, use_cache=True
         _write_genius_cache(cache_file, {'not_found': True, 'checked': time.time(), 'choruses': []})
         return []
 
-    soup = BeautifulSoup(final_response.content, 'html.parser')
-    lyrics_divs = soup.find_all('div', class_=lambda x: x and x.startswith('Lyrics__Container'))
-    
-    lyrics = ""
-    for div in lyrics_divs:
-        for excluded in div.find_all(['script', 'style', 'button']):
-            excluded.decompose()
-        lyrics += div.get_text(separator="\n")
-
-    choruses = []
-    pattern = rf'\[(?:{terms_pattern})(?:[:\s][^\]]*?)?\](.*?)(?=\[(?!{terms_pattern})|\Z)'
-    matches = re.findall(pattern, lyrics, re.DOTALL | re.IGNORECASE | re.UNICODE)
-    
-    for m in matches:
-        clean_m = m.strip()
-        if len(clean_m) > 10:
-            choruses.append(clean_m)
-
-    _write_genius_cache(cache_file, {'url': found_url, 'choruses': choruses})
+    import SongSections
+    choruses = choruses_from_sections(SongSections.parse_lyrics(final_response.content))
+    _write_genius_cache(cache_file, {'url': found_url, 'choruses': choruses, 'parser': GENIUS_PARSER})
     return choruses
 
 def recover_repeats_from_txt(lyrics_map_list, matched_choruses):

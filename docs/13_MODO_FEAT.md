@@ -69,5 +69,3 @@ Canciones de prueba (biblioteca): Sofia pasó de 0 a 5 tramos juntos (sus estrib
   servidor.
 - Validar con más canciones oficiales: volcar con Citron el RomFS del juego base de 2026 y de "mit Deutschen Hits"
   (clic derecho → Volcar RomFS) y repetir las mediciones.
-- B-72: la búsqueda de estribillos antigua (`genius_get_choruses`) no lee las cabeceras con enlaces; afecta a las
-  notas doradas del modo clásico (no al Feat).

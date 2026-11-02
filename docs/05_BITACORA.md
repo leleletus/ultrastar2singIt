@@ -256,6 +256,12 @@
 - Encontrado B-72: la búsqueda de estribillos antigua no lee cabeceras de Genius con nombres enlazados (75 canciones).
 - Pruebas: 61 OK.
 
+### 2026-11-02 (2) — B-72 y copia a la Switch
+- B-72 cerrado: la búsqueda de estribillos lee Genius como SongSections. Solo se releen las 75 cachés con página y
+  sin estribillos (72 releídas, 51 con estribillos) y solo esas canciones regeneran su vxla (39; las demás son de DLC
+  y usan su letra oficial). Conversión completa: 0 errores, 724 `.bk2` intactos, validador sin problemas.
+- Copia a la Switch: 1356 archivos (46 MB): 658 vxla_feat, 658 beats, 30 vxla, 7 vistas previas, la lista. Ningún video.
+
 <!-- Plantilla para nuevas entradas:
 ### AAAA-MM-DD — Título
 - Cambios: …

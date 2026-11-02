@@ -78,7 +78,7 @@ estado de cada bug está en la tabla). "Evidencia" = verificado con prueba, con 
 | B-69 | ALTO | Mod | El mod cerraba el juego: faltaban llamadas al sistema en main.npdm | CERRADO (2be952a) |
 | B-70 | MEDIO | Audio | Vista previa en el intro (segundo 60 fijo) | CERRADO (5083880: desde el coro) |
 | B-71 | MEDIO | Sincronía | Something About Us con la letra 1,08 s tarde | CERRADO (2be952a) |
-| B-72 | MEDIO | Letras | La búsqueda de estribillos en Genius no lee cabeceras con nombres enlazados ("[Coro: Luis Fonsi," partida en líneas): 75 canciones con página y sin estribillos | ABIERTO (el modo Feat ya usa SongSections) |
+| B-72 | MEDIO | Letras | La búsqueda de estribillos en Genius no lee cabeceras con nombres enlazados ("[Coro: Luis Fonsi," partida en líneas): 75 canciones con página y sin estribillos | CERRADO (este commit: 72 releídas, 51 con estribillos) |
 | B-73 | ALTO | Feat | El modo Feat cerraba el juego: faltaba vxla_feat y todas decían "coopfriendly": "Coop" sin segunda voz | CERRADO (4c02966; solo 2026) |
 
 ---
@@ -499,8 +499,12 @@ estado de cada bug está en la tabla). "Evidencia" = verificado con prueba, con 
   `[Chorus…]` no la encuentra. 75 de las 597 cachés con página tienen `"choruses": []` (Sofia, Échame la culpa…).
 - **Impacto**: en esas canciones los estribillos (y sus notas doradas del modo clásico) salen de la detección
   automática, que a veces da trozos de 3–5 s.
-- **Arreglo propuesto**: leer la página como `SongSections.parse_lyrics` (`<br>` → salto de línea). Cambia el vxla de
-  esas canciones: hacerlo con una subida de `VXLA_GENERATOR_VERSION` y probarlo en la consola.
+- **Arreglo**: la página se lee con `SongSections.parse_lyrics` (`<br>` → salto de línea; `choruses_from_sections`).
+  `upgrade_genius_cache` relee solo las cachés con página y sin estribillos (de la página ya guardada por
+  SongSections o de Genius) y las marca `reread`; esa marca entra en la firma del vxla, así que solo esas canciones
+  regeneran su vxla. Resultado: 72 releídas, 51 con estribillos (las otras 21 no tienen sección de estribillo en
+  Genius), 39 vxla regenerados (los demás eran canciones de DLC, que usan su letra oficial), 7 vistas previas
+  movidas al estribillo encontrado. Prueba: `test_choruses_of_a_page_with_linked_names_in_the_headers`.
 
 ### B-73 · ALTO · El modo Feat cerraba el juego
 - **Dónde**: `ConvertFiles` (no generaba `Songs/vxla_feat` ni `Songs/beats`) y `handle_xml_or_json` (`coopfriendly`).

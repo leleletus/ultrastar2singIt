@@ -734,6 +734,12 @@ class SongSectionsTest(unittest.TestCase):
         self.assertEqual(sections[1]['lines'], [['No eres tú, soy yo', 'italic'], ['No te quiero hacer sufrir', 'plain'],
                                                 ['Échame la culpa', 'bold']])
 
+    def test_choruses_of_a_page_with_linked_names_in_the_headers(self):
+        import SongSections
+        sections = SongSections.parse_lyrics(self.PAGE.encode())
+        self.assertEqual(UltrastarToSingit.choruses_from_sections(sections),
+                         ['No eres tú, soy yo\nNo te quiero hacer sufrir\nÉchame la culpa'])   # B-72: was []
+
     def test_singers_of_the_artist_and_title(self):
         import SongSections
         self.assertEqual(SongSections.song_singers('Luis Fonsi & Demi Lovato'), (['Luis Fonsi'], ['Demi Lovato']))

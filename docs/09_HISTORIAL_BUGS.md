@@ -1,13 +1,12 @@
 # 09 — Historial de bugs
 
-Resumen al 2026-11-02: **73 bugs registrados, 71 cerrados, 2 pendientes**. El detalle de cada uno (causa, impacto, arreglo) está en [03_BUGS.md](03_BUGS.md); las regresiones del historial de git en [04_REGRESIONES.md](04_REGRESIONES.md) y el día a día en [05_BITACORA.md](05_BITACORA.md).
+Resumen al 2026-11-02: **73 bugs registrados, 72 cerrados, 1 pendiente**. El detalle de cada uno (causa, impacto, arreglo) está en [03_BUGS.md](03_BUGS.md); las regresiones del historial de git en [04_REGRESIONES.md](04_REGRESIONES.md) y el día a día en [05_BITACORA.md](05_BITACORA.md).
 
 ## Pendientes
 
 | ID | Severidad | Área | Problema | Estado |
 |---|---|---|---|---|
 | B-61 | ALTO | GUI | La ventana se congeló una vez (hilo principal bloqueado, con el video de BBHMM abierto) | ABIERTO (vigilante hang_trace.log en 6e74b01) |
-| B-72 | MEDIO | Letras | La búsqueda de estribillos en Genius no lee cabeceras con nombres enlazados (75 canciones) | ABIERTO (el modo Feat ya usa SongSections) |
 
 ## Mejoras pendientes (no son bugs)
 
@@ -97,3 +96,4 @@ Resumen al 2026-11-02: **73 bugs registrados, 71 cerrados, 2 pendientes**. El de
 | B-70 | MEDIO | Audio | Vista previa en el intro (segundo 60 fijo) | (5083880: desde el coro) |
 | B-71 | MEDIO | Sincronía | Something About Us con la letra 1,08 s tarde | (2be952a) |
 | B-73 | ALTO | Feat | El modo Feat cerraba el juego: faltaba vxla_feat; "Coop" sin segunda voz | (4c02966; FeatVxla.py, SongSections.py) |
+| B-72 | MEDIO | Letras | La búsqueda de estribillos en Genius no leía cabeceras con nombres enlazados (75 canciones) | (este commit: 51 recuperan sus estribillos) |

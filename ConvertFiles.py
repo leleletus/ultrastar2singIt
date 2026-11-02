@@ -1369,7 +1369,7 @@ def adopt_legacy_cache(song_dir: Path, name_id: str, legacy_ids) -> None:
 def _vxla_cache_params(txt_path: Path, output_format, pitch_method, ignore_medley, keep_accents, song_duration,
                        vocal_isolation, genius_lookup=True, lyrics_offset=0.0):
     stat = txt_path.stat()
-    return {
+    params = {
         'version': VXLA_GENERATOR_VERSION,
         'format': output_format,
         'pitch_correction': pitch_method,
@@ -1383,6 +1383,11 @@ def _vxla_cache_params(txt_path: Path, output_format, pitch_method, ignore_medle
         'duration': round(song_duration, 1),
         'lyrics_offset': round(lyrics_offset, 3),
     }
+    # only the songs whose Genius choruses were read again (B-72) get a new vxla; the others keep theirs
+    parser = UltrastarToSingit.upgrade_genius_cache(txt_path) if genius_lookup else None
+    if parser:
+        params['genius_parser'] = parser
+    return params
 
 
 def _vxla_is_current(vxla_path: Path, meta_path: Path, params) -> bool:
