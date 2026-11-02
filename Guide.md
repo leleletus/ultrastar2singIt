@@ -81,6 +81,15 @@ every txt is kept). Converted .bk2 videos are never touched. Stopping a task los
  <i>Find singers' gender</i> - metadata fixes from the extracted games, USDB, MusicBrainz and the iTunes store (internet).</li>
 </ul>
 
+### Adding new songs (usdb_syncer)
+1. Download the songs with usdb_syncer into the input folder (same folder for both programs).
+2. Here: <i>Refresh</i>, tick <i>Only pending</i>, then <i>Check all visible</i> and <i>Convert checked</i>: the new songs are added to the
+ existing patch, the rest is not touched.
+3. Tick <i>Only problems</i>: an orange triangle in Video means a still image (right click > <i>Add a video</i>); an orange Sync icon means
+ a possible desync (click it to open the Sync Editor).
+4. Section 5: <i>Check the patch</i>, then <i>Update the patch on the Switch</i> with <i>Apply the changes</i>: only the new or changed files
+ are copied, the song list last.
+
 ### Songs downloaded with usdb_syncer
 Point usdb_syncer's song folder and this program's input folder to the same folder. Downloaded songs are recognized as they are
 ("Artist - Title" folders with their .txt, audio, video, [CO] cover and .usdb file). Downloading a song again in usdb_syncer

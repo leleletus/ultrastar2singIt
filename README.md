@@ -109,4 +109,5 @@ _Not mandatory reading:_
 - **Multi-language Support:** The GUI now features full i18n support. Simply place translation files in the `locales/` directory (e.g. `es.json`) and switch the language instantly in the top menu.
 - **Linux & Wine Support:** Cross-platform improvements mean you can now run this flawlessly on Linux using Python and Wine to execute Windows dependencies (like RAD Video Tools).
 - **Automated Media Copying:** When extending DLCs, you can now seamlessly copy all media files (Videos, Audio, Covers) from your base JSON's `Songs/` folder directly to the `Output/` patch with visual progress logs. 
+- **New songs:** download with usdb_syncer, tick *Only pending* → *Check all visible* → *Convert checked*, then section 5 → *Update the patch on the Switch*. Step by step: `docs/12_CANCIONES_NUEVAS.md`.
 - **Library tools:** section 5 of the window ("Advanced options: library tools") runs the maintenance tools of `tools/` in the background: patch check, Switch update over MTP, voice sync scan, covers, years, genres and singers' gender. See `docs/11_GUIA_DE_PRUEBAS.md`.

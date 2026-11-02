@@ -425,8 +425,11 @@ class SongFilterModel(QSortFilterProxyModel):
         self.setFilterCaseSensitivity(Qt.CaseInsensitive)
         self.setFilterKeyColumn(COL_NAME)
         self.only_problems = False
+        self.only_pending = False
 
     def filterAcceptsRow(self, source_row, source_parent):
+        if self.only_pending and self.sourceModel().rows[source_row].fully_cached:
+            return False
         if self.only_problems:
             r = self.sourceModel().rows[source_row]
             if r.state not in ('skipped', 'failed') and not r.doubtful_sync and not r.still_video:
@@ -971,6 +974,12 @@ class MainWindow(QMainWindow):
         self.t(self.only_problems_checkbox.setToolTip, "Show only songs with errors, skipped songs, possible desync or a still image as video.")
         self.only_problems_checkbox.toggled.connect(self.on_only_problems)
         top.addWidget(self.only_problems_checkbox)
+        self.only_pending_checkbox = QCheckBox()
+        self.t(self.only_pending_checkbox.setText, "Only pending")
+        self.t(self.only_pending_checkbox.setToolTip, "Show only songs not converted yet (e.g. new songs downloaded "
+                                                       "with usdb_syncer): then 'Check all visible' and 'Convert checked'.")
+        self.only_pending_checkbox.toggled.connect(self.on_only_pending)
+        top.addWidget(self.only_pending_checkbox)
         self.check_all_checkbox = QCheckBox()
         self.t(self.check_all_checkbox.setText, "Check all visible")
         self.check_all_checkbox.clicked.connect(self.on_check_all)
@@ -1390,6 +1399,10 @@ class MainWindow(QMainWindow):
 
     def on_search_changed(self, text: str) -> None:
         self.song_proxy.setFilterFixedString(text)
+
+    def on_only_pending(self, checked):
+        self.song_proxy.only_pending = checked
+        self.song_proxy.invalidateFilter()
 
     def on_only_problems(self, checked):
         self.song_proxy.only_problems = checked
