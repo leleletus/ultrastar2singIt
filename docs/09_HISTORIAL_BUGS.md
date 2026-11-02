@@ -96,4 +96,4 @@ Resumen al 2026-11-02: **73 bugs registrados, 72 cerrados, 1 pendiente**. El det
 | B-70 | MEDIO | Audio | Vista previa en el intro (segundo 60 fijo) | (5083880: desde el coro) |
 | B-71 | MEDIO | Sincronía | Something About Us con la letra 1,08 s tarde | (2be952a) |
 | B-73 | ALTO | Feat | El modo Feat cerraba el juego: faltaba vxla_feat; "Coop" sin segunda voz | (4c02966; FeatVxla.py, SongSections.py) |
-| B-72 | MEDIO | Letras | La búsqueda de estribillos en Genius no leía cabeceras con nombres enlazados (75 canciones) | (este commit: 51 recuperan sus estribillos) |
+| B-72 | MEDIO | Letras | La búsqueda de estribillos en Genius no leía cabeceras con nombres enlazados (75 canciones) | (a16d166: 51 recuperan sus estribillos) |
