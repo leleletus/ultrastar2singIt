@@ -96,4 +96,4 @@ Resumen al 2026-11-02: **73 bugs registrados, 71 cerrados, 2 pendientes**. El de
 | B-69 | ALTO | Mod | El mod cerraba el juego: faltaban llamadas al sistema en main.npdm | (2be952a) |
 | B-70 | MEDIO | Audio | Vista previa en el intro (segundo 60 fijo) | (5083880: desde el coro) |
 | B-71 | MEDIO | Sincronía | Something About Us con la letra 1,08 s tarde | (2be952a) |
-| B-73 | ALTO | Feat | El modo Feat cerraba el juego: faltaba vxla_feat; "Coop" sin segunda voz | (este commit; FeatVxla.py, SongSections.py) |
+| B-73 | ALTO | Feat | El modo Feat cerraba el juego: faltaba vxla_feat; "Coop" sin segunda voz | (4c02966; FeatVxla.py, SongSections.py) |

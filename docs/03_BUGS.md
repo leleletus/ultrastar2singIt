@@ -79,7 +79,7 @@ estado de cada bug está en la tabla). "Evidencia" = verificado con prueba, con 
 | B-70 | MEDIO | Audio | Vista previa en el intro (segundo 60 fijo) | CERRADO (5083880: desde el coro) |
 | B-71 | MEDIO | Sincronía | Something About Us con la letra 1,08 s tarde | CERRADO (2be952a) |
 | B-72 | MEDIO | Letras | La búsqueda de estribillos en Genius no lee cabeceras con nombres enlazados ("[Coro: Luis Fonsi," partida en líneas): 75 canciones con página y sin estribillos | ABIERTO (el modo Feat ya usa SongSections) |
-| B-73 | ALTO | Feat | El modo Feat cerraba el juego: faltaba vxla_feat y todas decían "coopfriendly": "Coop" sin segunda voz | CERRADO (este commit; solo 2026) |
+| B-73 | ALTO | Feat | El modo Feat cerraba el juego: faltaba vxla_feat y todas decían "coopfriendly": "Coop" sin segunda voz | CERRADO (4c02966; solo 2026) |
 
 ---
 
