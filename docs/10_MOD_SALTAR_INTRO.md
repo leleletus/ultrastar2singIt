@@ -11,10 +11,10 @@ zip para la SD, compatibilidad e instrucciones para adaptarlo a otra versión). 
 | Compatibilidad | |
 |---|---|
 | Juego | Let's Sing 2026, base `0100EE4020D18000` |
-| Actualización | **solo v131072** (`0100EE4020D18800`). Con otra, el juego se cierra o el mod no hace nada: quitarlo |
+| Actualización | **solo v131072**, versión 0.2.0 (`0100EE4020D18800`). Con otra, el juego se cierra o el mod no hace nada: quitarlo |
 | DLC / canciones del conversor | no influyen: funciona con y sin ellas |
 | Firmware | Atmosphère (`atmosphere/contents/0100EE4020D18000/exefs/`) |
-| Emuladores | sin probar |
+| Emuladores | Citron nightly `308bc267c`: carga el mod (`[exlaunch] [ skipintro ]` en el log) y llega al menú (2026-11-02). Lanzar Citron con `APPIMAGELAUNCHER_DISABLE=1` |
 
 | | |
 |---|---|

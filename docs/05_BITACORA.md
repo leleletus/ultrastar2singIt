@@ -213,9 +213,6 @@
   https://github.com/leleletus/ultrastar2singIt/releases/tag/skip-intro-v1
 - Vistas previas desde el coro (B-70); Something About Us −1080 ms (B-71); BBHMM: 10 líneas del final ajustadas a la
   voz (79% → 82%), quedan 59/78/80 y dos ad-libs para revisar a oído.
-- Micrófono con el móvil: el audio va por la WiFi (LiteNetLib), pero el emparejamiento pide un código a un servidor de
-  Voxler tras iniciar sesión en PlayFab con un token de la cuenta Nintendo; con Nintendo bloqueado sale 2123-0011. No
-  se trabaja en saltarse esa autenticación (riesgo de baneo para la consola del usuario).
 - Pendiente: copia de las vistas previas a la Switch (en curso), Citron con la actualización y el DLC (al cerrarlo
   se configura `external_content_dirs`), mejoras del mod (fin al acabar la letra, video sin acelerar).
 
