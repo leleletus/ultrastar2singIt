@@ -29,6 +29,10 @@ To make the whole process even more user-friendly, I've implemented a GUI and pa
 so you don't need to worry about installing Python or any dependencies.
 
 ## What this fork adds (`linux-wine-support` branch)
+**Mod for Let's Sing 2026: skip long intros.** Press ZR/ZL during a song's intro and it jumps to 3 s before the
+first note (normal mode only, game update v131072). Download: [release skip-intro-v1](https://github.com/leleletus/ultrastar2singIt/releases/tag/skip-intro-v1),
+source and build notes in [`mods/skip_intro/`](mods/skip_intro/README.md).
+
 Detailed technical notes, bug list, regressions and work log (in Spanish) are in [`docs/`](docs/README.md).
 
 **Your converted videos are safe.** Encoding a `.bk2` can take hours, so the converter never deletes or re-encodes one:
