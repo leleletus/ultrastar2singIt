@@ -479,40 +479,44 @@ def create_in_game_loading_picture(cover_file, list_in_dir, png_in_game_file_nam
     return _create_image(cover_file, list_in_dir, png_in_game_file_name, 512, 512, from_video)
 
 
-def create_audio_preview(audio_file, list_in_dir, ogg_preview_file_name, txt_data, time_offset=0.0):
-    """time_offset: seconds the txt timing is ahead of audio_file (see audio_window)."""
-    preview_start_time = 60
-    preview_duration_time = 30
-    try:
-        if 'MEDLEYSTARTBEAT' in txt_data and 'MEDLEYENDBEAT' in txt_data:
-            preview_start_beat = int(txt_data['MEDLEYSTARTBEAT'])
-            preview_end_beat = int(txt_data['MEDLEYENDBEAT'])
-            bpm = float(txt_data["BPM"].replace(',', '.'))
-            gap = float(txt_data.get("GAP", "0").replace(',', '.') or 0) / 1000
-            preview_start_time = (preview_start_beat * 60 / bpm / 4) + gap
-            preview_duration_time = ((preview_end_beat - preview_start_beat) * 60 / bpm / 4)
-        elif 'PREVIEWSTART' in txt_data:
-            preview_start_time = float(txt_data['PREVIEWSTART'].replace(',', '.'))
-    except (ValueError, ZeroDivisionError):
-        logger.warning("Invalid medley/preview tags, using the default preview position")
-    if preview_duration_time <= 0:
-        preview_duration_time = 30
-    if 'MEDLEYSTARTBEAT' in txt_data or 'PREVIEWSTART' in txt_data:
-        preview_start_time = max(0.0, preview_start_time - time_offset)
+PREVIEW_VERSION = 2
+PREVIEW_LENGTH = 30.0
+PREVIEW_LEAD_IN = 1.0  # seconds of music before the chorus
 
-    # prevent preview from exceeding actual song duration
-    try:
-        total_duration = get_duration(audio_file)
-        if preview_start_time + preview_duration_time > total_duration:
-            preview_start_time = max(0.0, total_duration - preview_duration_time)
-            if preview_start_time == 0.0:
-                preview_duration_time = total_duration
-    except SongError as e:
-        logger.warning(f"Could not verify duration for preview: {e}")
 
-    created = _ffmpeg(['-ss', str(preview_start_time), '-i', os.fspath(audio_file), '-vn',
-                       '-t', str(preview_duration_time), '-ar', '48000', '-af', 'dynaudnorm,volume=-2.5dB'],
-                      list_in_dir / ogg_preview_file_name)
+def preview_window(vxla_path, song_duration, txt_data, lyrics_offset=0.0):
+    """(start, length) in seconds of the game's audio for the song preview: #PREVIEWSTART when the txt sets it, else
+    the first chorus (golden notes, from the MEDLEY tags, Genius or the automatic detection), else the first note."""
+    start = None
+    if 'PREVIEWSTART' in txt_data:
+        try:
+            start = float(txt_data['PREVIEWSTART'].replace(',', '.')) - lyrics_offset
+        except ValueError:
+            logger.warning(f"Invalid #PREVIEWSTART:{txt_data['PREVIEWSTART']}")
+    if start is None:
+        try:
+            layers, _ = OfficialVxla.read_layers(vxla_path)
+            notes = OfficialVxla.to_sing_it(layers, 3600.0)['notes']
+        except Exception as e:  # unreadable vxla: the start of the song
+            logger.warning(f"{os.path.basename(str(vxla_path))}: preview from the start ({e})")
+            notes = []
+        golden = [n['t1'] for n in notes if '#g5' in n['value']]
+        if golden:
+            start = min(golden) - PREVIEW_LEAD_IN
+        elif notes:
+            start = notes[0]['t1'] - PREVIEW_LEAD_IN
+        else:
+            start = 0.0
+    length = min(PREVIEW_LENGTH, song_duration) if song_duration else PREVIEW_LENGTH
+    if song_duration:
+        start = min(start, song_duration - length)
+    return max(0.0, start), length
+
+
+def create_audio_preview(ogg_path, list_in_dir, ogg_preview_file_name, start, length):
+    """Cuts the preview from the converted audio (the same timeline as the vxla)."""
+    created = _ffmpeg(['-ss', f'{start:.3f}', '-i', os.fspath(ogg_path), '-vn', '-t', f'{length:.3f}', '-ar', '48000',
+                       '-af', 'dynaudnorm,volume=-2.5dB'], list_in_dir / ogg_preview_file_name)
     if created:
         logger.info('created : ' + ogg_preview_file_name)
     return created
@@ -1599,11 +1603,6 @@ def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None,
                 json.dump(audio_params, f)
         song_duration = get_duration(ogg_path)
 
-        if audio_changed or not (list_in_dir / ogg_preview_file_name).exists():
-            # the preview is cut from the original audio (the converted one is shifted by VIDEOGAP)
-            create_audio_preview(audio_source or ogg_path, list_in_dir, ogg_preview_file_name, txt_data,
-                                 lyrics_offset - trim_start if audio_source else lyrics_offset)
-
         # no image at all: try a frame of the video, else a placeholder with artist and title
         if cover_source is None:
             auto_cover = list_in_dir / (name_id + naming.AUTO_COVER_SUFFIX)
@@ -1741,6 +1740,15 @@ def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None,
                 json.dump(params, f, indent=1)
         else:
             logger.info(f"Using cached vxla for {dir_long_name} (no changes detected).")
+
+        # --- preview: the first chorus of the vxla (needs the vxla, so it comes after it) ---
+        preview_meta = list_in_dir / (name_id + naming.PREVIEW_META_SUFFIX)
+        preview_start, preview_length = preview_window(vxla_path, song_duration, txt_data, lyrics_offset)
+        wanted = {'version': PREVIEW_VERSION, 'start': round(preview_start, 2), 'length': round(preview_length, 2)}
+        if audio_changed or not (list_in_dir / ogg_preview_file_name).exists() or _read_json(preview_meta) != wanted:
+            if create_audio_preview(ogg_path, list_in_dir, ogg_preview_file_name, preview_start, preview_length):
+                with open(preview_meta, 'w', encoding='utf-8') as f:
+                    json.dump(wanted, f)
 
         # Validate that all required converted files were created successfully
         required = get_required_files(name_id, output_format, list_in_dir)

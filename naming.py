@@ -99,6 +99,7 @@ RESULT_SUFFIX = '_Result.png'
 VXLA_SUFFIX = '.vxla'
 VXLA_META_SUFFIX = '.vxla.meta.json'
 AUDIO_META_SUFFIX = '.ogg.meta.json'      # how the audio was cut (#START/#END, VIDEOGAP)
+PREVIEW_META_SUFFIX = '_preview.ogg.meta.json'  # where the preview was cut from (first chorus)
 VIDEO_MP4_SUFFIX = '.mp4'               # final video for XML games, legacy intermediate for JSON games
 VIDEO_BK2_SUFFIX = '.bk2'               # final video for JSON games (very slow to encode!)
 VIDEO_INTERMEDIATE_SUFFIX = '.avi'      # x264 intermediate fed to binkc
@@ -112,7 +113,7 @@ SYNC_REPORT_SUFFIX = '.sync.json'        # result of tools/sync_scan.py for the 
 GENERATED_SUFFIXES = (
     AUDIO_PREVIEW_SUFFIX, AUDIO_SUFFIX,
     COVER_LONG_SUFFIX, IN_GAME_LOADING_SUFFIX, RESULT_SUFFIX, COVER_SUFFIX,
-    VXLA_META_SUFFIX, VXLA_SUFFIX, AUDIO_META_SUFFIX,
+    VXLA_META_SUFFIX, VXLA_SUFFIX, PREVIEW_META_SUFFIX, AUDIO_META_SUFFIX,
     STILL_VIDEO_SUFFIX, STILL_VIDEO_MP4_SUFFIX, AUTO_COVER_SUFFIX, META_XML_SUFFIX,
     VIDEO_MP4_SUFFIX, VIDEO_BK2_SUFFIX, VIDEO_INTERMEDIATE_SUFFIX, VOICE_SUFFIX, SYNC_REPORT_SUFFIX,
 )

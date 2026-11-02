@@ -611,3 +611,13 @@ class MovingVideoTest(TempDirTest):
             self.assertIsNone(ConvertFiles.moving_video(d, ['Asong'], still, 200))
         finally:
             ConvertFiles.has_motion = old
+
+
+class PreviewWindowTest(TempDirTest):
+    def test_previewstart_tag_wins_and_window_stays_inside_the_song(self):
+        broken = write(self.tmp / 'x.vxla', 'not a vxla')
+        self.assertEqual(ConvertFiles.preview_window(broken, 200, {'PREVIEWSTART': '45,5'}, lyrics_offset=0.5),
+                         (45.0, 30.0))
+        self.assertEqual(ConvertFiles.preview_window(broken, 200, {}), (0.0, 30.0))   # unreadable: song start
+        self.assertEqual(ConvertFiles.preview_window(broken, 200, {'PREVIEWSTART': '190'}), (170.0, 30.0))
+        self.assertEqual(ConvertFiles.preview_window(broken, 20, {}), (0.0, 20))
