@@ -230,6 +230,15 @@
 - 01, 02 y 06 reescritos con el estado actual; índice de `docs/` con 11 y 12; tabla de 03 con B-63…B-71.
 - Pruebas: 51 OK.
 
+### 2026-11-02 — Citron: arranque con el mod y micrófono
+- Citron (nightly `308bc267c`) lanzado con `APPIMAGELAUNCHER_DISABLE=1` dentro de una unidad de systemd
+  (`MemoryMax=10G`); la carpeta de contenido externo apunta a la del juego. Carga la actualización 0.2.0 (v131072), el
+  DLC 3 y el mod (`[exlaunch] [ skipintro ]`); el juego llega al menú sin errores (~5 GB).
+- Micrófono del PC en Citron: no funciona y no es configuración. El juego (FMOD) pide la lista de micrófonos al
+  servicio `audin` cada segundo (`ListAudioInsAutoFiltered`) y nunca abre ninguno (`OpenAudioIn`), con cubeb y con
+  SDL, con el micrófono automático o fijado por nombre. Es una limitación de la emulación de la entrada de audio.
+  En la consola real, un micrófono USB va por esa misma ruta (`MicrophoneFmod`).
+
 <!-- Plantilla para nuevas entradas:
 ### AAAA-MM-DD — Título
 - Cambios: …
