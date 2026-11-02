@@ -51,6 +51,16 @@ def kio(*args, timeout=600):
     return subprocess.run(['kioclient', '--noninteractive', *args], capture_output=True, text=True, timeout=timeout)
 
 
+def kio_retry(*args, tries=4):
+    """kio that tries again when DBI's MTP responder drops a request (it does now and then)."""
+    for attempt in range(tries):
+        result = kio(*args)
+        if result.returncode == 0:
+            break
+        time.sleep(2 * (attempt + 1))
+    return result
+
+
 def make_dirs(remote, relative, made):
     """Creates on the Switch every folder of relative's path, top first (MTP can't make a/b/c if a/b is missing)."""
     parts = relative.split('/')[:-1]
@@ -157,7 +167,7 @@ def main():
         url = f"{remote}/{k}"
         if k in on_switch:  # keep what the Switch had
             os.makedirs(os.path.dirname(os.path.join(backup, k)), exist_ok=True)
-            if kio('copy', url, 'file://' + os.path.join(backup, k)).returncode != 0:
+            if kio_retry('copy', url, 'file://' + os.path.join(backup, k)).returncode != 0:
                 sys.exit(f"Could not back up {k} from the Switch: stopped before changing anything else.")
         else:
             make_dirs(remote, k, made)
@@ -166,7 +176,7 @@ def main():
             # DBI's MTP responder refuses to overwrite: remove it (backed up, or a leftover the photo does not know)
             # and copy again
             kio('remove', url)
-            result = kio('copy', 'file://' + os.path.join(patch, k), url)
+            result = kio_retry('copy', 'file://' + os.path.join(patch, k), url)
         got = remote_size(url)
         if result.returncode != 0 or got != local[k][0]:
             sys.exit(f"Copy of {k} failed ({result.stderr.strip()[:200]}); the Switch keeps the other files. "
