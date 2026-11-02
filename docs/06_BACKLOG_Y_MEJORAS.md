@@ -1,5 +1,35 @@
 # 06 — Backlog, mejoras de interfaz y plan de trabajo
 
+## 0. Estado al 2026-11-01
+
+Las fases 1 a 4 y 6 del plan están hechas (bugs B-01…B-45 cerrados; ver [09_HISTORIAL_BUGS.md](09_HISTORIAL_BUGS.md)).
+El resto del documento es el plan original del 2026-10-21, que se conserva como referencia.
+
+| ID | Estado | Nota |
+|---|---|---|
+| M-01 | Hecho | `tests/test_conversion.py` (51 pruebas, `unittest`) |
+| M-02 | Hecho | resumen ok/omitidas/fallidas con motivo en el log y estado por canción en la tabla |
+| M-03 | Parcial | `tools/validate_patch.py` revisa el parche; las canciones se validan al convertir (`SongError` con motivo) |
+| M-04 | Pendiente | duetos: el parser solo toma P1 |
+| M-05 | Hecho (2026) | idioma, género, dificultad, voz y año reales; solo en Let's Sing 2026 |
+| M-06 | Hecho | `_atomic_write_text` |
+| M-07 | Pendiente | la CLI no expone hilos, vaciar salida, forzar ni `--dry-run` |
+| M-08 | Pendiente | `SyncModel.py` ya separa la lógica del editor; falta el resto |
+| M-09 | Pendiente | |
+| M-10 | Pendiente | la capa `language` del vxla sigue en `english` (el idioma real va en `songs_xx.json`) |
+| M-11, M-12 | Pendiente | |
+| M-13 | Hecho | columna Sinc. + `tools/sync_scan.py` |
+| G-01…G-05 | Hecho | modelo/vista con escaneo en fondo, i18n completa, columna Estado, convertir marcadas, menú contextual por fila |
+| G-06 | Hecho | formulario en apartados 1–5 |
+| G-07 | Hecho | editor nuevo (carril de notas, cortes, ajustar a la voz, atajos, `.bak`) |
+| G-08 | Hecho | `QPlainTextEdit` con límite, colores, panel redimensionable |
+| G-09 | Hecho | iconos Tabler |
+| G-10 | Pendiente | vista de detalle de canción |
+| G-11 | Hecho | tamaño, posición y columnas en `QSettings` |
+| G-12 | Parcial | progreso con ETA; sin fase por canción |
+| G-13 | Hecho | Ctrl+F, F5, Ctrl+Enter, Esc |
+| G-14 | Pendiente | `Guide.md` solo en inglés |
+
 ## 1. Plan por fases (propuesto)
 
 Cada fase es un conjunto de commits pequeños y probables por separado.

@@ -8,7 +8,8 @@ This branch/patch introduces native Linux compatibility via Wine and Python nati
    - Automatically translates Unix file paths (e.g., `/home/...`) into Wine-friendly `Z:\home\...` format so `binkc` does not fail with "Syntax Errors".
 2. **Dynamic Paths in GUI:**
    - `Gui.py` now intelligently looks for `ffmpeg` at `/usr/bin/ffmpeg` on Linux.
-   - It also automatically searches for `radvideo64.exe` inside `~/.wine/drive_c/Program Files (x86)/RADVideo/`.
+   - It also automatically searches for `radvideo64.exe` inside `$WINEPREFIX/drive_c/Program Files (x86)/RADVideo/`
+     (`~/.wine` when `WINEPREFIX` is not set). Another Wine binary can be set with `tools.wine_path` in `config.yml`.
 3. **Icons:**
    - The Tabler SVG icons of `pytablericons` are rendered with QtSvg (`GuiElement.py`); its own renderer needs
      pygame/cairo and failed on many Linux systems. Without the package the GUI still works (plain dots).
@@ -29,16 +30,23 @@ sudo pacman -S wine wine-gecko wine-mono gst-plugins-good ffmpeg
 wget http://www.radgametools.com/down/Bink/RADTools.exe
 wine RADTools.exe
 
-# 3. Setup Python venv
+# 3. Get the project and set up the Python venv (inside the project folder: start_linux.sh uses ./venv)
+git clone -b linux-wine-support https://github.com/leleletus/ultrastar2singIt.git
+cd ultrastar2singIt
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
+# optional, several GB: voice analysis of the sync editor / sync check (Demucs) and the "slow" pitch method
+# pip install -r requirements-slow.txt
 python3 LetsSingUltraStarConverter.py
 ```
 
+Optional tools: `yt-dlp` (Add a video from a YouTube link; also found inside usdb_syncer's pipx install),
+KDE's `kioclient` and DBI on the Switch (Update the patch on the Switch over MTP).
+
 ## Opening it every day
 ```
-~/ultrastar_official/start_linux.sh          # open the program
-bash install_linux_launcher.sh               # once: adds it to the applications menu (KDE, GNOME...)
+./start_linux.sh                 # open the program (from the project folder; any folder works with its full path)
+bash install_linux_launcher.sh   # once: adds it to the applications menu (KDE, GNOME...)
 ```
 More in [`docs/08_USO_EN_LINUX.md`](docs/08_USO_EN_LINUX.md).

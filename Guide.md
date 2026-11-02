@@ -73,7 +73,8 @@ every txt is kept). Converted .bk2 videos are never touched. Stopping a task los
 <ul>
 <li><i>Check the patch</i> - checks every song of the converted patch before you copy it (seconds).</li>
 <li><i>Update the patch on the Switch</i> - copies only the changed files over MTP (Linux with KDE, DBI's MTP responder open).
- Files replaced on the Switch are backed up first; the song list is copied last, so a disconnection never leaves a broken patch.</li>
+ Files replaced on the Switch are backed up first; the song list is copied last, so a disconnection never leaves a broken patch.
+ The first time on a PC, also tick <i>First copy</i>: it copies the whole patch, only if the DLC folder on the Switch is missing or empty.</li>
 <li><i>Check the timing of every song against the voice</i> - separates the voice (Demucs) and compares it with the lyrics;
  fills the Sync column and writes informe_sincronia.csv. Hours the first time (3-4 min per song), minutes afterwards.
  Needs a lot of memory: on Linux it runs with a 6 GB limit so the rest of the PC keeps working.</li>

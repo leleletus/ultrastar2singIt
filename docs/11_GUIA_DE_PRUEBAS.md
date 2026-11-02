@@ -3,6 +3,9 @@
 Parche de Let's Sing 2026 (DLC `0100EE4020D19003`): 675 canciones (660 propias + 15 oficiales), validado sin problemas.
 Biblioteca: `~/LetsSing/songs` (271 descargadas con usdb_syncer + 389 sacadas de los DLC y juegos anteriores).
 
+Es la foto de la biblioteca del autor ese día (canciones, cantidades, `~/LetsSing`). En otro PC, `<canciones>` es tu
+carpeta de entrada y `<proyecto>` la carpeta del repositorio; los pasos del apartado 3 valen igual.
+
 ## 1. Qué cambió
 
 | Área | Antes | Ahora |
@@ -18,7 +21,7 @@ Biblioteca: `~/LetsSing/songs` (271 descargadas con usdb_syncer + 389 sacadas de
 | Sync Editor | No mostraba la letra | Editor nuevo: carril de notas, cortes por partes, ajustar a la voz, modo cantar |
 | Columna "Sinc." | — | Resultado de la revisión con la voz (ok / parcial / desfase / dudosa) |
 | Herramientas | Solo por terminal | Apartado **5. Opciones avanzadas: herramientas de la biblioteca** en la app |
-| usdb_syncer | Apuntaba al disco dañado | Apunta a `~/LetsSing/songs`; las canciones nuevas se convierten sin pasos extra |
+| usdb_syncer | Apuntaba al disco dañado | Apunta a la carpeta de entrada del programa; las canciones nuevas se convierten sin pasos extra |
 | Videos `.bk2` | Ninguna forma segura de rehacer uno | Clic derecho → "Volver a codificar el video desde su fuente" (el viejo se **mueve** a `_replaced_videos`, no se borra) |
 
 ## 2. Qué probar en la consola
@@ -47,23 +50,23 @@ Si algo falla, anota la canción y qué se ve: con eso se busca en `docs/03_BUGS
 
 ## 3. Qué probar en el PC
 
-Abre el programa con el icono de KDE o con `~/ultrastar_official/start_linux.sh`.
+Abre el programa con el icono de KDE o con `<proyecto>/start_linux.sh`.
 
 - **Apartado 5 (abajo a la izquierda)**: elige *Comprobar el parche antes de copiarlo a la consola* → *Ejecutar*: en
   menos de un minuto debe decir "675 songs checked: 0 problem(s)". *Ver progreso* abre la ventana con la salida.
 - **Solo listar**: elige *Arreglar portadas repetidas o malas* sin marcar *Aplicar los cambios*: lista lo que
   cambiaría y no toca nada.
 - **Detener**: lanza *Revisar la sincronía de cada canción con la voz* marcando *Solo las canciones ya analizadas*,
-  pulsa *Detener*: el informe `~/LetsSing/informe_sincronia.csv` queda completo.
+  pulsa *Detener*: el informe `<canciones>/../informe_sincronia.csv` queda completo.
 - **Bloqueo**: mientras corre una herramienta, *Iniciar conversión* está desactivado (y al revés).
 - **Volver a codificar un video**: clic derecho en *Madonna - La isla bonita (Radio Edit)* → *Volver a codificar el
-  video desde su fuente…*. Pide confirmación, mueve el `.bk2` actual a `~/LetsSing/_replaced_videos/` y convierte
+  video desde su fuente…*. Pide confirmación, mueve el `.bk2` actual a `<canciones>/../_replaced_videos/` y convierte
   solo esa canción (unos minutos). Luego, apartado 5 → *Actualizar el parche en la Switch* con *Aplicar los cambios*.
-- **Añadir un video**: clic derecho en una canción de `~/LetsSing/VIDEOS_PENDIENTES.md` → *Añadir un video (archivo o
+- **Añadir un video**: clic derecho en una canción sin videoclip (lista del autor: `~/LetsSing/VIDEOS_PENDIENTES.md`) → *Añadir un video (archivo o
   enlace)…* → pega el enlace; la ventana dice en qué segundo empieza la canción y si encaja; luego *Convertir solo esta
   canción*.
 - **usdb_syncer**: ábrelo con `usdb_syncer`; en sus ajustes la carpeta de canciones debe ser
-  `/home/djvemo/LetsSing/songs`. Descarga una canción nueva, pulsa *Actualizar* en el programa: debe aparecer en la
+  la carpeta de entrada del programa. Descarga una canción nueva, pulsa *Actualizar* en el programa: debe aparecer en la
   tabla y convertirse con *Convertir solo esta canción*.
 
 ## 4. Qué quedó a medias / qué falta (actualizado 2026-11-01 por la noche)

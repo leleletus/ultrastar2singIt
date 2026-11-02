@@ -30,8 +30,9 @@ so you don't need to worry about installing Python or any dependencies.
 
 ## What this fork adds (`linux-wine-support` branch)
 **Mod for Let's Sing 2026: skip long intros.** Press ZR/ZL during a song's intro and it jumps to 3 s before the
-first note (normal mode only, game update v131072). Download: [release skip-intro-v1](https://github.com/leleletus/ultrastar2singIt/releases/tag/skip-intro-v1),
-source and build notes in [`mods/skip_intro/`](mods/skip_intro/README.md).
+first note (normal mode only). **Only for game update v131072** (build ID `1C344DD17322D4FA3E8F50063340C7D0`).
+Its own repository, with the download, compatibility and build instructions:
+[leleletus/letssing2026-skip-intro](https://github.com/leleletus/letssing2026-skip-intro).
 
 Detailed technical notes, bug list, regressions and work log (in Spanish) are in [`docs/`](docs/README.md).
 
@@ -74,20 +75,20 @@ folder is cleared any video without a copy in its song folder is rescued.
 
 **Let's Sing 2026** (only this edition; older ones are generated as before): the "Title" list of the game is sorted
 by the song ID, so the patch uses title-first IDs; real language (English/French/Spanish/German/Korean/Other), genre
-(HipHop, RnB, Latin...), difficulty (estimated from the notes) and singer. Design of a mod to skip long intros:
-[`docs/10_MOD_SALTAR_INTRO.md`](docs/10_MOD_SALTAR_INTRO.md).
+(HipHop, RnB, Latin...), difficulty (estimated from the notes) and singer. What the game's code says and how the
+skip-intro mod works: [`docs/10_MOD_SALTAR_INTRO.md`](docs/10_MOD_SALTAR_INTRO.md).
 
 **GUI**: fast song table with per-song status, convert only the checked songs or a single one, coloured log,
 settings remembered, full Spanish translation. Tests: `python -m unittest discover -s tests -t .`
 
 ## Requirements
-- Windows 7+
+- Windows 7+, or Linux with Wine (see [README_Linux.md](README_Linux.md))
 - [ffmpeg](https://ffmpeg.org/download.html) - I used version [7.1.1-full_build from gyan.dev](https://www.gyan.dev/ffmpeg/builds/)
 - [RAD Video Tools](https://www.radgametools.com/bnkdown.htm) (**needed only for Let's Sing 2024+**)
 
 ## How to use
-**Linux:** open the program with `~/ultrastar_official/start_linux.sh` (or run `bash install_linux_launcher.sh`
-once to get it in the applications menu). Daily use on Linux, the menu launcher and long background tasks:
+**Linux:** install it as in [README_Linux.md](README_Linux.md), then open the program with `./start_linux.sh` from the
+project folder (or run `bash install_linux_launcher.sh` once to get it in the applications menu). Daily use on Linux, the menu launcher and long background tasks:
 [`docs/08_USO_EN_LINUX.md`](docs/08_USO_EN_LINUX.md).
 
 See the [Guide document](Guide.md) for a detailed step-by-step guide on how to use this converter and patch your DLC with custom songs.

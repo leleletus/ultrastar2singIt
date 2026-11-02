@@ -79,16 +79,16 @@ Resumen al 2026-11-01: **71 bugs registrados, 70 cerrados, 1 pendiente**. El det
 | B-52 | ALTO | Datos | El idioma de todas las canciones salía "English" (fijo en el código): el filtro por idioma del juego no servía | (aa33a0e, e4aeb93; solo 2026) |
 | B-53 | ALTO | Portadas | 79 canciones con la portada de otra (una por artista, de un script anterior) | (aa33a0e: tools/fix_covers.py) |
 | B-54 | ALTO | Letras | Caracteres rotos ("Ã©", "Â«") en letras oficiales: archivos UTF-8 que declaran Windows-1252 | (e4aeb93) |
-| B-55 | MEDIO | Datos | Género "Rap" no existe en 2026 (es "HipHop"); RnB/Latin/Country nunca se usaban | (este commit; solo 2026) |
-| B-56 | ALTO | Orden | Lista "Título" del juego ordenada por artista: Let's Sing 2026 ordena por el ID y el nuestro empezaba por las iniciales del artista | (este commit: ID de juego título primero, solo 2026) |
-| B-57 | MEDIO | Datos | 240 canciones de DLC con el año del DLC (2020) en vez del de la canción | (este commit: tools/fix_years.py) |
-| B-58 | MEDIO | Portadas | Portadas del megapack en blanco, fotogramas borrosos o de recopilatorios | (este commit: fix_covers --blank/--dlc) |
+| B-55 | MEDIO | Datos | Género "Rap" no existe en 2026 (es "HipHop"); RnB/Latin/Country nunca se usaban | (7f89e26; solo 2026) |
+| B-56 | ALTO | Orden | Lista "Título" del juego ordenada por artista: Let's Sing 2026 ordena por el ID y el nuestro empezaba por las iniciales del artista | (7f89e26: ID de juego título primero, solo 2026) |
+| B-57 | MEDIO | Datos | 240 canciones de DLC con el año del DLC (2020) en vez del de la canción | (7f89e26: tools/fix_years.py) |
+| B-58 | MEDIO | Portadas | Portadas del megapack en blanco, fotogramas borrosos o de recopilatorios | (7f89e26: fix_covers --blank/--dlc) |
 | B-59 | BAJO | Biblioteca | Swish Swish duplicada (normal y Album Version) | (movida a archivo/duplicados_quitados) |
 | B-60 | BAJO | Herramientas | Los registros de los servicios no se vaciaban al relanzar (systemd "file:") | (usar "truncate:") |
 | B-62 | MEDIO | Switch | DBI no sobrescribe archivos por MTP ("Access denied") | (e4aeb93: borrar ya respaldado y copiar) |
 | B-63 | ALTO | usdb_syncer | Su carpeta de canciones seguía en el disco dañado | (configuración corregida) |
-| B-64 | MEDIO | Herramientas | Detener sync_scan dejaba el informe solo con lo revisado en esa pasada | (este commit) |
-| B-65 | MEDIO | Caché | Un `.bk2` se volvería a codificar si usdb_syncer renombra la carpeta | (este commit) |
+| B-64 | MEDIO | Herramientas | Detener sync_scan dejaba el informe solo con lo revisado en esa pasada | (81eadc3) |
+| B-65 | MEDIO | Caché | Un `.bk2` se volvería a codificar si usdb_syncer renombra la carpeta | (81eadc3) |
 | B-66 | ALTO | Video | 28 canciones con la portada fija como `.bk2` aunque tienen su videoclip | (5b0e377: 27 recodificadas desde los video.mp4 del usuario, Merry Christmas con su .bk2 oficial, Maria y Something About Us con videoclip alineado) |
 | B-67 | ALTO | Switch | La SD se llenó copiando el parche nuevo junto al viejo; carpetas sin crear tras vaciarla | (429f0a7, b1b09cb) |
 | B-68 | MEDIO | Switch | Copias por MTP cortadas por fallos sueltos de DBI | (135db90: reintentos) |

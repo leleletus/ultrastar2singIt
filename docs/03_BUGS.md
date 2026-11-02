@@ -1,6 +1,7 @@
 # 03 — Registro de bugs
 
-Estado al commit `4e1cb35`. "Evidencia" = verificado con prueba, con `error.log`, o por lectura directa del código.
+Registro abierto con la auditoría del commit `4e1cb35` (las líneas del detalle de B-01…B-45 son de ese commit; el
+estado de cada bug está en la tabla). "Evidencia" = verificado con prueba, con `error.log`, o por lectura directa del código.
 
 ## Resumen
 
@@ -60,14 +61,23 @@ Estado al commit `4e1cb35`. "Evidencia" = verificado con prueba, con `error.log`
 | B-52 | ALTO | Datos | El idioma de todas las canciones salía "English" (fijo en el código): el filtro por idioma del juego no servía | CERRADO (aa33a0e, e4aeb93; solo 2026) |
 | B-53 | ALTO | Portadas | 79 canciones con la portada de otra (una por artista, de un script anterior) | CERRADO (aa33a0e: tools/fix_covers.py) |
 | B-54 | ALTO | Letras | Caracteres rotos ("Ã©", "Â«") en letras oficiales: archivos UTF-8 que declaran Windows-1252 | CERRADO (e4aeb93) |
-| B-55 | MEDIO | Datos | Género "Rap" no existe en 2026 (es "HipHop"); RnB/Latin/Country nunca se usaban | CERRADO (este commit; solo 2026) |
-| B-56 | ALTO | Orden | Lista "Título" del juego ordenada por artista: Let's Sing 2026 ordena por el ID y el nuestro empezaba por las iniciales del artista | CERRADO (este commit: ID de juego título primero, solo 2026) |
-| B-57 | MEDIO | Datos | 240 canciones de DLC con el año del DLC (2020) en vez del de la canción | CERRADO (este commit: tools/fix_years.py) |
-| B-58 | MEDIO | Portadas | Portadas del megapack en blanco, fotogramas borrosos o de recopilatorios | CERRADO (este commit: fix_covers --blank/--dlc) |
+| B-55 | MEDIO | Datos | Género "Rap" no existe en 2026 (es "HipHop"); RnB/Latin/Country nunca se usaban | CERRADO (7f89e26; solo 2026) |
+| B-56 | ALTO | Orden | Lista "Título" del juego ordenada por artista: Let's Sing 2026 ordena por el ID y el nuestro empezaba por las iniciales del artista | CERRADO (7f89e26: ID de juego título primero, solo 2026) |
+| B-57 | MEDIO | Datos | 240 canciones de DLC con el año del DLC (2020) en vez del de la canción | CERRADO (7f89e26: tools/fix_years.py) |
+| B-58 | MEDIO | Portadas | Portadas del megapack en blanco, fotogramas borrosos o de recopilatorios | CERRADO (7f89e26: fix_covers --blank/--dlc) |
 | B-59 | BAJO | Biblioteca | Swish Swish duplicada (normal y Album Version) | CERRADO (movida a archivo/duplicados_quitados) |
 | B-60 | BAJO | Herramientas | Los registros de los servicios no se vaciaban al relanzar (systemd "file:") | CERRADO (usar "truncate:") |
 | B-61 | ALTO | GUI | La ventana se congeló una vez (hilo principal bloqueado, con el video de BBHMM abierto) | ABIERTO (vigilante hang_trace.log en 6e74b01) |
 | B-62 | MEDIO | Switch | DBI no sobrescribe archivos por MTP ("Access denied") | CERRADO (e4aeb93: borrar ya respaldado y copiar) |
+| B-63 | ALTO | usdb_syncer | Su carpeta de canciones seguía en el disco dañado | CERRADO (configuración corregida) |
+| B-64 | MEDIO | Herramientas | Detener sync_scan dejaba el informe solo con lo revisado en esa pasada | CERRADO (81eadc3) |
+| B-65 | MEDIO | Caché | Un `.bk2` se volvería a codificar si usdb_syncer renombra la carpeta | CERRADO (81eadc3) |
+| B-66 | ALTO | Video | 28 canciones con la portada fija como `.bk2` aunque tienen su videoclip | CERRADO (5b0e377: 27 recodificadas desde los video.mp4 del usuario, Merry Christmas con su .bk2 oficial, Maria y Something About Us con videoclip alineado) |
+| B-67 | ALTO | Switch | La SD se llenó copiando el parche nuevo junto al viejo; carpetas sin crear tras vaciarla | CERRADO (429f0a7, b1b09cb) |
+| B-68 | MEDIO | Switch | Copias por MTP cortadas por fallos sueltos de DBI | CERRADO (135db90: reintentos) |
+| B-69 | ALTO | Mod | El mod cerraba el juego: faltaban llamadas al sistema en main.npdm | CERRADO (2be952a) |
+| B-70 | MEDIO | Audio | Vista previa en el intro (segundo 60 fijo) | CERRADO (5083880: desde el coro) |
+| B-71 | MEDIO | Sincronía | Something About Us con la letra 1,08 s tarde | CERRADO (2be952a) |
 
 ---
 
@@ -404,8 +414,8 @@ Estado al commit `4e1cb35`. "Evidencia" = verificado con prueba, con `error.log`
 ### B-63 · ALTO · usdb_syncer apuntaba al disco dañado
 - **Dónde**: configuración de usdb_syncer (`~/.config/bohning/usdb_syncer.conf`, `song_dir`), no el conversor.
 - **Causa**: tras rescatar la biblioteca a `~/LetsSing/songs` (2026-10-24) usdb_syncer seguía con
-  `/run/media/djvemo/EADE-F56A/songs_custom`: no veía las canciones y descargaría a una ruta que ya no existe.
-- **Arreglo**: `song_dir=/home/djvemo/LetsSing/songs` (copia `usdb_syncer.conf.antes_LetsSing_20261101`). usdb_syncer
+  la carpeta `songs_custom` del disco externo dañado: no veía las canciones y descargaría a una ruta que ya no existe.
+- **Arreglo**: `song_dir=~/LetsSing/songs` (copia `usdb_syncer.conf.antes_LetsSing_20261101`). usdb_syncer
   encuentra cada canción por su `.usdb` (recorre toda la carpeta), así que reconoce las 271 sin importar el nombre de
   la carpeta. Comprobado: el escáner del programa reconoce las 660 carpetas (271 de USDB + 389 de DLC/juegos).
 - **A saber**: las 271 descargadas antes tienen sus medios con nombre genérico (`audio.ogg`, `video.mp4`,
@@ -460,7 +470,7 @@ Estado al commit `4e1cb35`. "Evidencia" = verificado con prueba, con `error.log`
 - **Arreglo**: `kio_retry` reintenta hasta 4 veces con pausa creciente; volver a ejecutarla sigue donde quedó.
 
 ### B-69 · ALTO · El mod de saltar intro cerraba el juego al abrirlo
-- **Dónde**: `mods/skip_intro` (`main.npdm`).
+- **Dónde**: mod de saltar intro (`main.npdm`), hoy en su repositorio: https://github.com/leleletus/letssing2026-skip-intro.
 - **Causa**: se instaló solo `subsdk9` con el `main.npdm` del juego, que no permite las llamadas al sistema que exlaunch
   usa para escribir sus ganchos: "Undefined System Call 0x74" (`svcMapProcessMemory`) en `atmosphere/crash_reports`.
 - **Arreglo**: `main.npdm` del juego (convertido con `npdm2json.py` y rehecho con `npdmtool`) con solo 0x40, 0x43,

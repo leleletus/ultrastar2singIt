@@ -219,6 +219,20 @@
 - Pendiente: copia de las vistas previas a la Switch (en curso), Citron con la actualización y el DLC (al cerrarlo
   se configura `external_content_dirs`), mejoras del mod (fin al acabar la letra, video sin acelerar).
 
+### 2026-11-01 (noche) — Proyecto portable, mod en su repositorio, docs al día
+- Mod de saltar intro: repositorio propio `leleletus/letssing2026-skip-intro` (código, `build.sh` reproducible,
+  compatibilidad detallada: solo la actualización v131072, build ID `1C344DD17322D4FA3E8F50063340C7D0`). En este
+  proyecto `mods/` queda en `.gitignore`. `build.sh` desde cero: `main.npdm` idéntico al release y `subsdk9` con el
+  mismo código máquina (solo cambian las rutas de compilación incrustadas en `.rodata`).
+- Sin rutas del PC del autor: yt-dlp (`YT_DLP`, PATH, usdb_syncer o módulo), RAD bajo `$WINEPREFIX`, `start_linux.sh`
+  sin venv obligatorio, `config.yml.antes_limpieza` fuera de git (`config.yml.*` ignorado), guías con marcadores
+  `<proyecto>`/`<canciones>`/`<salida>`.
+- `switch_update.py --first-copy` (y "Primera copia" en el apartado 5): en un PC sin foto de la Switch copia el parche
+  entero, solo si la carpeta del DLC en la Switch falta o está vacía. Probado con `kioclient` sobre carpetas locales
+  (inexistente, vacía, con archivos → se niega, segunda pasada).
+- 01, 02 y 06 reescritos con el estado actual; índice de `docs/` con 11 y 12; tabla de 03 con B-63…B-71.
+- Pruebas: 51 OK.
+
 <!-- Plantilla para nuevas entradas:
 ### AAAA-MM-DD — Título
 - Cambios: …

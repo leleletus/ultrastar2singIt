@@ -1,7 +1,8 @@
 # 12 — Añadir canciones nuevas (usdb_syncer → programa → Switch)
 
-Biblioteca: `~/LetsSing/songs` (la carpeta de canciones de usdb_syncer y la carpeta de entrada del programa son la
-misma). Parche: `~/LetsSing/output/0100EE4020D19003` (DLC 3 de Let's Sing 2026).
+Biblioteca: `<canciones>`, la carpeta de canciones de usdb_syncer, que es también la carpeta de entrada del programa
+(en usdb_syncer: ajustes → *Song directory*). Parche: `<salida>/<TitleID del DLC>` (por ejemplo `0100EE4020D19003`,
+el DLC 3 de Let's Sing 2026).
 
 ## 1. Descargar
 
@@ -11,7 +12,7 @@ renombrar ni mover nada.
 
 ## 2. Convertir solo las nuevas
 
-1. Abrir el programa (icono de KDE o `~/ultrastar_official/start_linux.sh`). Si ya estaba abierto, **Actualizar**.
+1. Abrir el programa (icono del menú o `<proyecto>/start_linux.sh`). Si ya estaba abierto, **Actualizar**.
    Las canciones nuevas salen como **Pendiente**.
 2. Arriba de la lista: marcar **Solo pendientes** → **Marcar todas las visibles** → **Convertir marcadas**.
    - "Convertir marcadas" **añade** las canciones al parche que ya existe (no vacía la salida, no toca las demás).
@@ -37,7 +38,10 @@ Opcional, en **5. Opciones avanzadas** (marcar la casilla para desplegarlo), ant
    `0 problem(s)`.
 2. En la Switch: **DBI → Run MTP responder** y conectar el cable.
 3. **5. Opciones avanzadas** → **Actualizar el parche en la Switch (MTP, DBI)**, marcar **Aplicar los cambios** →
-   Ejecutar.
+   Ejecutar. Necesita Linux con KDE (`kioclient`).
+   - **La primera vez en este PC** (todavía no hay foto de lo que tiene la Switch): marcar también **Primera copia**.
+     Copia el parche entero, solo si la carpeta del DLC en la Switch no existe o está vacía; si tiene archivos de
+     una copia anterior hecha a mano, vaciarla antes con DBI.
    - Copia **solo los archivos nuevos o cambiados**: audio, vista previa, portada, video y letra de las canciones
      nuevas, y al final `songs_int.json` (la lista de canciones). Las carpetas no se copian enteras.
    - La lista se copia la última: si el cable se suelta, la consola sigue con la lista anterior completa; volver a
@@ -52,5 +56,5 @@ Opcional, en **5. Opciones avanzadas** (marcar la casilla para desplegarlo), ant
 - **No volver a descargar en usdb_syncer una canción ya arreglada**: reescribe su txt (se pierden la sincronía
   ajustada, `#GENRE`, `#YEAR`, la portada elegida) y puede renombrar la carpeta. El `.bk2` ya convertido se reutiliza.
 - **Nunca se borra un `.bk2`** al convertir: solo se rehace uno que sea la portada fija cuando la carpeta tiene un video
-  con movimiento (el viejo se guarda en `~/LetsSing/_replaced_videos`).
+  con movimiento (el viejo se guarda en `<canciones>/../_replaced_videos`).
 - Ningún paso necesita internet salvo la descarga, "Añadir un video" con enlace y las herramientas de datos (internet).

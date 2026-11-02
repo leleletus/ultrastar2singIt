@@ -1,7 +1,7 @@
 # 07 — Canciones con problemas reportados
 
 Reportadas el 2026-10-21 tras probarlas en la consola. **Ninguna se pudo abrir todavía**: el disco con `songs_custom`
-no estaba conectado (en `/run/media/djvemo/EADE-F56A` había otro disco). La tabla indica la causa más probable según
+no estaba conectado (en su punto de montaje había otro disco). La tabla indica la causa más probable según
 el código y qué arreglo ya la cubre; la columna "Verificar" es lo que hay que mirar con el disco conectado.
 
 | Canción | Síntoma reportado | Causa probable | Cubierto por | Verificar |

@@ -1,15 +1,27 @@
 # 10 — Mod para Let's Sing 2026: saltar el intro y terminar al acabar la letra
 
-Estado: **funciona en la consola (2026-11-01)**. Código en `mods/skip_intro/`; plan A elegido por el
-usuario: botón (ZR/ZL, SL/SR) durante el intro, salto a 3 s antes de la primera nota. Plan B si falla: automático. Todo lo de abajo sale del código del juego, no de
-suposiciones; las direcciones valen **solo** para la versión analizada.
+Estado: **funciona en la consola (2026-11-01)**. Botón (ZR/ZL, SL/SR) durante el intro, salto a 3 s antes de la
+primera nota. Todo lo de abajo sale del código del juego, no de suposiciones; las direcciones valen **solo** para la
+versión analizada.
+
+**Repositorio del mod**: https://github.com/leleletus/letssing2026-skip-intro (código, `build.sh`, release con el
+zip para la SD, compatibilidad e instrucciones para adaptarlo a otra versión). En este proyecto se clona en
+`mods/skip_intro/`, que está en `.gitignore`: es un repositorio aparte.
+
+| Compatibilidad | |
+|---|---|
+| Juego | Let's Sing 2026, base `0100EE4020D18000` |
+| Actualización | **solo v131072** (`0100EE4020D18800`). Con otra, el juego se cierra o el mod no hace nada: quitarlo |
+| DLC / canciones del conversor | no influyen: funciona con y sin ellas |
+| Firmware | Atmosphère (`atmosphere/contents/0100EE4020D18000/exefs/`) |
+| Emuladores | sin probar |
 
 | | |
 |---|---|
 | Juego | Let's Sing 2026, base `0100EE4020D18000` + actualización v131072 |
 | Build ID del ejecutable (`main`) | `1C344DD17322D4FA3E8F50063340C7D0` |
 | Motor | Unity IL2CPP, metadata v31 |
-| Volcado | `~/LetsSing/juegos/Let's Sing 2026/extraido/il2cpp_dump/` (dump.cs, script.json, il2cpp.h); scripts de análisis (desensamblar, buscar llamadas) y Il2CppDumper en `extraido/herramientas_analisis/` |
+| Volcado | `il2cpp_dump/` (dump.cs, script.json, il2cpp.h) de Il2CppDumper sobre `exefs/main` + `global-metadata.dat`; no se versiona (es código del juego) |
 
 Cómo se obtuvo: `global-metadata.dat` sacado en la consola con nxdumptool (RomFS con la actualización);
 `exefs/main` extraído del NSP de la actualización con hactool; Il2CppDumper v6.7.46 bajo Wine. Para desensamblar:
@@ -48,21 +60,23 @@ dificultad `VeryEasy…VeryHard`; voz `Women, Men, Both`.
    vez. Así una canción como Bitch Better Have My Money no sigue con el video tras la última línea.
 3. **Solo partida normal** (Classic): no tocar Fest/Career/Feat (online o con reglas propias).
 
-### Cómo construirlo
+### Cómo está hecho
 
-- Forma recomendada: un módulo **exlaunch** (plantilla en C++ para hooks en juegos de Switch, se carga como
-  `subsdk9` desde `atmosphere/contents/0100EE4020D18000/exefs/`). Hooks: post-`StartSong` y post-`UpdateVx`. El
-  compilador ya está en el PC (`/opt/devkitpro/devkitA64`). Falta descargar la plantilla exlaunch (GitHub): pedir
-  permiso antes, igual que con Il2CppDumper.
-- Alternativa sin plantilla: parche IPS (`atmosphere/exefs_patches/letssing_skip/<build id>.ips`) con el código en
-  una zona libre; más frágil (hay que recorrer listas IL2CPP en ensamblador).
+- Módulo **exlaunch** (commit `f9f4b0d`, GPL-2.0) cargado como `subsdk9` desde
+  `atmosphere/contents/0100EE4020D18000/exefs/`. Un gancho en `InGameClassic.UpdateVx` (cada fotograma, solo partida
+  normal) lee el mando con `nn::hid::GetNpadState` y, si se pulsa ZR/ZL con más de 6 s hasta la primera nota, llama a
+  `InGameSimple.SetTime(primeraNota - 3)`.
+- `main.npdm` = el del juego + llamadas al sistema `0x40`, `0x43`, `0x74`, `0x75` (sin ellas: "Undefined System
+  Call 0x74", B-69).
+- Compilar: `./build.sh` en el repositorio del mod (devkitA64 + `npdmtool`). La salida es idéntica en código al
+  release publicado.
 - Se quita borrando la carpeta; no toca las canciones ni la partida guardada. No usar en modos online.
 - Cada actualización del juego cambia el Build ID y las direcciones: hay que volver a localizarlas en el volcado
-  nuevo (los nombres de las funciones no cambian).
+  nuevo (los nombres de las funciones no cambian). Pasos en el README del mod.
 
-### Pasos para seguir
+### Pendiente
 
-1. Confirmar con un hook de prueba (solo registra) que `StartSong`/`UpdateVx` se llaman en partida normal.
-2. Hook de `SetTime` con un tiempo fijo (p. ej. 30 s) para comprobar que audio, letra y video saltan juntos.
-3. Calcular la primera/última nota desde `KaraokeManager.Instance.KaraokeSong` y activar las dos funciones.
-4. Probar en la consola con canciones de intro largo (BBHMM 94 s, Stan 82 s, Something About Us 78 s).
+1. **Terminar al acabar la letra**: en `UpdateVx`, si `KTime` > última nota + 3 s, llamar a `SwitchToResult()` una
+   vez (canciones como Bitch Better Have My Money, cuyo video sigue tras la última línea).
+2. **Video sin acelerar**: tras el salto, el video Bink se pone al día acelerando un momento (`VideoDesyncTolerance`);
+   lo ideal es moverlo directo al mismo tiempo que el audio.

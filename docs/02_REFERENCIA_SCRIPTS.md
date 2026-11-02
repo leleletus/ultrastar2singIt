@@ -1,185 +1,237 @@
 # 02 — Referencia script por script
 
-Formato: `línea` · función · qué hace · notas (bugs relacionados entre corchetes).
+Estado: 2026-11-01. Formato: `línea` · función · qué hace (bugs relacionados entre corchetes). Los números de línea
+envejecen con cada cambio: para la línea actual, `grep -n "def <nombre>" <archivo>`.
 
 ---
 
-## LetsSingUltraStarConverter.py (132 líneas) — punto de entrada
+## LetsSingUltraStarConverter.py (147) — punto de entrada
 
-| Línea | Función | Qué hace / notas |
+| Línea | Función | Qué hace |
 |---|---|---|
-| 4 | `main` | `--cli`/`-c` → CLI; si no → GUI |
-| 11 | `_run_cli` | argparse con grupos (game, tools, folders, tweaks, dlc songs); sobrescribe `config` solo para esa ejecución. No expone `multithreading`, `clear_output`, `force_reconvert`, `vocal_isolation` [M-07] |
-| 120 | `_run_gui` | En Windows oculta la consola; importa `Gui` |
+| 4 | `main` | `--tool <nombre>` → herramienta; `--cli`/`-c` → CLI; si no → GUI |
+| 13 | `_run_cli` | argparse (juego, herramientas, carpetas, ajustes, canciones del DLC); sobrescribe la config solo para esa ejecución |
+| 122 | `_run_tool` | ejecuta `tools/<nombre>.py` (solo las de `ToolsPanel.TASKS` y `align_video`); así el ejecutable empaquetado también corre las herramientas |
+| 135 | `_run_gui` | en Windows oculta la consola; `Gui.main()` |
 
 ## ConfigLoader.py (60) — configuración
 
-| Línea | Función | Qué hace / notas |
+| Línea | Función | Qué hace |
 |---|---|---|
-| 7 | `plugins_dir` | `app_dir()/plugins` (dependencias del modo slow) |
-| 10 | `bundle_dir` | `_MEIPASS` en ejecutable congelado, si no carpeta del script |
-| 16 | `app_dir` | carpeta del ejecutable o del script |
+| 7 | `plugins_dir` | `app_dir()/plugins` (dependencias opcionales del tono slow) |
+| 10 | `bundle_dir` | `_MEIPASS` en el ejecutable, si no la carpeta del script |
+| 16 | `app_dir` | carpeta del ejecutable o del script (ahí van `config.yml`, `error.log`, `encode_stats.json`) |
 | 22 | `deep_override_config` | fusión recursiva; ignora `None` |
-| 36 | `load_default_config` | solo `config_default.yml` |
-| 43 | `load_config` | default + `config.yml` de `app_dir()` [B-18: la GUI escribe en el CWD] |
+| 36 / 43 | `load_default_config` / `load_config` | `config_default.yml` / default + `config.yml` de `app_dir()` [B-18 cerrado] |
 
-## ConvertFiles.py (962) — orquestador
+## naming.py (146) — IDs y nombres de archivos generados
 
-| Línea | Función | Qué hace / notas |
+| Línea | Función | Qué hace |
 |---|---|---|
-| 5 | `json_lock` | lock global solo para el JSON [B-05: TSV y name.txt sin lock] |
-| 39 | handler `error.log` | se añade al **importar** el módulo, ruta relativa al CWD [B-37] |
-| 54 | `_init_paths` | rutas globales; escudo `_Patch` si la salida contiene algo que no sea un TitleID [B-16, B-17] |
-| 82 | `resolve_config` | completa `core.id` y `json_name` desde data.db |
-| 93 | `get_output_format` | JSON si hay `json_name` |
-| 102 | `sanitize_name` | limpia nombres de carpeta (solo lo usa la función muerta de abajo) |
-| 112 | `rename_folders_physically` | **código muerto** (upstream revirtió el renombrado, `3e46d42`); además usa `return` en vez de `continue` [B-43] |
-| 142 | `strip_accents` | NFD + ø/œ/æ/ß/& (la línea de ñ es inalcanzable: NFD ya la descompone) |
-| 153 | `construct_name_id_from_directory_name` | iniciales del artista + título minúsculas ASCII [B-30] |
-| 170 | `find_folders_to_convert` | subcarpetas con `" - "` sin prefijo `_`/`.` (sin ordenar) |
-| 177 | `delete_output_folder` | `rmtree(output)` si `clear_output` (por defecto True) |
-| 192 | `get_duration` | ffprobe → `float(stdout)`; revienta si sale vacío [B-15] |
-| 203 | `is_video_still_image` | `freezedetect`; >95 % congelado = imagen fija; división por cero si duración 0 |
-| 225 | `create_still_video_from_cover_image` | video 1280×720 con fondo desenfocado desde `#COVER` o primera imagen; `IndexError` si no hay imágenes |
-| 254 | `create_in_game_loading_picture` | 512×512 |
-| 263 | `create_cover_long` | 191×396 (el fallback desde video usa 308×424 — tamaños inconsistentes) |
-| 273 | `get_clean_image_path` | PIL → JPG limpio en **un único archivo temporal compartido** [B-02] |
-| 293 | `create_cover` | 256×256 |
-| 302 | `create_audio_preview` | medley → PREVIEWSTART → 60 s; recorta a la duración real |
-| 338 | `create_audio` | adelay/atrim por VIDEOGAP + `dynaudnorm,volume=-2.5dB`; `IndexError` sin audio ni video [B-15] |
-| 362 | `create_video` | x264 2 pasadas, `-bf 0`, 1280×720, 25 fps |
-| 384 | `create_video_bink` | copia a tmp, `wine radvideo64 binkc`; **ignora `compression_percentage`** [B-11]; sin timeout ni log de salida [B-44] |
-| 431 | `match_genre` | Pop/Rap/Rock/Ballad/Electro por subcadena |
-| 439 | `handle_xml_or_json` | arma metadatos; `int(year)` sin control [B-04]; valores fijos (gender, language…) [M-10] |
-| 471 | `create_meta_xml` | `<id>_meta.xml` UTF-8 BOM + CRLF |
-| 493 | `add_song_to_json` | lee/crea `songs_xx.json`, reemplaza por ID; lee con `utf-8` [B-03] |
-| 520 | `add_data_to_songsdlc_tsv` | TSV del core; UID ≥ 200; sin lock, sin encoding [B-05] |
-| 586 | `add_data_to_name_txt` | XML: añade ID (sin deduplicar); JSON: escribe el nombre del JSON |
-| 609 | `get_required_files` | lista de archivos que deben existir antes de registrar |
-| 625 | `validate_converted_files` | devuelve los que faltan |
-| 633 | `convert_files` | copia de medios del DLC base + bucle de canciones (secuencial o pool) |
-| 681 | `_process_single_song` | todo el pipeline por canción (ver 01 §3) [B-04, B-08, B-09, B-10, B-12, B-13, B-14] |
-| 912 | selección de multihilo | lee `multithreading`/`multithreading_workers` |
-| 937 | `main` | resolve → init → reset tweaks si desactivados → borrar salida → convertir |
+| 12 | `strip_accents` | NFD + ø/œ/æ/ß/& |
+| 26 | `construct_name_id_from_directory_name` | ID de caché: iniciales del artista + título, solo ASCII; `Song<md5>` si queda vacío. **Congelado** (nombra los `.bk2`) [B-30] |
+| 47 | `game_song_id` | ID de juego (2026): título primero + iniciales del artista ("2BeLovedLR") [B-56] |
+| 69 | `legacy_name_ids` | IDs de versiones anteriores del algoritmo (para reutilizar su caché) |
+| 95–122 | sufijos | `AUDIO_SUFFIX`, `VXLA_META_SUFFIX`, `VIDEO_BK2_SUFFIX`, `VOICE_SUFFIX`… y `GENERATED_SUFFIXES`, `PROTECTED_SUFFIXES` (`.bk2`), `OFFICIAL_VXLA_NAME` |
+| 133 | `is_generated_file` | si un archivo lo escribió el conversor para alguno de los IDs |
 
-## UltrastarToSingit.py (660) — UltraStar → vxla
+## ConvertFiles.py (1878) — orquestador
 
-| Línea | Función | Qué hace / notas |
+| Línea | Función | Qué hace |
 |---|---|---|
-| 26 | `replacements` | comillas tipográficas, ligaduras, guiones |
-| 38 | `normalize_text` | reemplazos + **quita todos los acentos** de las letras [B-40] |
-| 45 | `normalize_for_url` | slug para URL de Genius |
-| 54 | `detect_encoding` | chardet sobre 4 KB |
-| 60 | `parse_file` | `#TAG:valor` → dict (claves sensibles a mayúsculas); notas `split(" ", 4)` [B-29] |
-| 80 | `find_refrains` | estribillos automáticos por similitud entre páginas (≥20 caracteres, ≥85 %, separadas ≥10 s) |
-| 136 | `merge_intervals` | une intervalos contiguos del mismo valor |
-| 151 | `map_data` | tiempos = beat·60/BPM/4 + GAP + VIDEOGAP; notas `#p<tono>#.<sílaba>` (+`#g5` dorada/estribillo); `F/R` → `#p1#.`; páginas; estructura (medley → Genius → auto); pasajes `long`/`speed` |
-| 299 | `get_lyrics_for_beat_range` | texto entre beats |
-| 302 | `clean_artist_name` | corta en feat/ft/&/,/x |
-| 310 | `sanitize_for_genius` | quita paréntesis, `+ artista`, `$→s`, `!→i` |
-| 322 | `genius_search_for_correct_path` | API `search/multi` con 3 consultas, timeout 10 s |
-| 379 | `genius_get_choruses` | caché `<txt>_genius_cache.json`; URL directa → búsqueda → regex de `[Chorus]` multilenguaje [B-39] |
-| 475 | `recover_repeats_from_txt` | repeticiones del estribillo dentro del txt (≥90 %) |
-| 521 | `match_choruses_to_beats` | ventana deslizante + Levenshtein (≥0.7) |
-| 568 | `word_positions_to_beats` | índice de palabra → beats |
-| 576 | `write_intervals` | `<Interval t1 t2 value>` con 3 decimales |
-| 582 | `write_metadata_file` | **código muerto** (escribe en `titleid/romfs/`) |
-| 603 | `write_vxla_file` | capas: segments (JSON) / structure+challenge (XML), pages, passages (fusionados), lyrics, notes_full, language="english" fijo; Windows-1252 con `&#NNN;` para el resto |
-| 655 | `main` | parse → map → write |
+| 41 | `VXLA_GENERATOR_VERSION` | subirla regenera todos los vxla (no los videos) |
+| 53 | `_setup_error_log` | `error.log` en `app_dir()` (solo ERROR); silencia librerías ruidosas [B-37] |
+| 100 / 123 | `_run` / `stop_running_processes` | subprocesos que Stop puede terminar (solo los de la conversión) [B-24] |
+| 133 | `_ffmpeg` | escribe en un nombre temporal y renombra al final: nunca queda un archivo a medias |
+| 159 | `safe_output_dir` | escudo `_Patch` si la salida tiene algo que no sea un TitleID [B-17] |
+| 172 | `_init_paths` | rutas de ffmpeg/ffprobe/binkc/wine, entrada y salida |
+| 194 | `resolve_config` | completa `core.id`, `json_name` y edición desde `data.db` |
+| 227 | `_rescue_unbacked_videos` | antes de vaciar la salida, copia a su carpeta todo `.bk2` que solo esté en el parche |
+| 276 | `delete_output_folder` | vacía la salida si `clear_output` |
+| 310 | `is_video_still_image` | ffmpeg `freezedetect`: > 95 % congelado = imagen fija |
+| 330 | `CleanImage` | portada limpia (RGB, sin EXIF) en un temporal propio por canción [B-02] |
+| 367 | `create_still_video_from_cover_image` | video 1280×720 con fondo desenfocado desde la portada |
+| 403 | `create_placeholder_cover` | portada con artista y título para canciones sin imagen |
+| 442 / 455 | `_image_is_current` / `_image_has_size` | rehacer la imagen si no tiene el tamaño del juego o la fuente es más nueva [B-48] |
+| 470–478 | `create_cover`, `create_cover_long`, `create_in_game_loading_picture` | 256×256, 191×396, 512×512 |
+| 487 | `preview_window` | inicio de la vista previa: `#PREVIEWSTART`, 1 s antes del primer coro del vxla, o la primera nota [B-70] |
+| 516 | `create_audio_preview` | corta 30 s del audio convertido |
+| 525 | `create_audio` | aplica VIDEOGAP y #START/#END; `dynaudnorm` |
+| 550 | `create_video` | x264 1280×720, 25 fps, `-bf 0` |
+| 574 / 579 / 587 | `is_still_bk2` / `has_motion` / `moving_video` | detectar un `.bk2` de portada fija y un video real en la carpeta [B-66] |
+| 595 | `keep_replaced_video` | mueve el `.bk2` reemplazado a `_replaced_videos` (nunca borra) |
+| 612 / 631 | `_record_encode` / `recommended_workers` | mide cada codificación y calcula "Recomendado: N" |
+| 662 | `_big_temp_dir` | `~/.cache/letssing_converter` (en disco; `/tmp` suele estar en RAM) |
+| 671 | `create_video_bink` | `wine radvideo64 binkc` con `/D` según "Tamaño máximo"; timeout; valida el tamaño mínimo; un `.bk2` existente nunca se pisa [B-44, B-47] |
+| 755 | `match_genre` | género del juego desde `#GENRE` (lista de 2026 solo para 2026) [B-55] |
+| 768 | `parse_year` | año tolerante (`1985-03`, vacío…) [B-04] |
+| 796 / 819 / 839 | `singer_gender` / `sung_median_pitch` / `song_difficulty` | voz y dificultad para 2026 |
+| 865 | `game_ids_for` | `{carpeta: ID dentro del parche}`; únicos con un número si coinciden |
+| 912 / 924 | `detect_language` / `song_language` | idioma por `#LANGUAGE` o por las palabras de la letra [B-52] |
+| 962 | `_remove_old_patch_copies` | quita del parche las copias con el ID de caché tras pasar al ID de juego |
+| 987 | `handle_xml_or_json` | `meta.xml` (XML) o registro en `SongsDLC.tsv` / `songs_xx.json` |
+| 1038 / 1046 | `_atomic_write_text` / `_read_text` | escritura atómica; conserva BOM y codificación [B-03, M-06] |
+| 1056 / 1090 / 1149 | `add_song_to_json` / `add_data_to_songsdlc_tsv` / `add_data_to_name_txt` | registro bajo `registry_lock`, sin duplicados [B-05] |
+| 1173 / 1187 | `last_note_time` / `audio_window` | fin de la letra; cómo aplicar `#START`/`#END` |
+| 1220 / 1236 | `get_required_files` / `validate_converted_files` | archivos que deben existir antes de copiar |
+| 1276 | `choose_txt_file` | el txt UltraStar (no `[MULTI]`/`[DUET]`, no txt ajenos) |
+| 1286 | `resolve_song_sources` | audio/video/portada: etiquetas primero, nunca archivos generados [B-08] |
+| 1317 | `adopt_legacy_cache` | reutiliza archivos de IDs antiguos y un `.bk2` único de una carpeta renombrada [B-65] |
+| 1342 / 1361 | `_vxla_cache_params` / `_vxla_is_current` | firma del vxla [B-13] |
+| 1375 | `_copy_dlc_base_media` | copia los medios del DLC base al parche (opción "Incluir canciones del DLC") |
+| 1408 | `_find_name_id_collisions` | dos carpetas con el mismo ID: la segunda se omite |
+| 1421 | `convert_files` | bucle de canciones (secuencial o hilos) y `_convert_song` (ver 01 §3); devuelve el resumen ok/omitidas/fallidas |
+| 1840 | `main` | resolve → rutas → ajustes por defecto si están desactivados → vaciar salida (o `only_dirs`) → convertir |
 
-## PitchAnalyzer.py (152) — corrección de tono
+## UltrastarToSingit.py (836) — UltraStar → vxla
 
-| Línea | Función | Qué hace / notas |
+| Línea | Función | Qué hace |
 |---|---|---|
-| 10 | `_slow_deps_available` | importa numpy/librosa/crepe **al cargar el módulo** [B-38] |
-| 23 | `get_pitch_correction_suggestion_slow` | mediana CREPE del audio − mediana del txt; Demucs opcional (`htdemucs_ft`, CPU) |
-| 76 | `get_txt_pitch_values` | media/mediana/min/max de notas `:`/`*`; división por cero sin notas [B-07] |
-| 101 | `get_audio_pitch_values` | sobre notas MIDI válidas (confianza ≥ 0.9) |
-| 115 | `analyze_pitch_from_audio` | librosa 16 kHz + CREPE tiny |
-| 132 | `get_pitch_correction_suggestion_fast` | heurística heredada de upstream: +48 por defecto, o `81−max` / `43−min` [B-06] |
+| 52 | `normalize_lyric` | conserva todo lo que admite Windows-1252 (é, ñ, ¿…), translitera el resto [B-40, B-46] |
+| 90 / 115 | `detect_encoding` / `read_text_file` | archivo completo: UTF-8 estricto → chardet → cp1252 → latin-1; nunca `errors='ignore'` [B-46] |
+| 124 | `parse_file` | etiquetas en mayúsculas, líneas tolerantes, `#RELATIVE`, duetos (solo P1) [B-29] |
+| 183 | `find_refrains` | estribillos automáticos por similitud entre páginas |
+| 254 | `_end_word` | espacio al final de cada palabra, como los vxla oficiales [B-49] |
+| 260 | `map_data` | tiempos (BPM, GAP, VIDEOGAP, `time_offset` de #START), notas `#p<tono>#.<sílaba>`, doradas, rap (`#p1`), páginas, estructura |
+| 423 | `build_passages` | pasajes `long`/`speed` como los oficiales |
+| 492 / 551 | `genius_search_for_correct_path` / `genius_get_choruses` | estribillos de Genius con caché (también "no encontrado") y modo sin conexión [B-39] |
+| 660 / 706 | `recover_repeats_from_txt` / `match_choruses_to_beats` | repeticiones del estribillo y su posición en beats |
+| 788 | `write_vxla_file` | capas segments (JSON) / structure+challenge (XML), pages, passages, lyrics, notes_full |
+| 829 | `main` | parse → map → write |
 
-## Gui.py (1 650) — interfaz principal
+## OfficialVxla.py (131) — vxla oficial de canciones de DLC
 
-| Línea | Elemento | Qué hace / notas |
+| Línea | Función | Qué hace |
 |---|---|---|
-| 21 | import QtMultimedia | el `.spec` lo excluye [B-41] |
-| 47 | `QtLogHandler` | logging → señal Qt |
-| 58 | `ConversionWorker` | QThread; añade/quita el handler; `finished` se emite siempre (también tras error/stop) [B-24] |
-| 93 / 104 | `strip_accents` / `construct_name_id…` | **copias** de ConvertFiles [B-30] |
-| 122 / 127 | `set_element_enabled` / `mark_field_valid` | borde rojo por propiedad dinámica `has_border` |
-| 134 / 142 | barra de título oscura (Windows) / tooltips por tema | `apply_theme_change` **acumula** hojas de estilo en cada cambio de tema |
-| 185 | `MainWindow.__init__` | menús Language/Tools, paneles, watcher con debounce 500 ms, QMediaPlayer, carga config |
-| 273-324 | validadores `*_fv` de Game info | regex TitleID laxa [B-36]; `dlc_json_name_input_fv` re-escanea la carpeta cada vez [B-25] |
-| 326 | `create_left_panel` | grupos Game info / Conversion tools / Input-Output / Advanced settings (checkable) / Help |
-| 490 | `create_right_panel` | tabla + logs (alto fijo 150 px) |
-| 521 | `create_preview_table` | búsqueda, tabla, leyenda, barra de progreso, botones |
-| 602-668 | validadores de rutas | `output_path_fv` aplica el escudo `_Patch` [B-17] |
-| 670 | `include_dlc_checkbox_refresh` | activa campos XML o JSON |
-| 693 | `set_defaults` | carga config en el formulario; **no carga** multithreading/workers [B-19] ni idioma [B-20] |
-| 759 / 780 | `prefill_ffmpeg_path` / `prefill_rad_path` | rutas típicas Windows/Linux/Wine |
-| 816 | `sanitize_name` | **código muerto** |
-| 825 | `scan_input_folder` | lista canciones, iconos de entrada/caché, botones Play y Fix Sync; parsea cada txt [B-25]; filtro `_cover.mp4` obsoleto [B-09] |
-| 963 | `play_song_audio` | primer `*.ogg`/`*.mp3` [B-27]; llama a `log_message` inexistente [B-21] |
-| 994 | `is_doubtful_sync` | marca ⚠ si GAP<0, BPM fuera de 50–400 o primera letra < 0.5 s |
-| 1019 | `open_sync_editor` | `glob('*.txt')[0]` [B-26]; `log_message` inexistente [B-21] |
-| 1068-1101 | watcher | vigila raíz + subcarpetas; refresco completo en cada evento, también durante la conversión [B-25] |
-| 1128 | `clear_cache` | borra solo la lista `outputs` [B-28] |
-| 1174 | `required_fields_missing` | **`return` mal indentado: no valida nada** [B-01] |
-| 1205 | `set_controls_enabled` | deshabilita todo; al reactivar pone `SingleSelection` [B-23] |
-| 1247 | `start_conversion` | guarda config, lanza el worker |
-| 1284-1336 | progreso / fin / error | ETA por media; "finished successfully" incluso tras error/stop [B-24] |
-| 1338 | `stop_conversion` | `stop_event` + `pkill -9 -f radvideo*` (Linux) — no mata ffmpeg [B-24] |
-| 1355 / 1376 | ayuda | `Guide.md` → HTML con `markdown` |
-| 1388 | `init_elements` | crea todos los widgets |
-| 1450 / 1456 | idioma | `update_ui_language` cubre ~30 textos; clave en español para include_dlc [B-20] |
-| 1507 | `set_tooltips` | mezcla inglés y español |
-| 1552 / 1568 | Tools → Recover cache / Unpack | ver tools/ [B-31, B-32] |
-| 1586 | `save_config` | escribe `config.yml` en el **CWD** [B-18] |
-| 1644 | `main` | QApplication, tema, show (no usa `qdarktheme`, importado sin uso) |
+| 21 | `_utf8_text` | archivos UTF-8 que declaran Windows-1252 [B-54] |
+| 36 | `read_layers` | capas `{nombre: [(t1, t2, valor)]}` y versión (v2/v3) |
+| 76 | `to_sing_it` | v2/v3 → estructura de `write_vxla_file`; el texto visible sale de la capa `lyrics` [B-50] |
+| 119 | `convert` | escribe el vxla de la canción desde `letssing_original.vxla` |
 
-## PreviewTable.py (228)
+## PitchAnalyzer.py (201) — corrección de tono
 
-| Línea | Elemento | Notas |
+| Línea | Función | Qué hace |
 |---|---|---|
-| 17 | `CheckBoxHeader` | checkbox tri-estado pintado en la cabecera |
-| 79 | `PreviewTable.__init__` | 9 columnas: `"", Play, Song, Sync, Video, Audio, Image, Lyrics, OrigOrder(oculta)`; anchos fijos; cabeceras sin traducir |
-| 131 | `on_header_clicked` | asc → desc → original; el "original" ordena por la columna **7** en vez de 8 [B-22] |
-| 159 | `toggle_rows` | marcar/desmarcar selección |
-| 211 | `mousePressEvent` | seleccionar una fila nueva alterna su checkbox (clic en fila = marcar) — comportamiento poco evidente [G-05] |
-| 219 | `keyPressEvent` | Ctrl+A y Espacio |
+| 20 | `_slow_deps_available` | importación perezosa de numpy/librosa/crepe [B-38] |
+| 37 | `get_explicit_pitch_offset` | `#LETSSINGPITCHOFFSET` (canciones reconstruidas desde DLC) |
+| 48 | `choose_octave_shift` | múltiplo de 12 que deja menos notas fuera de `[43, 81]` [B-06] |
+| 64 | `get_pitch_correction_suggestion_slow` | CREPE sobre el audio (Demucs opcional), redondeado a octavas |
+| 132 / 152 / 167 | `get_txt_pitch_values` / `get_audio_pitch_values` / `analyze_pitch_from_audio` | estadísticas de tono [B-07] |
+| 185 | `get_pitch_correction_suggestion_fast` | offset explícito o `choose_octave_shift` |
 
-## SyncEditor.py (281) — "Fix Sync"
+## Gui.py (2081) — ventana principal
 
-| Línea | Elemento | Notas |
+| Línea | Elemento | Qué hace |
 |---|---|---|
-| 12 | `__init__` | parsea el txt, elige el primer `*.ogg` [B-26], arma reproductores y controles (textos solo en español) |
-| 131 | `build_lines` | agrupa notas por `-` |
-| 205 | `update_lyrics` | cada 50 ms; resalta sílabas; ignora VIDEOGAP; `note[4]` sin control |
-| 254 | `save_gap` | reescribe `#GAP:` en UTF-8 (no respeta la codificación original, no añade GAP si falta) [B-26] |
+| 55 | `QtLogHandler` | logging → señal Qt (seguro entre hilos) |
+| 66 | `ConversionWorker` | QThread que llama a `ConvertFiles.main`; señales de log, progreso, estado por canción y resumen |
+| 105 | `SongRow` | estado de una carpeta: fuentes, caché, sincronía, último resultado |
+| 137 / 153 | `voice_check` / `is_doubtful_sync` | resultado de `sync_scan` (`<id>.sync.json`) o aviso heurístico |
+| 170 / 229 | `scan_song_folders` / `ScanWorker` | escaneo de la entrada en un hilo de fondo [B-25] |
+| 252 | `COL_*`, `HEADERS` | columnas: marca, canción, estado, video, audio, imagen, letra, sinc., play |
+| 259 / 421 | `SongTableModel` / `SongFilterModel` | modelo/vista; filtros búsqueda, "Solo pendientes", "Solo problemas" [G-01, G-03] |
+| 496 | `MainWindow` | ventana |
+| 566 | `t` | texto traducido que se actualiza al cambiar de idioma [B-20] |
+| 602 / 768 / 817 / 958 | `init_elements` / `build_menus` / `create_left_panel` / `create_right_panel` | widgets, menús (Idioma, Herramientas, Ayuda), apartados 1–5, tabla y log |
+| 1065 / 1077 | `restore_window_state` / `save_window_state` | QSettings |
+| 1083–1195 | validadores `*_fv` | TitleID (`fullmatch` hex), rutas, JSON del DLC… [B-36] |
+| 1204 | `set_defaults` | carga la config en el formulario (hilos e idioma incluidos) [B-19] |
+| 1256 / 1269 / 1281 | `prefill_ffmpeg_path` / `prefill_rad_path` / `prefill_input_output_paths` | rutas por defecto (PATH, `$WINEPREFIX`, `Input/`/`Output/` junto al programa) |
+| 1292 | `save_config` | `app_dir()/config.yml` |
+| 1344 / 1372 | `scan_input_folder` / `refresh_single_song` | escaneo completo en fondo / una fila tras convertirla |
+| 1438 | `on_table_context_menu` | Play, Arreglar sincronización, Abrir carpeta, Convertir solo esta, Volver a codificar el video, Añadir un video |
+| 1465 / 1484 | `add_video` / `reencode_video` | `tools/align_video.py` / mover el `.bk2` a `_replaced_videos` y convertir |
+| 1527 / 1545 | `song_audio_files` / `play_song_audio` | el audio convertido o el original [B-27] |
+| 1563 | `open_sync_editor` | abre `SyncEditorDialog` con el txt elegido por `choose_txt_file` |
+| 1622 | `sync_watched_folders` | vigila solo la carpeta de entrada (altas, bajas, renombres) |
+| 1662 | `clear_cache` | borra los generados de las marcadas; los `.bk2` solo con petición explícita y doble confirmación |
+| 1727 | `required_fields_missing` | validación antes de convertir [B-01] |
+| 1779 | `update_recommended_workers` | "Recomendado: N" |
+| 1797 | `on_tool_state_changed` | no se puede convertir mientras corre una herramienta (y al revés) |
+| 1805 / 1810 | `start_checked_conversion` / `start_conversion` | convertir marcadas (añade al parche) / todo |
+| 1854 | `confirm_output_clearing` | confirmación antes de vaciar la salida |
+| 1902 / 1936 / 1944 | `on_conversion_finished` / `on_conversion_error` / `stop_conversion` | resumen real, error, Stop [B-24] |
+| 1958 | `closeEvent` | confirmación y espera al worker [B-45] |
+| 2005 / 2015 | `tool_recover_cache` / `tool_unpack_output` | menú Herramientas |
+| 2037 | `start_hang_watchdog` | `hang_trace.log` si la ventana no responde 10 s [B-61] |
+| 2073 | `main` | QApplication, tema, ventana |
 
-## GuiElement.py (77), i18n.py (22), SupportedFormats.py (3), version.py
+## ToolsPanel.py (477) — apartado "5. Opciones avanzadas"
 
-- `GuiElement.Icon`: iconos dibujados con PIL al importar; `get_icon()` los cachea como QIcon; `combine_icons` (doble ancho).
-  `pytablericons` se importa pero no se usa.
-- `i18n.load_language/tr`: diccionario plano; claves = texto inglés.
-- `SupportedFormats`: `.bk2` cuenta como video de entrada pero luego no se procesa [B-14]; falta `.jfif`, `.webp`, `.m4v`, `.mov`.
+| Línea | Elemento | Qué hace |
+|---|---|---|
+| 30 / 38 | `Option` / `Task` | descripción de cada herramienta: opciones, tiempo estimado, si es pesada, programas que necesita |
+| 55–110 | `TASKS` | `validate_patch`, `switch_update`, `sync_scan`, `usdb_sources`, `fix_covers`, `fix_years`, `fix_genres`, `usdb_restore_names`, `clean_song_folders`, `artist_genders` |
+| 118 | `tool_command` | `python LetsSingUltraStarConverter.py --tool <nombre> …` (o el ejecutable) |
+| 125 / 136 | `available_memory_gb` / `demucs_installed` | para desactivar lo que no puede correr |
+| 141 | `ToolRunWindow` | salida en vivo |
+| 169 | `ToolsPanel` | una herramienta a la vez, en un proceso aparte; las pesadas con `systemd-run -p MemoryMax` en Linux |
+| 377 | `run_tool` | herramientas fuera de la lista (p. ej. `align_video` desde la tabla) |
+| 459 | `stop` | termina el proceso (o la unidad de systemd) |
+
+## SyncEditor.py (1200) y SyncModel.py (383) — editor de sincronía
+
+| Archivo:línea | Elemento | Qué hace |
+|---|---|---|
+| SyncEditor:33 | `looks_still` | si el video es una imagen fija (3 fotogramas) |
+| SyncEditor:74 | `NoteLane` | notas como barras (como el juego), voz aislada y tono cantado; arrastrar una nota cambia su tono |
+| SyncEditor:209 | `SyncMap` | toda la canción en una franja, cada línea coloreada según coincida con la voz; cortes |
+| SyncEditor:270 | `Microphone` | tono del micrófono (modo cantar) |
+| SyncEditor:338 | `SyncEditorDialog` | reproductor, cortes (`cut_start`/`cut_end`), mover partes (`adjust`), `auto_adjust` (ajustar a la voz), `analyze_voice`, `save` (conserva codificación y finales de línea, `.bak` la primera vez) [B-26, B-51] |
+| SyncModel:41 | `detect_pitch` | YIN |
+| SyncModel:108 / 134 | `load_txt` / `load_official` | notas y sílabas de un txt / de un vxla oficial (solo lectura en el editor) |
+| SyncModel:170 / 200 / 214 | `isolate_voice` / `analyze_voice` / `load_voice` | Demucs → `<id>.voice.npz` |
+| SyncModel:227 / 273 / 290 | `line_report` / `runs_out_of_time` / `song_verdict` | coincidencia por línea, bloques desfasados, veredicto (ok/parcial/desfase/dudosa/otra_version) |
+| SyncModel:316 | `rewrite_txt` | `#GAP` y notas movidas por cortes, en pulsos |
+
+## GuiElement.py (107), i18n.py (22), SupportedFormats.py (3), version.py
+
+- `GuiElement`: iconos Tabler (`pytablericons`) renderizados con QtSvg; sin el paquete, puntos de color.
+- `i18n.load_language/tr`: diccionario plano; claves = texto en inglés.
+- `SupportedFormats`: extensiones de video (`.mp4 .mpeg .avi .flv .divx .mkv .webm .bk2`), audio
+  (`.mp3 .ogg .aac .wav .flac .m4a .opus`), imagen (`.jpg .jpeg .png .bmp`) y txt.
 
 ## data/
 
-- `DlcEntity` (dataclass), `DlcRepository`: consultas a `data.db`. `init()` hace `drop table dlc` sin `IF EXISTS` [B-35].
-  Catálogo 2018–2026 (2026: aus/fr/int/spa/uk).
+- `DlcEntity` (dataclass) y `DlcRepository` (`init`, `get_by_dlc_id`, `get_edition_by_core_id`, `get_all`,
+  `get_by_core_edition`, `get_core_editions`) sobre `data.db`. `init()` rehace la tabla con la lista del código
+  (2018–2026; 2026: aus/fr/int/spa/uk) [B-35].
 
 ## tools/
 
-| Script | Uso | Estado / notas |
+Todas se ejecutan con `python tools/<script>.py --help`. Las que cambian archivos solo listan hasta `--apply`
+(los txt quedan con `.txt.bak`); ninguna borra un `.bk2`.
+
+| Script | Uso | Notas |
 |---|---|---|
-| `cache_recovery.py` | menú Tools → copia medios del parche de vuelta a la caché | name_id antiguo; `os.walk` puede encontrar primero el romfs del core [B-31] |
-| `unpacker.py` | menú Tools → vxla → txt | **roto**: `NameError safe_artist` (l.102); BPM inconsistente; formato de notas no coincide [B-32] |
-| `reverse_vxla.py` | script, rutas fijas | `NameError name_id` (l.154) si hay video [B-33] |
-| `LetSing_ExtractorPro.py` | CLI `--megapack --output` | solo capa `notes`; detección de espacios casi nula [B-34] |
-| `validate_patch.py`, `switch_update.py`, `sync_scan.py`, `usdb_sources.py`, `fix_covers.py`, `fix_years.py`, `fix_genres.py`, `artist_genders.py`, `usdb_restore_names.py`, `clean_song_folders.py` | CLI y apartado 5 de la GUI (`ToolsPanel.py`) | ver `docs/11_GUIA_DE_PRUEBAS.md` |
+| `validate_patch.py` | revisa un parche JSON (2024+) antes de copiarlo | solo lee |
+| `switch_update.py` | copia a la Switch por MTP (KDE `kioclient` + DBI) solo lo que cambió | foto `<dlc>.switch.json`, `--first-copy` (Switch sin parche), respaldo antes de reemplazar, `--prune`/`--prune-first`, reintentos [B-62, B-67, B-68] |
+| `sync_scan.py` | revisa toda la biblioteca contra la voz (Demucs), informe CSV y `<id>.sync.json` | continúa donde quedó; `--only-analyzed` [B-64] |
+| `sync_check.py` | lo mismo para una canción, con propuesta de GAP | solo lee |
+| `usdb_sources.py` | canciones de USDB cuyo audio viene de otro video | solo lee |
+| `align_video.py` | recorta un videoclip (archivo o enlace de YouTube) al audio de la canción | yt-dlp: `YT_DLP`, PATH, el de usdb_syncer o el módulo |
+| `fix_covers.py` | portada propia: USDB, oficial, single/álbum de iTunes | `--extracted`, `--dlc`, `--blank`, `--song` [B-53, B-58] |
+| `fix_years.py` | año real: datos oficiales, MusicBrainz, iTunes | [B-57] |
+| `fix_genres.py` | `#GENRE` desde iTunes | |
+| `artist_genders.py` | voz por artista (MusicBrainz) → `_artist_genders.json` | |
+| `usdb_restore_names.py` | nombres de archivo como los deja usdb_syncer | |
+| `clean_song_folders.py` | mueve restos a `_papelera` | nunca borra |
+| `diagnose_library.py` | informe de salud de la biblioteca (solo los txt) | |
+| `attach_official_vxla.py` | empareja canciones reconstruidas con su vxla oficial | |
+| `mark_extracted_songs.py` | marca reconstruidas con `#LETSSINGPITCHOFFSET:36` | |
+| `rename_songs.py` | renombra carpeta + caché (videos incluidos) desde un CSV | |
+| `LetSing_ExtractorPro.py` | megapack de Let's Sing → carpetas UltraStar | no toca carpetas existentes [B-34, B-48] |
+| `reverse_vxla.py` | variante del extractor | [B-33] |
+| `unpacker.py` | menú Herramientas → Desempaquetar (usa la lógica del extractor) | [B-32] |
+| `cache_recovery.py` | menú Herramientas → Recuperar caché desde la salida | nunca sobrescribe [B-31] |
 
 Quitados el 2026-11-01 (siguen en el historial de git, `git show fb416d5:<ruta>`): `desync_detector.py` (sustituido
 por `sync_scan.py`), `mass_test.py` (sustituido por `tests/`), `merge_dlc_json.py` (lo hace el conversor con
 "Copiar DLC"), `experimental_tools/` entero y `README_PULL_REQUEST.md`.
 
+## tests/test_conversion.py (632)
+
+51 pruebas (`python -m unittest discover -s tests -t .`): nombres e IDs, parser y codificaciones, tono por octavas,
+fuentes y caché (incluido usdb_syncer y `.bk2` protegidos), escudo de salida, registro con hilos, #START/#END,
+espacios y pasajes, vxla oficial, ida y vuelta vxla → txt → vxla, modelo de sincronía, idioma, IDs de juego,
+dificultad/voz, base de datos, hilos recomendados, vista previa y edición de tono.
