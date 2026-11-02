@@ -66,28 +66,25 @@ Abre el programa con el icono de KDE o con `~/ultrastar_official/start_linux.sh`
   `/home/djvemo/LetsSing/songs`. Descarga una canción nueva, pulsa *Actualizar* en el programa: debe aparecer en la
   tabla y convertirse con *Convertir solo esta canción*.
 
-## 4. Qué quedó a medias / qué falta
+## 4. Qué quedó a medias / qué falta (actualizado 2026-11-01 por la noche)
 
-1. **28 canciones con la portada fija como video** aunque tienen su videoclip (`video.mp4` puesto después de la
-   primera conversión; B-66): La isla bonita, Mamma Mia, Ironic, Everybody, everything i wanted, Buy Me a Boat,
-   Maneater, Blue (Da Ba Dee), Missing, Lose You to Love Me, Down to the Honkytonk, Best Shot, Sunny and 75,
-   Alejandro, Bloody Mary, Someone You Loved, Mambo No. 5, Friends, Think a Little Less, Bohemian Rhapsody,
-   The Invisible Man, We Will Rock You, Who Wants To Live Forever, There's Nothing Holdin' Me Back, All I Wanna Do,
-   In Hell I'll Be In Good Company, Wake Me Up Before You Go-Go (+ Swish Swish por revisar). Volver a codificarlas
-   tarda horas (RAD bajo Wine); los `.bk2` actuales se guardan en `_replaced_videos`. Necesita tu permiso.
-2. **Revisar a mano** las 15 canciones marcadas por la revisión de voz (lista en `docs/07_CANCIONES_PROBLEMA.md` e
-   `informe_sincronia.csv`): Something About Us (−1,08 s), Bad Decisions, ExtraL, Thumbs y 11 "parcial".
-3. **Bitch Better Have My Money**: el audio es de otra versión; lo ideal es bajarlo de https://youtu.be/B3eAMGXFw1o.
-4. **Mod saltar intro / terminar al acabar la letra**: diseño en `docs/10_MOD_SALTAR_INTRO.md`; falta permiso para
-   descargar la plantilla exlaunch y probarlo en la consola.
-5. **Temas** (Amor/Profunda/Fiesta): todas siguen con los tres (no hay datos oficiales para calcularlo bien).
-6. **Varios idiomas por canción** ("Korean, English"): el juego lo admite, sin probar.
-7. **beats / vxla_feat** de los DLC oficiales 2026: sin generar (el juego funciona sin ellos).
-8. **B-61**: la ventana se congeló una vez; si pasa otra vez, el programa deja `hang_trace.log` en su carpeta.
-9. **Canciones viejas de USDB**: sus archivos tienen nombre genérico (`audio.ogg`, `video.mp4`, `cover.png`); se
-   convierten bien, pero si vuelves a descargar una en usdb_syncer, este reescribe su txt (se pierden los arreglos
-   de esa canción). Las nuevas no tienen este problema.
-10. Algunos años de canciones de Vocaloid salen 2000 (Melt es de 2007, Senbonzakura de 2011): por corregir.
+Hecho y probado en la consola: videos nuevos (La isla bonita…), orden por título, filtros de idioma, años por
+décadas, letras con acentos, portadas, dificultad y el mod de saltar intro (ZR/ZL).
+
+1. **14 canciones con la portada fija como video**: `~/LetsSing/VIDEOS_PENDIENTES.md` (enlaces y nombre del archivo);
+   clic derecho → *Añadir un video (archivo o enlace)*. Swish Swish (Album Version) hay que montarla a mano (el
+   videoclip oficial está en `~/LetsSing/VIDEOS_PENDIENTES/`).
+2. **BBHMM**: revisar a oído en el Sync Editor las líneas 59, 78 y 80 y los ad-libs 18 y 48; si la letra sigue
+   pareciendo adelantada desde el principio, probar la calibración de latencia del juego.
+3. **Mod**: terminar la canción al acabar la letra; que el video salte directo (ahora acelera un momento).
+4. **Citron**: al cerrarlo se configura la carpeta de actualización y DLC (`~/LetsSing/juegos/Let's Sing 2026`);
+   el mod ya está en `~/.local/share/citron/load/0100EE4020D18000/skipintro`.
+5. **Análisis de voz de las canciones de USDB**: al cambiar su audio a la `.m4a` original, su análisis guardado se ve
+   "por rehacer" (se valida por tamaño); la columna Sinc. vuelve con *Revisar la sincronía* del apartado 5 (horas).
+6. **Temas** (Amor/Profunda/Fiesta) y **beats / vxla_feat**: sin cambios. **B-61**: si la ventana se congela, queda
+   `hang_trace.log`.
+7. **Bohemian Rhapsody** sale con año 1985 (dato oficial del juego de Queen); la canción es de 1975.
+8. **Micrófono con el móvil**: necesita la cuenta Nintendo en línea (ver bitácora); alternativa: micrófono USB.
 
 ## 5. Tareas largas desde la app (apartado 5)
 

@@ -1,19 +1,20 @@
 # 09 — Historial de bugs
 
-Resumen al 2026-11-01: **66 bugs registrados, 64 cerrados, 2 pendientes**. El detalle de cada uno (causa, impacto, arreglo) está en [03_BUGS.md](03_BUGS.md); las regresiones del historial de git en [04_REGRESIONES.md](04_REGRESIONES.md) y el día a día en [05_BITACORA.md](05_BITACORA.md).
+Resumen al 2026-11-01: **71 bugs registrados, 70 cerrados, 1 pendiente**. El detalle de cada uno (causa, impacto, arreglo) está en [03_BUGS.md](03_BUGS.md); las regresiones del historial de git en [04_REGRESIONES.md](04_REGRESIONES.md) y el día a día en [05_BITACORA.md](05_BITACORA.md).
 
 ## Pendientes
 
 | ID | Severidad | Área | Problema | Estado |
 |---|---|---|---|---|
 | B-61 | ALTO | GUI | La ventana se congeló una vez (hilo principal bloqueado, con el video de BBHMM abierto) | ABIERTO (vigilante hang_trace.log en 6e74b01) |
-| B-66 | ALTO | Video | 28 canciones con la portada fija como `.bk2` aunque tienen su videoclip (`video.mp4` añadido después) | Aviso + acción "Volver a codificar el video" hechos; falta codificar las 28 (con permiso) |
 
 ## Mejoras pendientes (no son bugs)
 
 | Qué | Estado |
 |---|---|
-| Mod para Let's Sing 2026: saltar el intro (3 s antes de la letra) y terminar al acabar la letra | En investigación: volcado IL2CPP hecho; el juego ya tiene `Lyrics.firstNoteStartTime`, `TryGetLastNote`, `Seek` |
+| Mod: terminar la canción al acabar la letra (BBHMM y similares) | Pendiente; el salto del intro ya funciona (release skip-intro-v1) |
+| Mod: que el video salte directo tras el salto del intro (ahora se pone al día acelerando un momento) | Pendiente |
+| 14 canciones sin videoclip (imagen fija) | Lista con enlaces en `~/LetsSing/VIDEOS_PENDIENTES.md`; clic derecho → Añadir un video |
 | Revisión de sincronía de las 274 canciones UltraStar contra la voz (`tools/sync_scan.py`) | Hecha (278 ok, 11 parcial, 1 desfase, 3 dudosa); desde la app: 5. Opciones avanzadas |
 | Bitch Better Have My Money: audio de otra versión | Sincronizada a mano por partes; lo ideal es bajar el audio de https://youtu.be/B3eAMGXFw1o |
 | Varios idiomas por canción (el juego guarda una lista, p. ej. "Korean, English") | Por probar en la consola |
@@ -88,3 +89,9 @@ Resumen al 2026-11-01: **66 bugs registrados, 64 cerrados, 2 pendientes**. El de
 | B-63 | ALTO | usdb_syncer | Su carpeta de canciones seguía en el disco dañado | (configuración corregida) |
 | B-64 | MEDIO | Herramientas | Detener sync_scan dejaba el informe solo con lo revisado en esa pasada | (este commit) |
 | B-65 | MEDIO | Caché | Un `.bk2` se volvería a codificar si usdb_syncer renombra la carpeta | (este commit) |
+| B-66 | ALTO | Video | 28 canciones con la portada fija como `.bk2` aunque tienen su videoclip | (5b0e377: 27 recodificadas desde los video.mp4 del usuario, Merry Christmas con su .bk2 oficial, Maria y Something About Us con videoclip alineado) |
+| B-67 | ALTO | Switch | La SD se llenó copiando el parche nuevo junto al viejo; carpetas sin crear tras vaciarla | (429f0a7, b1b09cb) |
+| B-68 | MEDIO | Switch | Copias por MTP cortadas por fallos sueltos de DBI | (135db90: reintentos) |
+| B-69 | ALTO | Mod | El mod cerraba el juego: faltaban llamadas al sistema en main.npdm | (2be952a) |
+| B-70 | MEDIO | Audio | Vista previa en el intro (segundo 60 fijo) | (5083880: desde el coro) |
+| B-71 | MEDIO | Sincronía | Something About Us con la letra 1,08 s tarde | (2be952a) |

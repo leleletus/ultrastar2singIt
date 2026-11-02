@@ -189,6 +189,36 @@
 - Pendiente con el usuario: copiar el parche nuevo a la Switch (`switch_update.py --apply --prune`, ~30 GB por
   los nombres nuevos); revisar a mano las 15 canciones del informe; mod (diseño en `10_MOD_SALTAR_INTRO.md`).
 
+### 2026-11-01 — Videos reales, biblioteca al estilo usdb_syncer, limpieza, mod funcionando
+- Herramientas en la app: apartado **5. Opciones avanzadas** (`ToolsPanel.py`, 10 herramientas como proceso aparte,
+  de una en una, las pesadas con límite de memoria) y clic derecho → "Volver a codificar el video" / "Añadir un video
+  (archivo o enlace)" (`tools/align_video.py`: compara el sonido, recorta, no guarda si es otra versión o imagen fija).
+- usdb_syncer: apuntaba al disco dañado (B-63); 658 de 660 carpetas con nombres "Artista - Título" como los deja
+  usdb_syncer (`usdb_restore_names.py`, el `.usdb` los reconoce); la del directo de Madonna de 2003 se queda con
+  nombres cortos (ruta demasiado larga para Windows).
+- Videos: 28 `.bk2` eran la portada fija aunque había videoclip (B-66). Recodificadas 27 desde los `video.mp4`
+  recortados por el usuario (intactos), Merry Christmas con su `.bk2` oficial de 2024, Maria y Something About Us con
+  videoclip alineado. Quedan 14 sin video (`~/LetsSing/VIDEOS_PENDIENTES.md`). El conversor ahora rehace solo un `.bk2`
+  fijo cuando la carpeta tiene un video con movimiento, con cualquier nombre (el viejo va a `_replaced_videos`).
+- Apagón a mitad de la recodificación: 17 terminadas intactas, se borraron los `.avi` a medias de las 2 cortadas y se
+  reanudó con las 10 que faltaban.
+- Limpieza (con confirmación del usuario): borrados `workspace`, `archivo`, volcados de 2018–2024/ABBA/Country/Queen
+  (todo verificado en el servidor), `_replaced_videos` y `.bak`; libres 119 GB. Se quedan `songs`, `output` y
+  `juegos/Let's Sing 2026`. Desde ahora la limpieza mueve a `_papelera` (el usuario se molestó porque 505 restos se
+  borraron sin una confirmación final).
+- Rendimiento: "Recomendado: N" junto a Hilos, medido en el PC (2 a la vez codifican 0,7 min de video por minuto).
+- Switch: copia completa desde cero tras vaciar la carpeta (B-67), con reintentos por MTP (B-68). Verificada.
+- Mod de saltar intro (`mods/skip_intro`): ZR/ZL durante el intro → 3 s antes de la primera nota. Primero cerraba el
+  juego (B-69, faltaban permisos en `main.npdm`); ya funciona y está publicado:
+  https://github.com/leleletus/ultrastar2singIt/releases/tag/skip-intro-v1
+- Vistas previas desde el coro (B-70); Something About Us −1080 ms (B-71); BBHMM: 10 líneas del final ajustadas a la
+  voz (79% → 82%), quedan 59/78/80 y dos ad-libs para revisar a oído.
+- Micrófono con el móvil: el audio va por la WiFi (LiteNetLib), pero el emparejamiento pide un código a un servidor de
+  Voxler tras iniciar sesión en PlayFab con un token de la cuenta Nintendo; con Nintendo bloqueado sale 2123-0011. No
+  se trabaja en saltarse esa autenticación (riesgo de baneo para la consola del usuario).
+- Pendiente: copia de las vistas previas a la Switch (en curso), Citron con la actualización y el DLC (al cerrarlo
+  se configura `external_content_dirs`), mejoras del mod (fin al acabar la letra, video sin acelerar).
+
 <!-- Plantilla para nuevas entradas:
 ### AAAA-MM-DD — Título
 - Cambios: …

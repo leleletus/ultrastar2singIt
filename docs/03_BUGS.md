@@ -444,3 +444,39 @@ Estado al commit `4e1cb35`. "Evidencia" = verificado con prueba, con `error.log`
   propio (`video.mp4` recortado a mano, intacto); Merry Christmas toma su `.bk2` oficial de Let's Sing 2024; Swish Swish
   (Album Version) tiene como video una imagen. Las 16 que no tienen video: `~/LetsSing/VIDEOS_PENDIENTES.md`.
   Pruebas: `test_still_bk2_is_moved_aside_never_deleted`.
+
+### B-67 · ALTO · La copia a la Switch llenó la SD
+- **Dónde**: `tools/switch_update.py`.
+- **Causa**: con `--prune` los archivos viejos solo se borraban al terminar de copiar los nuevos; con los IDs nuevos
+  (título primero) el parche entero cambió de nombre y no cabían los dos (30 GB + 30 GB): "not enough space".
+- **Arreglo**: `--prune-first` (guarda en el PC los viejos sin copia idéntica, los quita y luego copia). Esta vez el
+  usuario vació la carpeta a mano y se copió todo desde cero; `make_dirs` crea en la Switch todas las carpetas del
+  camino (MTP no crea `romfs/Songs/audio` si falta `romfs`), que era el "se esperaba 0 B" de DBI.
+
+### B-68 · MEDIO · Copias por MTP cortadas por fallos sueltos de DBI
+- **Dónde**: `tools/switch_update.py`.
+- **Causa**: DBI a veces responde "Access denied" o no entrega un archivo (al reemplazar o al respaldar) y la copia se
+  detenía entera.
+- **Arreglo**: `kio_retry` reintenta hasta 4 veces con pausa creciente; volver a ejecutarla sigue donde quedó.
+
+### B-69 · ALTO · El mod de saltar intro cerraba el juego al abrirlo
+- **Dónde**: `mods/skip_intro` (`main.npdm`).
+- **Causa**: se instaló solo `subsdk9` con el `main.npdm` del juego, que no permite las llamadas al sistema que exlaunch
+  usa para escribir sus ganchos: "Undefined System Call 0x74" (`svcMapProcessMemory`) en `atmosphere/crash_reports`.
+- **Arreglo**: `main.npdm` del juego (convertido con `npdm2json.py` y rehecho con `npdmtool`) con solo 0x40, 0x43,
+  0x74 y 0x75 añadidas; comparado campo a campo con el original. Probado en la consola: funciona.
+
+### B-70 · MEDIO · Vista previa en el intro
+- **Dónde**: `ConvertFiles.create_audio_preview`.
+- **Causa**: sin etiquetas MEDLEY la vista previa empezaba siempre en el segundo 60 (en BBHMM, con 76 s de intro,
+  sonaban ruidos del video).
+- **Arreglo**: `preview_window`: `#PREVIEWSTART` si existe; si no, 1 s antes de la primera nota dorada (coro) del vxla;
+  si no hay coro, la primera nota. Se corta del audio convertido; canciones de menos de 30 s: la canción entera.
+  Prueba: `PreviewWindowTest`.
+
+### B-71 · MEDIO · Something About Us con la letra 1,08 s tarde
+- **Dónde**: biblioteca (txt de USDB sincronizado con un video que ya no existe; el audio se bajó de otro).
+- **Causa**: la revisión de voz la marcó como "desfase" y quedó para revisión manual en vez de corregirse.
+- **Arreglo**: `#GAP` −1080 ms (coincidencia con la voz 30% → 75%, veredicto ok). Video oficial alineado con
+  `tools/align_video.py`.
+
