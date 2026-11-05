@@ -501,17 +501,23 @@ def video_pieces(song_env, clip_env, start_lag=None, rate=100):
         piece = song_env[start:start + size]
         if len(piece) < rate:
             break
-        corr = correlations(piece, clip_env)[:len(clip_env)]
-        floor = 0 if previous is None else max(0, start + previous - rate // 2)
-        allowed = corr[floor:]
-        if not len(allowed):
+        full = correlations(piece, clip_env)
+        # position in the video of every correlation value: negative ones (the piece begins before the video
+        # starts, as when the video begins after the song) wrap to the end of the array
+        where = np.arange(len(full))
+        where = np.where(where < len(clip_env), where, where - len(full))
+        lags = where - start
+        allowed = np.ones(len(full), dtype=bool) if previous is None else lags >= previous - rate // 2
+        if not allowed.any():
             lag = previous or 0
         else:
-            best = floor + int(np.argmax(allowed))
-            lag = best - start
+            best = int(np.argmax(np.where(allowed, full, -np.inf)))
+            lag = int(lags[best])
             if previous is not None:
-                at = start + previous
-                if 0 <= at < len(corr) and corr[at] >= 0.6 * corr[best]:
+                at = np.nonzero(lags == previous)[0]
+                # the first piece only overlaps part of the video when it starts later: keep the global offset
+                keep = 0.3 if not pieces else 0.6
+                if len(at) and full[at[0]] >= keep * full[best]:
                     lag = previous
         pieces.append([start / rate, min(len(song_env), start + size) / rate, lag / rate])
         previous = lag
@@ -541,20 +547,24 @@ def _jump_time(song_env, clip_env, around, lag1, lag2, rate, window=2.0):
     return around
 
 
-def cut_video_to_audio(audio, clip, target):
+def cut_video_to_audio(audio, clip, target, cuts=None):
     """target: the video of `clip` rebuilt to follow `audio` (scenes that break the song are left out). Returns the
-    cuts [(song start, song end, video start)]."""
+    cuts [(song start, song end, video start)]; `cuts` given: those, as they are."""
     from align_video import envelope, measure
-    start_lag, _, _ = measure(audio, clip)
-    cuts = video_pieces(envelope(audio), envelope(clip), start_lag)
+    if cuts is None:
+        start_lag, _, _ = measure(audio, clip)
+        cuts = video_pieces(envelope(audio), envelope(clip), start_lag)
     clip_length = duration_of(clip)
     parts, labels = [], []
     for k, (a, b, v) in enumerate(cuts):
+        before = max(0.0, -v)  # the video starts after the song: its first frame stays
         v = min(max(0.0, v), max(0.0, clip_length - 0.1))
-        end = min(clip_length, v + (b - a))
-        pad = max(0.0, (b - a) - (end - v))  # the video ends first: its last frame stays
+        end = min(clip_length, v + (b - a) - before)
+        after = max(0.0, (b - a) - before - (end - v))  # the video ends first: its last frame stays
+        pads = [f"start_duration={before:.3f}:start_mode=clone"] if before > 0.01 else []
+        pads += [f"stop_duration={after:.3f}:stop_mode=clone"] if after > 0.01 else []
         parts.append(f"[0:v]trim=start={v:.3f}:end={end:.3f},setpts=PTS-STARTPTS"
-                     + (f",tpad=stop_duration={pad:.3f}:stop_mode=clone" if pad > 0.01 else '') + f"[v{k}]")
+                     + (f",tpad={':'.join(pads)}" if pads else '') + f"[v{k}]")
         labels.append(f"[v{k}]")
     graph = ';'.join(parts) + ';' + ''.join(labels) + f"concat=n={len(labels)}:v=1:a=0,fps=25[out]"
     subprocess.run(['ffmpeg', '-v', 'error', '-y', '-i', str(clip), '-filter_complex', graph, '-map', '[out]',
@@ -589,9 +599,11 @@ def make_song(artist, title, url, songs_dir, language='Spanish', year=None, genr
         clip, _, cover = download_video(url, work, base, yt_dlp)
         from align_video import measure
         offset, fits, sure = measure(official, clip)
-        whole = min(fits) >= 0.8 and sure >= 0.2 and offset >= 0
+        follows = min(fits) >= 0.8 and sure >= 0.2
+        whole = follows and offset >= 0
+        decision = 'kept uncut' if whole else 'shifted to the official audio' if follows else 'cut to the official audio'
         log(f"    the song starts at {offset:+.1f} s of the video; fit of each quarter "
-            f"{', '.join(f'{f:.0%}' for f in fits)} -> " + ("kept uncut" if whole else "cut to the official audio"))
+            f"{', '.join(f'{f:.0%}' for f in fits)} -> {decision}")
         if cover and not (folder / cover.name).exists():
             cover = Path(cover).replace(folder / cover.name)
         if whole:
@@ -603,7 +615,9 @@ def make_song(artist, title, url, songs_dir, language='Spanish', year=None, genr
         else:
             audio = Path(official).replace(folder / official.name)
             video = folder / f"{base}.mp4"
-            cuts = cut_video_to_audio(audio, clip, video)
+            # the video follows the whole song but starts after it: one cut, its first frame held at the start
+            cuts = cut_video_to_audio(audio, clip, video,
+                                      [(0.0, duration_of(audio), offset)] if follows else None)
             log(f"    video rebuilt from {len(cuts)} piece(s): " + ', '.join(
                 f"song {a:.0f}-{b:.0f} s = video {v:.0f} s" for a, b, v in cuts))
     else:
