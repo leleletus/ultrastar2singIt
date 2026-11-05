@@ -101,10 +101,16 @@ def lrclib_versions(artist, title, folder=None):
     if cache and cache.exists():
         hits = json.loads(cache.read_text(encoding='utf-8'))
     else:
-        response = requests.get(LRCLIB, params={'artist_name': artist, 'track_name': title}, timeout=20,
-                                headers={'User-Agent': USER_AGENT})
-        response.raise_for_status()
-        hits = response.json()
+        main_artist = re.split(r'\s+(?:feat\.?|ft\.?|&|x|×|,)\s+|,\s*', artist, flags=re.IGNORECASE)[0]
+        hits = []
+        # the artist as given, then the main artist ("LISA feat. Doja Cat & RAYE" -> "LISA"), then a free search
+        for params in ({'artist_name': artist, 'track_name': title}, {'artist_name': main_artist, 'track_name': title},
+                       {'q': f"{main_artist} {title}"}):
+            response = requests.get(LRCLIB, params=params, timeout=20, headers={'User-Agent': USER_AGENT})
+            response.raise_for_status()
+            hits = [h for h in response.json() if h.get('syncedLyrics')]
+            if hits:
+                break
         if cache:
             cache.write_text(json.dumps(hits, ensure_ascii=False), encoding='utf-8')
     out = []
@@ -617,7 +623,7 @@ def duration_of(path):
     return float(out) if out else 0.0
 
 
-def fetch_song(artist, title, url, songs_dir, audio_url=None, yt_dlp=None, log=print):
+def fetch_song(artist, title, url, songs_dir, audio_url=None, yt_dlp=None, log=print, lyrics_artist=None):
     """Everything that needs internet, kept in the song folder: the video, the official audio, the LRCLIB lyrics and
     the Genius pages (choruses and sections, used by the conversion). make_song then works without internet."""
     import SongSections
@@ -638,18 +644,19 @@ def fetch_song(artist, title, url, songs_dir, audio_url=None, yt_dlp=None, log=p
             with_retries(lambda: download_video(url, work, base, yt_dlp), log)
     else:
         with_retries(lambda: download_video(url, folder, base, yt_dlp), log)
-    with_retries(lambda: lrclib_versions(artist, title, folder), log)
+    lyrics_artist = lyrics_artist or artist
+    with_retries(lambda: lrclib_versions(lyrics_artist, title, folder), log)
     txt = folder / f"{base}.txt"  # the Genius caches are named after the txt the song will have
     UltrastarToSingit._genius_offline = False
-    with_retries(lambda: UltrastarToSingit.genius_get_choruses(txt, artist=artist, title=title), log)
-    with_retries(lambda: SongSections.get_sections(txt, artist, title), log)
+    with_retries(lambda: UltrastarToSingit.genius_get_choruses(txt, artist=lyrics_artist, title=title), log)
+    with_retries(lambda: SongSections.get_sections(txt, lyrics_artist, title), log)
     (folder / 'songmaker_fetched.json').write_text(json.dumps({'url': url, 'audio_url': audio_url}), encoding='utf-8')
     log(f"Fetched: {base}")
     return folder
 
 
 def make_song(artist, title, url, songs_dir, language='Spanish', year=None, genre=None, yt_dlp=None, log=print,
-              audio_url=None):
+              audio_url=None, lyrics_artist=None):
     """Makes "<songs_dir>/<artist> - <title>/" and returns the path of its txt. audio_url: take the audio from
     that upload and cut the video of `url` to it. What fetch_song already downloaded is used as it is."""
     sys.path.insert(0, str(Path(__file__).resolve().parent / 'tools'))
@@ -702,7 +709,7 @@ def make_song(artist, title, url, songs_dir, language='Spanish', year=None, genr
     energy, pitch = voice['energy'], voice['pitch']
 
     log("3/4 Timed lyrics (LRCLIB)")
-    versions = with_retries(lambda: lrclib_versions(artist, title, folder), log)
+    versions = with_retries(lambda: lrclib_versions(lyrics_artist or artist, title, folder), log)
     if not versions:
         raise RuntimeError(f"LRCLIB has no timed lyrics for {artist} - {title}")
     version, offset, score = fit_lyrics(versions, energy, song_length or duration, intro)

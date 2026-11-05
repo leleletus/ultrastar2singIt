@@ -7,7 +7,8 @@ Usage:
     python tools/make_songs.py <songs folder> <queue.json> convert    # converts finished songs while `build` runs
     python tools/make_songs.py <songs folder> <queue.json> all        # the three, one after the other
 
-<queue.json>: [{"artist", "title", "url", "audio" (optional), "language", "year", "genre"}, ...]. Keep it on disk (not
+<queue.json>: [{"artist", "title", "url", "audio" (optional), "language", "year", "genre", "lyrics_artist" (optional: the
+artist to look the lyrics up with, e.g. "Maroon 5" for "Maroon 5 feat. LISA")}, ...]. Keep it on disk (not
 in /tmp, which is emptied when the PC turns off). `build` and `convert` can run at the same time (two processes):
 `convert` converts each song as soon as `build` finishes it and ends when `build` has ended.
 """
@@ -40,7 +41,8 @@ def fetch(songs, queue):
             continue
         log(f"######## fetch {folder.name}")
         try:
-            SongMaker.fetch_song(song['artist'], song['title'], song['url'], songs, audio_url=song.get('audio'), log=log)
+            SongMaker.fetch_song(song['artist'], song['title'], song['url'], songs, audio_url=song.get('audio'), log=log,
+                                 lyrics_artist=song.get('lyrics_artist'))
         except Exception as e:
             log(f"FAILED fetch {folder.name}: {e}")
 
@@ -57,7 +59,8 @@ def build(songs, queue):
             try:
                 SongMaker.make_song(song['artist'], song['title'], song['url'], songs,
                                     language=song.get('language', 'Spanish'), year=song.get('year'),
-                                    genre=song.get('genre'), audio_url=song.get('audio'), log=log)
+                                    genre=song.get('genre'), audio_url=song.get('audio'), log=log,
+                                    lyrics_artist=song.get('lyrics_artist'))
             except Exception as e:
                 log(f"FAILED build {folder.name}: {e}")
     finally:
