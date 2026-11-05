@@ -845,7 +845,8 @@ class SongMakerTest(unittest.TestCase):
         import SongMaker
         self.assertEqual(SongMaker.lead_vocal("Check that money (yikes)"), "Check that money")
         self.assertEqual(SongMaker.lead_vocal("(Oye) si jugamos (oye), con mis reglas"), "si jugamos, con mis reglas")
-        self.assertEqual(SongMaker.lead_vocal("(Ooh, ooh)"), "")
+        self.assertEqual(SongMaker.lead_vocal("(Ooh, ooh)"), "Ooh, ooh")            # a whole line in brackets is sung
+        self.assertEqual(SongMaker.lead_vocal("（あ あ おーえお）"), "あ あ おーえお")
         self.assertEqual(SongMaker.lead_vocal("I know (you know"), "I know")       # bracket closed on the next line
         self.assertEqual(SongMaker.lead_vocal("it) and then"), "and then")
         self.assertEqual(SongMaker.lead_vocal("[Chorus] La la"), "La la")

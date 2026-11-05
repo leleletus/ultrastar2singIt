@@ -357,7 +357,7 @@ def _smooth_pitch(pitch):
 # notes repeat it, two fifths move 1-2 semitones, under a tenth jump 5 or more) and rap written as pitchless notes.
 # make_notes writes like that: the syllables go where the voice attacks, each one is a single steady note until
 # the next, and only a long syllable whose pitch clearly moves gets a second note.
-NOTE_MAKER_VERSION = 3          # 1: notes cut from the voice; 2: written like the official songs; 3: no backing vocals
+NOTE_MAKER_VERSION = 4          # 1: notes cut from the voice; 2: written like the official songs; 3: no backing vocals; 4: whole bracketed lines kept
 MIN_SYLLABLE_FRAMES = 3         # 60 ms
 SYLLABLE_S = (0.12, 0.35)       # expected length of a syllable (the line's voice shared out, kept in this range)
 ONSET_DURATION_WEIGHT = 4.0     # how much a syllable far from its expected length costs, against attack strength
@@ -599,7 +599,12 @@ _BRACKETS = re.compile(r'[(（][^)）]*[)）]|\[[^\]]*\]')
 def lead_vocal(text):
     """The line without what LRCLIB writes in brackets: backing vocals and ad-libs ("(yeah)", "(oye)", "[Chorus]").
     The official songs never show them (none of 387 has a bracket) and they are not the main voice's syllables;
-    a bracket left open or closed by another line is cut too."""
+    a bracket left open or closed by another line is cut too. A line that is all in round brackets is kept (without
+    them): it has its own time, nobody else sings over it (a hook, a bridge, "(El destino nos unió)"), and a line
+    left out could not be put back in the sync editor, while one that is not sung can be deleted there."""
+    whole = re.fullmatch(r'\s*[(（]([^()（）]*)[)）]\s*', text)
+    if whole:
+        text = whole.group(1)
     out = _BRACKETS.sub(' ', text)
     out = re.sub(r'[(（].*$', ' ', out)
     out = re.sub(r'^[^(（]*[)）]', ' ', out)

@@ -309,6 +309,13 @@
   coros de LRCLIB entre paréntesis cantados como sílabas de la voz principal → se quitan (`SongMaker.lead_vocal`).
   Palabras pegadas: 0 (la unión de sílabas sobrantes de la versión 1 ya no existe); sílabas sobre silencio: 0,3 %.
   Las 62 rehechas otra vez (txt de la versión 2 en `_papelera/notas_v2`) y reconvertidas; parche 739, 0 problemas.
+- Versión 4 de las notas: lo quitado fue el 6,6 % de las palabras (1421 de 21 599): ecos («Baila (baila)»), coletillas
+  («(yeah)», «(woh)») y firmas («(ATL Jacob)», «(Mr. Doble U)»); el estribillo nunca se tocó. Pero 36 líneas enteras
+  entre paréntesis desaparecían y varias sí se cantan solas (el gancho de vocales de «aiue», «(El destino nos unió)»
+  en Destino): una línea entera entre paréntesis ahora se conserva sin ellos (si no se canta, se borra en el editor
+  con Ctrl+Supr; una línea quitada no se puede volver a añadir allí). Rehechas las 12 afectadas (txt anteriores en
+  `_papelera/notas_v3`) y reconvertidas, sin tocar los .bk2; parche 739, 0 problemas.
+- README: guía completa del editor de sincronía (cada botón, su icono, nombre en español y atajo).
 - Pendiente (B-75): en líneas ligadas un 23 % de las sílabas cae a más de 0,3 s de su sitio; con volumen y tono no
   se distingue dónde acaba una sílaba (haría falta alinear la letra con un modelo de habla).
 

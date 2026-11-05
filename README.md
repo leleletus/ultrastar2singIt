@@ -40,20 +40,10 @@ Detailed technical notes, bug list, regressions and work log (in Spanish) are in
 "Clear cache" keeps them (double confirmation), a failed encode never replaces a good file, and before the output
 folder is cleared any video without a copy in its song folder is rescued.
 
-**Sync editor** (right click on a song → *Fix sync…*), a small video editor for the lyrics:
-- video, the notes as bars like the game and karaoke lyrics; play/pause, ±5 s, ±0.1 s, previous/next line,
-  jump to the first lyrics, speed 0.5×–1.25×, a timeline you can click, keyboard shortcuts on every button;
-- move all the lyrics (`#GAP`) or **cut** the song into parts (cut start / cut end) and move one part without
-  touching the others (a gap in the middle of the song); the selected part stays selected while you move around
-  the song; a `.bak` of the txt is kept the first time a song is saved;
-- **Analyze voice**: the singer is isolated (Demucs) and drawn over the notes; a map colours every line by how well
-  it matches the voice and *Fit to voice* moves a part to where the singer really is;
-- **Lyrics fixes** (UltraStar songs): delete the selected syllable with its notes (`Delete`) or the whole line
-  (`Ctrl+Delete`) when nothing is sung there, fix the text of a note (double click) or of the line (`T`, one piece
-  per note separated by `|`);
-- **Sing mode**: listens to the microphone, draws your voice over the notes and counts the notes you hit (any
-  octave, like the game) to check that the pitch of a song is right;
-- songs that use an official Let's Sing lyrics file are shown read-only (the game uses their timing as is).
+**Sync editor** (right click on a song → *Fix sync…*), a small video editor for the lyrics: move all the lyrics
+or only a part of the song, see where the singer really is, fix the pitch of a note, delete lyrics where nothing is
+sung and fix misspelt words, and sing over it with a microphone. Every button and shortcut is described in
+[Sync editor: buttons and shortcuts](#sync-editor-buttons-and-shortcuts).
 
 **Lyrics and notes**
 - Songs rebuilt from older Let's Sing DLCs use the official vxla (`letssing_original.vxla`, see
@@ -85,6 +75,103 @@ skip-intro mod works: [`docs/10_MOD_SALTAR_INTRO.md`](docs/10_MOD_SALTAR_INTRO.m
 
 **GUI**: fast song table with per-song status, convert only the checked songs or a single one, coloured log,
 settings remembered, full Spanish translation. Tests: `python -m unittest discover -s tests -t .`
+
+## Sync editor: buttons and shortcuts
+Open it with a right click on a song → *Fix sync…* (*Arreglar sincronización...*). Button names are shown in English
+and, in brackets, as they appear with the Spanish translation. Hovering over any button shows what it does and its
+shortcut. Shortcuts work while the editor window is active (not while typing in a text box).
+
+**Songs that use an official Let's Sing lyrics file** (`letssing_original.vxla`) open **read-only**: the game uses
+their timing as it is, so only playback, voice analysis and sing mode work; the editing buttons are greyed out.
+
+### Window, from top to bottom
+| Part | What it shows / does |
+|---|---|
+| Info line | audio and video files used, and warnings (still-image video, lyrics longer than the audio, official file...) |
+| Video | the song's video, in sync with the audio |
+| Note lane | the notes as bars like the game: **blue** = normal note, **yellow** = golden note, **grey bar at the bottom** = rap note (only the timing counts, not the pitch). The white vertical line is "now"; the name of the note being sung is shown next to it. Horizontal guides = one per semitone (labelled on every C). After *Analyze voice*, **light-blue dots** = the singer's real voice. In sing mode, **green / red dots** = your voice on / off the note. A **white outline** = the selected note. The **orange tint** = the part the arrows move; **orange lines** = cuts |
+| Karaoke lyrics | the line being sung, coloured as it goes, and the next one |
+| Timeline | click anywhere to jump there |
+| Line map | one block per lyrics line: **green** = on the voice, **orange** = a bit off, **red** = out of time, **grey** = voice not analysed yet (or the line is barely sung). Orange triangles = cuts, white box = selected part, red line = end of the audio. Click to jump there (and select that part) |
+
+### Mouse on the note lane
+| Action | What it does |
+|---|---|
+| Click a note | selects it (white outline); rap notes can be selected too |
+| Drag a note up / down | changes its pitch by semitones (sung notes only) |
+| Double click a note | fixes the text of that syllable (see [Lyrics](#lyrics-fix-misspelt-words-delete-what-is-not-sung)) |
+
+### Playback
+| Button | Name | Shortcut | What it does |
+|---|---|---|---|
+| ⏮ skip back | Go to the start (*Ir al inicio*) | `Home` | jumps to 0:00 |
+| ⏮ previous track | Previous line (*Línea anterior*) | `Up` | goes back to the start of the line being sung; pressed again (in the first second of the line), to the line before |
+| ⏪ 5 | Back 5 seconds (*Retroceder 5 segundos*) | `J` | |
+| ‹ | Back 0.1 seconds (*Retroceder 0,1 segundos*) | `,` | fine positioning |
+| ▶ / ⏸ (big) | Play / pause (*Reproducir / pausar*) | `Space` | |
+| › | Forward 0.1 seconds (*Avanzar 0,1 segundos*) | `.` | |
+| ⏩ 5 | Forward 5 seconds (*Avanzar 5 segundos*) | `L` | |
+| ⏭ next track | Next line (*Línea siguiente*) | `Down` | half a second before the next line |
+| text icon | Go to just before the first lyrics (*Ir justo antes de la primera letra*) | `F` | 2 s before the first line, to skip the intro |
+| speedometer + list | Speed (*Velocidad*) | | 0.5×, 0.75×, 1×, 1.25× (slow it down to place a fast part) |
+| speaker + slider | Volume (*Volumen*) | | |
+| time | | | position / length of the song |
+
+### Timing: move the lyrics
+| Button | Name | Shortcut | What it does |
+|---|---|---|---|
+| « -250 | Lyrics earlier (*Letra antes*) | `Ctrl+Left` | moves the selected part (or all the lyrics) 250 ms earlier |
+| ‹ -50 | Lyrics earlier | `Left` | 50 ms earlier |
+| ‹ -10 | Lyrics earlier | `Shift+Left` | 10 ms earlier |
+| +10 › | Lyrics later (*Letra después*) | `Shift+Right` | 10 ms later |
+| +50 › | Lyrics later | `Right` | 50 ms later |
+| +250 » | Lyrics later | `Ctrl+Right` | 250 ms later |
+| ✂ Start | Cut start (*Inicio*) | `C` | a new part starts at the line being sung and gets selected: from now on the arrows move only that part (from there to the next cut or to the end) |
+| ⏐ End | Cut end (*Fin*) | `V` | the selected part ends just before the line being sung: what comes after does not move |
+| ↶ Join | Join (*Unir*) | | removes the selected cut: the part joins the one before it and takes its shift |
+| ↔ All the lyrics | All the lyrics (*Toda la letra*) | `G` | selects the whole song (`#GAP`): the arrows move every part together |
+| | previous / next part | `[` / `]` | selects the part before / after (or click it on the line map) |
+| ✨ Fit to voice | Fit to voice (*Ajustar a la voz*) | `A` | moves the line being sung, and its part up to the next cut, to where the voice analysis found the singer. Needs *Analyze voice* first |
+| 〜 Analyze voice | Analyze voice (*Analizar voz*) | | isolates the voice with Demucs (about 2–3 minutes, once per song; then it is kept next to the song): draws the singer over the notes and colours the line map |
+| ↶ | Undo changes (*Deshacer cambios*) | | back to how the song was when the editor opened: timing, cuts, pitches, deleted and fixed lyrics |
+| 💾 Save | Save (*Guardar*) | `Ctrl+S` | writes the txt (a `.bak` copy of the original txt is kept the first time). Convert the song afterwards so the game gets it |
+
+The label under the buttons shows what the arrows move (all the lyrics, or lines *a–b* and their shift), how many
+parts there are, how far the voice of the current line is, and a warning when a moved part would overlap the line
+before it (fix it before saving). Parts are saved in steps of one beat of the song (shown there).
+
+### Pitch
+| Action | Shortcut | What it does |
+|---|---|---|
+| Drag the selected note | | up / down by semitones |
+| Note up / down | `Shift+Up` / `Shift+Down` | one semitone up / down |
+
+### Lyrics: fix misspelt words, delete what is not sung
+UltraStar songs only. Nothing is written until you save; the grey label of this row shows the selected syllable and
+how many notes were deleted / texts fixed.
+
+| Button | Name | Shortcut | What it does |
+|---|---|---|---|
+| 🗑 Delete syllable | Delete syllable (*Borrar sílaba*) | `Delete` | deletes the selected note's syllable with its notes (also the `~` notes that hold it). Click the note first |
+| row minus | Delete line (*Borrar línea*) | `Ctrl+Delete` | deletes the line being sung (or the selected note's line) with all its notes, after asking |
+| I-beam Fix text | Fix text (*Corregir texto*) | `T` | fixes the text of the line being sung (or of the selected note's line) |
+| | Fix syllable | double click a note | fixes the text of only that note |
+
+How to write the text:
+- *Fix text* shows the line **one piece per note, separated by `|`**, for example `Ca|mi|nan|do ` . Keep the same
+  number of pieces (the window says how many notes the line has); to take out a syllable, delete its note instead.
+- A **space at the end** of a piece ends the word: `Ca|mi|nan|do ` is one word, `Ca |mi ` are two.
+- `~` holds the syllable before (a long note sung over several pitches). An empty piece becomes `~`.
+
+### Sing mode
+| Control | Name | What it does |
+|---|---|---|
+| 🎤 Sing (toggle) | Sing (*Cantar*) | listens to the microphone and draws your voice over the notes like the game: green = on the note, red = off. It counts the notes you hit (any octave counts, like the game) and the % on pitch. Use headphones so the microphone does not hear the song |
+| microphone list | | which microphone to use |
+| ms box | Mic delay (*Retardo del micro*) | how late the microphone hears you (default 100 ms); raise it if your voice is drawn after the notes |
+
+### Closing
+If there are unsaved changes, closing asks: **Yes** saves, **No** discards them, **Cancel** goes back to the editor.
 
 ## Requirements
 - Windows 7+, or Linux with Wine (see [README_Linux.md](README_Linux.md))
