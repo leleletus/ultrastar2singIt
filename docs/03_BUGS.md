@@ -80,6 +80,7 @@ estado de cada bug está en la tabla). "Evidencia" = verificado con prueba, con 
 | B-71 | MEDIO | Sincronía | Something About Us con la letra 1,08 s tarde | CERRADO (2be952a) |
 | B-72 | MEDIO | Letras | La búsqueda de estribillos en Genius no lee cabeceras con nombres enlazados ("[Coro: Luis Fonsi," partida en líneas): 75 canciones con página y sin estribillos | CERRADO (a16d166: 72 releídas, 51 con estribillos) |
 | B-73 | ALTO | Feat | El modo Feat cerraba el juego: faltaba vxla_feat y todas decían "coopfriendly": "Coop" sin segunda voz | CERRADO (4c02966; solo 2026) |
+| B-74 | ALTO | usdb_syncer | usdb_syncer no marcaba ninguna canción descargada: la carpeta se guardó como texto y la ignoraba | CERRADO (configuración; 271 reconocidas) |
 
 ---
 
@@ -512,4 +513,13 @@ estado de cada bug está en la tabla). "Evidencia" = verificado con prueba, con 
   `<id>_feat.vxla` (y `beats/<id>.json`). `"Coop"` marca las canciones con segunda voz.
 - **Arreglo**: `FeatVxla.py` + `SongSections.py` (ver `13_MODO_FEAT.md`); `coopfriendly` = `"Coop"` solo con segunda
   voz; `validate_patch.py` exige `vxla_feat` en 2026. Probado en la consola: Sofia y Un año sin lluvia en Feat.
+
+### B-74 · ALTO · usdb_syncer no reconocía las canciones descargadas
+- **Dónde**: `~/.config/bohning/usdb_syncer.conf` (no el conversor). Causado al arreglar B-63 el 2026-11-01.
+- **Causa**: la carpeta se escribió a mano como texto (`song_dir=/home/.../songs`). usdb_syncer guarda un `Path` y su
+  `_Settings.get` devuelve el valor por defecto (`~/songs`, que no existe) cuando el tipo no coincide: buscaba los
+  `.usdb` en una carpeta vacía y dejaba su tabla `sync_meta` vacía, así que ninguna canción salía como descargada.
+- **Arreglo**: `settings.set_song_dir(Path(...))` con el Python de usdb_syncer (copia
+  `usdb_syncer.conf.antes_song_dir_20261105`) y su propia sincronización de carpeta: 271 canciones reconocidas. Para
+  cambiar la carpeta: el botón de usdb_syncer, nunca editar el `.conf`.
 

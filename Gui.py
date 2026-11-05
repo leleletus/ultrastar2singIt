@@ -783,6 +783,9 @@ class MainWindow(QMainWindow):
         unpack_action = tools_menu.addAction("")
         self.t(unpack_action.setText, "Unpack DLC songs to the input folder")
         unpack_action.triggered.connect(self.tool_unpack_output)
+        make_song_action = tools_menu.addAction("")
+        self.t(make_song_action.setText, "Make a song that is not on USDB...")
+        make_song_action.triggered.connect(self.tool_make_song)
 
         help_menu = menu_bar.addMenu("")
         self.t(help_menu.setTitle, "Help")
@@ -2011,6 +2014,50 @@ class MainWindow(QMainWindow):
             self.scan_input_folder()
         except Exception as e:
             QMessageBox.critical(self, tr("Error"), str(e))
+
+    def tool_make_song(self) -> None:
+        """A song USDB does not have (SongMaker): music video from YouTube, timed lyrics from LRCLIB, notes from the
+        singer's voice. The folder appears in the table when it ends; then it is converted like any other song."""
+        songs = self.input_path.text().strip()
+        title = tr("Make a song that is not on USDB...").rstrip('.')
+        if not os.path.isdir(songs):
+            QMessageBox.warning(self, title, tr("Choose the input folder with your songs first."))
+            return
+        dialog = QDialog(self)
+        dialog.setWindowTitle(title)
+        form = QFormLayout(dialog)
+        intro = QLabel(tr("The video, the timed lyrics (LRCLIB) and the notes (from the singer's voice, Demucs) are "
+                          "made automatically; it takes a few minutes. Check the song in the sync editor afterwards."))
+        intro.setWordWrap(True)
+        form.addRow(intro)
+        fields = {}
+        for key, label, hint in (('artist', "Artist", "Paty Cantú"), ('title', "Title", "Goma de Mascar"),
+                                 ('url', "YouTube link of the music video", "https://www.youtube.com/watch?v=..."),
+                                 ('audio', "YouTube link of the official audio (optional)",
+                                  tr("Only when the video has scenes that break the song")),
+                                 ('year', "Year (optional)", "2009"), ('genre', "Genre (optional)", "Pop")):
+            edit = QLineEdit()
+            edit.setPlaceholderText(hint)
+            fields[key] = edit
+            form.addRow(tr(label), edit)
+        language = QComboBox()
+        language.addItems(['Spanish', 'English', 'Korean', 'French', 'German', 'Japanese', 'Other'])
+        form.addRow(tr("Language"), language)
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        form.addRow(buttons)
+        if dialog.exec() != QDialog.Accepted:
+            return
+        values = {k: e.text().strip() for k, e in fields.items()}
+        if not (values['artist'] and values['title'] and values['url'].startswith(('http://', 'https://'))):
+            QMessageBox.warning(self, title, tr("Artist, title and the link of the video are needed."))
+            return
+        args = [songs, values['artist'], values['title'], values['url'], '--language', language.currentText()]
+        for key in ('audio', 'year', 'genre'):
+            if values[key]:
+                args += [f'--{key}', values[key]]
+        self.tools_panel.run_tool('make_song', args, title, heavy=True)
 
     def tool_unpack_output(self) -> None:
         try:

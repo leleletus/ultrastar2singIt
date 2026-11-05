@@ -772,3 +772,51 @@ class SongSectionsTest(unittest.TestCase):
         self.assertIn((8.0, 20.0, 'feat'), feat['segments'])                  # the chorus is sung together
         self.assertEqual([v for *_, v in feat['notes2_full']], ['#p60#.n2', '#p60#.n4'])  # Demi's and both lines
         self.assertEqual([p[0] for p in feat['pages2']], [8.0, 16.0])
+
+
+class SongMakerTest(unittest.TestCase):
+    """Songs made from YouTube + LRCLIB + the singer's voice (SongMaker)."""
+
+    def test_spanish_syllables(self):
+        import SongMaker
+        cases = {'Maldito': ['Mal', 'di', 'to'], 'encontré': ['en', 'con', 'tré'], 'chicle': ['chi', 'cle'],
+                 'guitarra': ['gui', 'ta', 'rra'], 'país': ['pa', 'ís'], 'construcción': ['cons', 'truc', 'ción'],
+                 'quiero': ['quie', 'ro'], 'hoy': ['hoy'], 'abrazo': ['a', 'bra', 'zo']}
+        for word, expected in cases.items():
+            self.assertEqual(SongMaker.syllables_es(word), expected, word)
+
+    def test_korean_is_romanized_one_syllable_per_block(self):
+        import SongMaker
+        self.assertEqual(SongMaker.line_syllables('숨 쉬듯 찾는 네 밥상', 'Korean'),
+                         ['Sum ', 'swi', 'deut ', 'chat', 'neun ', 'ne ', 'bap', 'sang'])
+        self.assertEqual(SongMaker.line_syllables('Sign을 보내, signal', 'Korean'),
+                         ['Sign', 'eul ', 'bo', 'nae, ', 'sig', 'nal'])
+
+    def test_lrc_lines(self):
+        import SongMaker
+        lrc = '[ti:Song]\n[00:08.16] Maldito el día\n\n[01:02.50][02:10.00] Coro\n[00:20.00]\n'
+        self.assertEqual(SongMaker.parse_lrc(lrc), [(8.16, 'Maldito el día'), (62.5, 'Coro'), (130.0, 'Coro')])
+
+    def test_syllables_go_to_the_strongest_note_starts(self):
+        import numpy as np
+        import SongMaker
+        energy = np.zeros(100, dtype=np.float32)
+        for start in (0, 30, 60):                      # three attacks; the notes at 15 and 45 are held parts
+            energy[start:start + 10] = 1.0
+        energy[10:30] = energy[40:60] = 0.5
+        notes = [(0, 15, 60.0), (15, 30, 62.0), (30, 45, 64.0), (45, 60, 64.0), (60, 75, 62.0)]
+        out = SongMaker.assign_syllables(notes, ['a', 'b', 'c'], energy)
+        self.assertEqual([t for *_, t in out], ['a', '~', 'b', '~', 'c'])
+        more = SongMaker.assign_syllables([(0, 40, 60.0)], ['x', 'y'], energy)   # fewer notes: split the longest
+        self.assertEqual([(a, b, t) for a, b, m, t in more], [(0, 20, 'x'), (20, 40, 'y')])
+
+    def test_ultrastar_text(self):
+        import SongMaker
+        lines = [[(10.0, 10.3, 62.4, 'Ho'), (10.3, 10.6, 64.0, 'la ')], [(12.0, 12.6, 60.0, 'tú')]]
+        text = SongMaker.ultrastar_text(lines, {'TITLE': 'T', 'ARTIST': 'A', 'YEAR': None})
+        self.assertIn('#GAP:10000', text)
+        self.assertNotIn('#YEAR', text)
+        body = [l for l in text.splitlines() if not l.startswith('#')]
+        self.assertEqual(body, [': 0 8 2 Ho', ': 8 8 4 la ', '- 52', ': 53 16 0 tú', 'E'])
+        parsed = UltrastarToSingit.parse_file(write(Path(tempfile.mkdtemp()) / 's.txt', text))
+        self.assertEqual(len([n for n in parsed['notes'] if n[0] == ':']), 3)

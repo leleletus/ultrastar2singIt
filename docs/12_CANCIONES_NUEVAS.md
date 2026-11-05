@@ -58,3 +58,6 @@ Opcional, en **5. Opciones avanzadas** (marcar la casilla para desplegarlo), ant
 - **Nunca se borra un `.bk2`** al convertir: solo se rehace uno que sea la portada fija cuando la carpeta tiene un video
   con movimiento (el viejo se guarda en `<canciones>/../_replaced_videos`).
 - Ningún paso necesita internet salvo la descarga, "Añadir un video" con enlace y las herramientas de datos (internet).
+- **Si usdb_syncer no marca como descargadas tus canciones**, su carpeta de canciones no es la buena (B-74): elígela
+  con su botón de carpeta, no editando el `.conf`.
+- **Canciones que no están en USDB**: Herramientas → Crear una canción que no está en USDB… (`docs/14_CANCIONES_SIN_USDB.md`).

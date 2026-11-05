@@ -18,6 +18,7 @@ Documentación interna del fork (rama `linux-wine-support`). Auditoría inicial:
 | [11_GUIA_DE_PRUEBAS.md](11_GUIA_DE_PRUEBAS.md) | Qué cambió, cómo probarlo en la consola y en el PC, qué falta (2026-11-01) |
 | [12_CANCIONES_NUEVAS.md](12_CANCIONES_NUEVAS.md) | Añadir canciones nuevas: usdb_syncer → programa → Switch |
 | [13_MODO_FEAT.md](13_MODO_FEAT.md) | Modo Feat de 2026: archivos oficiales, reglas, cómo se generan la letra feat, la segunda voz y los beats, fiabilidad |
+| [14_CANCIONES_SIN_USDB.md](14_CANCIONES_SIN_USDB.md) | Crear canciones que USDB no tiene (SongMaker): video, letra con tiempos de LRCLIB, notas de la voz |
 | [correcciones_metadatos.csv](correcciones_metadatos.csv) | Artista/título corregidos (entrada de `tools/rename_songs.py`) |
 
 ## Convenciones

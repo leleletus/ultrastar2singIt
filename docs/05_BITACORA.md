@@ -262,6 +262,17 @@
   y usan su letra oficial). Conversión completa: 0 errores, 724 `.bk2` intactos, validador sin problemas.
 - Copia a la Switch: 1356 archivos (46 MB): 658 vxla_feat, 658 beats, 30 vxla, 7 vistas previas, la lista. Ningún video.
 
+### 2026-11-05 — usdb_syncer (B-74) y canciones que USDB no tiene (SongMaker)
+- usdb_syncer no marcaba ninguna canción como descargada: la carpeta que escribí a mano el 1-11 como texto la ignora
+  (usa `~/songs`). Guardada como `Path` con su propia API y sincronizada: 271 reconocidas.
+- SongMaker (`SongMaker.py`, `tools/make_song.py`, Herramientas → Crear una canción que no está en USDB…): videoclip
+  de YouTube (sin cortar si contiene la canción seguida; rehecho por tramos si hay escenas en medio), letra con tiempos
+  de LRCLIB (la versión y el desfase que mejor encajan con la voz), notas desde la voz (Demucs), sílabas en español,
+  inglés y coreano romanizado. Ver `docs/14_CANCIONES_SIN_USDB.md`.
+- Hechas: Paty Cantú (Goma de Mascar, Afortunadamente No Eres Tú, Clavo Que Saca Otro Clavo, Suerte), TWICE (SIGNAL,
+  Strategy), LE SSERAFIM (Smart, SPAGHETTI, BOOMPALA). Coincidencia con la voz 43–64 %, desplazamiento mediano 0,00 s
+  en todas. SIGNAL tiene 15/76 líneas a más de 1 s: revisar en el editor.
+
 <!-- Plantilla para nuevas entradas:
 ### AAAA-MM-DD — Título
 - Cambios: …

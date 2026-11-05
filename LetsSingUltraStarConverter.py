@@ -124,7 +124,7 @@ def _run_tool(name, args):
     import importlib
     import runpy
     import ToolsPanel
-    if name not in {t.key for t in ToolsPanel.TASKS} | {'align_video'}:
+    if name not in {t.key for t in ToolsPanel.TASKS} | {'align_video', 'make_song'}:
         sys.exit(f"unknown tool: {name}")
     for sibling in {'usdb_sources', 'fix_covers'} - {name}:  # the tools import each other by their bare name
         sys.modules.setdefault(sibling, importlib.import_module(f'tools.{sibling}'))

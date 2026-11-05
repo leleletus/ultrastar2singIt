@@ -338,5 +338,15 @@
   "Only pending": "Solo pendientes",
   "Show only songs not converted yet (e.g. new songs downloaded with usdb_syncer): then 'Check all visible' and 'Convert checked'.": "Mostrar solo las canciones aún sin convertir (p. ej. las nuevas bajadas con usdb_syncer): luego 'Marcar todas las visibles' y 'Convertir marcadas'.",
   "First copy: the Switch has no patch of this DLC yet": "Primera copia: la Switch todavía no tiene el parche de este DLC",
-  "Copies the whole patch, only when the DLC folder on the Switch is missing or empty (a folder with files is never touched).": "Copia el parche entero, solo si la carpeta del DLC en la Switch no existe o está vacía (nunca toca una carpeta con archivos)."
+  "Copies the whole patch, only when the DLC folder on the Switch is missing or empty (a folder with files is never touched).": "Copia el parche entero, solo si la carpeta del DLC en la Switch no existe o está vacía (nunca toca una carpeta con archivos).",
+  "Make a song that is not on USDB...": "Crear una canción que no está en USDB...",
+  "The video, the timed lyrics (LRCLIB) and the notes (from the singer's voice, Demucs) are made automatically; it takes a few minutes. Check the song in the sync editor afterwards.": "El video, la letra con tiempos (LRCLIB) y las notas (de la voz del cantante, Demucs) se hacen solos; tarda unos minutos. Revisa después la canción en el editor de sincronía.",
+  "Artist": "Artista",
+  "Title": "Título",
+  "YouTube link of the music video": "Enlace de YouTube del videoclip",
+  "YouTube link of the official audio (optional)": "Enlace de YouTube del audio oficial (opcional)",
+  "Only when the video has scenes that break the song": "Solo si el video tiene escenas que cortan la canción",
+  "Year (optional)": "Año (opcional)",
+  "Genre (optional)": "Género (opcional)",
+  "Artist, title and the link of the video are needed.": "Hacen falta el artista, el título y el enlace del video."
 }

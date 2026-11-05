@@ -1,6 +1,6 @@
 # 09 — Historial de bugs
 
-Resumen al 2026-11-02: **73 bugs registrados, 72 cerrados, 1 pendiente**. El detalle de cada uno (causa, impacto, arreglo) está en [03_BUGS.md](03_BUGS.md); las regresiones del historial de git en [04_REGRESIONES.md](04_REGRESIONES.md) y el día a día en [05_BITACORA.md](05_BITACORA.md).
+Resumen al 2026-11-05: **74 bugs registrados, 73 cerrados, 1 pendiente**. El detalle de cada uno (causa, impacto, arreglo) está en [03_BUGS.md](03_BUGS.md); las regresiones del historial de git en [04_REGRESIONES.md](04_REGRESIONES.md) y el día a día en [05_BITACORA.md](05_BITACORA.md).
 
 ## Pendientes
 
@@ -97,3 +97,4 @@ Resumen al 2026-11-02: **73 bugs registrados, 72 cerrados, 1 pendiente**. El det
 | B-71 | MEDIO | Sincronía | Something About Us con la letra 1,08 s tarde | (2be952a) |
 | B-73 | ALTO | Feat | El modo Feat cerraba el juego: faltaba vxla_feat; "Coop" sin segunda voz | (4c02966; FeatVxla.py, SongSections.py) |
 | B-72 | MEDIO | Letras | La búsqueda de estribillos en Genius no leía cabeceras con nombres enlazados (75 canciones) | (a16d166: 51 recuperan sus estribillos) |
+| B-74 | ALTO | usdb_syncer | No marcaba las canciones descargadas: carpeta guardada como texto | (configuración: set_song_dir con Path; 271 reconocidas) |
