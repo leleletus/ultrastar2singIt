@@ -1387,6 +1387,8 @@ def _vxla_cache_params(txt_path: Path, output_format, pitch_method, ignore_medle
     parser = UltrastarToSingit.upgrade_genius_cache(txt_path) if genius_lookup else None
     if parser:
         params['genius_parser'] = parser
+    if UltrastarToSingit.is_duet(txt_path):
+        params['duet'] = 'both singers'  # the vxla holds the lines of P1 and P2 (only duets get a new vxla)
     return params
 
 

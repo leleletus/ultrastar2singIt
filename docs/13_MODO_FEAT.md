@@ -39,7 +39,7 @@ En modo Feat, "Un año sin lluvia" (y cualquier canción convertida) cerraba el 
 |---|---|
 | Estribillos (`feat`) | Canciones de DLC: `structure` oficial (si marca al menos 2). Si no: secciones de Genius (`chorus`, `post-chorus`). Si no: los estribillos detectados por el conversor, uniendo los trozos a menos de 4 s |
 | Cortes de las estrofas | Cambios de sección (oficial o Genius); una parte de más de 22 s se corta en su pausa más larga; partes de 8 s como mínimo |
-| Segunda voz | Duetos de UltraStar: la voz `P2` del txt. Canciones con varios artistas: las líneas que Genius atribuye al segundo artista (por la sección o, dentro de una sección, por el formato: normal / *cursiva* / **negrita** = "ambos"). Si no, vacía |
+| Segunda voz | Duetos de UltraStar: la voz `P2` del txt (y en el modo clásico el vxla lleva las líneas de los dos cantantes: `merge_duet`, P1 gana si se pisan). Canciones con varios artistas: las líneas que Genius atribuye al segundo artista (por la sección o, dentro de una sección, por el formato: normal / *cursiva* / **negrita** = "ambos"). Si no, vacía |
 | `coopfriendly` | `"Coop"` si la segunda voz tiene 20 notas o más (la oficial GoodNews, con 6, es `""`) |
 | Beats | Detector propio con numpy + ffmpeg (sin librosa): espectrograma mel, tempo por autocorrelación, pulsos por programación dinámica |
 

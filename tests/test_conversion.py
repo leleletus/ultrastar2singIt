@@ -820,3 +820,14 @@ class SongMakerTest(unittest.TestCase):
         self.assertEqual(body, [': 0 8 2 Ho', ': 8 8 4 la ', '- 52', ': 53 16 0 tú', 'E'])
         parsed = UltrastarToSingit.parse_file(write(Path(tempfile.mkdtemp()) / 's.txt', text))
         self.assertEqual(len([n for n in parsed['notes'] if n[0] == ':']), 3)
+
+
+class DuetClassicTest(TempDirTest):
+    def test_classic_mode_has_the_lines_of_both_singers(self):
+        txt = write(self.tmp / 'd.txt', '#TITLE:D\n#ARTIST:A\n#BPM:300\n#GAP:0\nP1\n: 0 4 5 uno\n- 10\n'
+                    ': 20 4 5 dos\nP2\n: 10 4 7 tres\n- 18\n: 21 4 7 pisa\nE\n')
+        merged = UltrastarToSingit.parse_file(txt, voice=0)
+        self.assertEqual([n[4] for n in merged['notes'] if n[0] == ':'], ['uno', 'tres', 'dos'])  # P2 overlap left out
+        plain = write(self.tmp / 'p.txt', '#TITLE:P\n#ARTIST:A\n#BPM:300\n#GAP:0\n: 0 4 5 solo\nE\n')
+        self.assertEqual(UltrastarToSingit.parse_file(plain, voice=0)['notes'],
+                         UltrastarToSingit.parse_file(plain)['notes'])                      # other songs: unchanged

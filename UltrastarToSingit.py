@@ -120,14 +120,55 @@ _NOTE_RE = re.compile(r'^([:*FRG])\s*(-?\d+)\s+(-?\d+)\s+(-?\d+)(?: (.*))?$')
 _PAGE_RE = re.compile(r'^-\s*(-?\d+)(?:\s+(-?\d+))?')
 _PLAYER_RE = re.compile(r'^P\s*(\d+)', re.IGNORECASE)
 
+def _note_lines(notes):
+    lines, current = [], []
+    for note in notes:
+        if note[0] == 'E':
+            break
+        if note[0] == '-':
+            if current:
+                lines.append(current)
+                current = []
+        else:
+            current.append(note)
+    if current:
+        lines.append(current)
+    return lines
+
+
+def _span(line):
+    return int(line[0][1]), max(int(n[1]) + int(n[2]) for n in line)
+
+
+def merge_duet(data1, data2):
+    """One voice with the lines of both singers of a duet: every P1 line, and the P2 lines sung while P1 is quiet
+    (a P2 line that overlaps a P1 line is left out: P1 wins)."""
+    lines1, lines2 = _note_lines(data1['notes']), _note_lines(data2['notes'])
+    spans1 = [_span(line) for line in lines1]
+    extra = [line for line in lines2
+             if not any(a < _span(line)[1] and _span(line)[0] < b for a, b in spans1)]
+    notes = []
+    for i, line in enumerate(sorted(lines1 + extra, key=lambda l: _span(l)[0])):
+        if i:
+            notes.append(['-', line[0][1]])
+        notes += line
+    notes.append(['E'])
+    merged = dict(data1)
+    merged['notes'] = notes
+    return merged
+
+
 def parse_file(filename, voice=1):
     """Parse an UltraStar txt.
 
     Tags are stored upper-case with stripped values. Notes are lists of strings:
     [type, start_beat, length, pitch, lyric] (lyric may be '') and page breaks ['-', beat].
     RELATIVE files are converted to absolute beats; for duets only `voice` (P1 or P2, plus the P3 lines that both
-    sing) is kept.
+    sing) is kept, or with voice=0 the lines of both singers (merge_duet; the same as voice 1 for other songs).
     """
+    if voice == 0:
+        first = parse_file(filename, 1)
+        return merge_duet(first, parse_file(filename, 2)) if is_duet(filename) else first
     data = {
         "notes": [],
         "passages": [], # represents rows in the txt file
@@ -866,7 +907,7 @@ def voice_layers(input_file_name, song_duration, pitch_corr=0, voice=2, keep_acc
 
 def main(input_file_name, song_duration, pitch_corr=0, s='', directory='', output_type=JSON, ignore_medley=False,
          keep_accents=True, time_offset=0.0):
-    us_data = parse_file(input_file_name)
+    us_data = parse_file(input_file_name, voice=0)  # a duet: the lines of both singers (classic mode)
     output_file = s if s else re.sub('[^A-Za-z0-9]+', '', us_data.get("TITLE", "Song"))
     
     sing_it = map_data(us_data, song_duration, pitch_corr, input_file_name=input_file_name, ignore_medley=ignore_medley,
