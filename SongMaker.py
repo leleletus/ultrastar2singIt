@@ -357,10 +357,11 @@ def _smooth_pitch(pitch):
 # notes repeat it, two fifths move 1-2 semitones, under a tenth jump 5 or more) and rap written as pitchless notes.
 # make_notes writes like that: the syllables go where the voice attacks, each one is a single steady note until
 # the next, and only a long syllable whose pitch clearly moves gets a second note.
-NOTE_MAKER_VERSION = 2          # 1: notes cut from the voice (2026-11-04); 2: written like the official songs
+NOTE_MAKER_VERSION = 3          # 1: notes cut from the voice; 2: written like the official songs; 3: no backing vocals
 MIN_SYLLABLE_FRAMES = 3         # 60 ms
 SYLLABLE_S = (0.12, 0.35)       # expected length of a syllable (the line's voice shared out, kept in this range)
 ONSET_DURATION_WEIGHT = 4.0     # how much a syllable far from its expected length costs, against attack strength
+LOCAL_VOICE_SHARE = 0.25        # inside a line, voice = louder than this share of the line's loud part
 MIN_NOTE_S = 0.12               # shorter notes are made this long when the next one leaves room
 NOTE_GAP_FRAMES = 2             # a silence this long (40 ms) ends a note before the next syllable
 MELISMA_MIN_S = 0.45            # a syllable this long may hold two notes...
@@ -592,23 +593,42 @@ def smooth_octaves(midis, center):
     return out[::-1]
 
 
+_BRACKETS = re.compile(r'[(（][^)）]*[)）]|\[[^\]]*\]')
+
+
+def lead_vocal(text):
+    """The line without what LRCLIB writes in brackets: backing vocals and ad-libs ("(yeah)", "(oye)", "[Chorus]").
+    The official songs never show them (none of 387 has a bracket) and they are not the main voice's syllables;
+    a bracket left open or closed by another line is cut too."""
+    out = _BRACKETS.sub(' ', text)
+    out = re.sub(r'[(（].*$', ' ', out)
+    out = re.sub(r'^[^(（]*[)）]', ' ', out)
+    out = re.sub(r'\s+([,.!?;:、。])', r'\1', re.sub(r'\s+', ' ', out)).strip()
+    return out.strip(' ,;')
+
+
 def make_notes(lines, offset, energy, pitch, language):
     """[[(start s, end s, midi or None for rap, syllable)] per line]."""
     threshold = _voice_threshold(energy)
     smooth = _smooth_pitch(pitch)
-    voiced = energy > threshold
+    song_voiced = voiced = energy > threshold
     novelty = _novelty(energy, smooth)
     heard = smooth[voiced & ~np.isnan(smooth)]
     song_median = float(np.median(heard)) if len(heard) else 60.0
     result, features, rows = [], [], []  # rows: the lines with notes from the voice (rap is looked for in them)
     for index, (t, text) in enumerate(lines):
-        syllables = line_syllables(text, language)
-        if not syllables:
+        syllables = line_syllables(lead_vocal(text), language)
+        if not syllables:  # an empty line, or only backing vocals
             continue
         start = t + offset - 0.25
         end = min((lines[index + 1][0] + offset - 0.05) if index + 1 < len(lines) else start + LINE_MAX_S,
                   start + LINE_MAX_S)
         a, b = max(0, int(start / FRAME)), min(len(energy), int(end / FRAME))
+        if LOCAL_VOICE_SHARE and b > a:  # the voice of this line: its loud part, not the reverb or the next line
+            local = float(np.percentile(energy[a:b], 90)) * LOCAL_VOICE_SHARE
+            voiced = energy > max(threshold, local)
+        else:
+            voiced = song_voiced
         weights = [1 + 0.2 * len(re.sub(r'\W', '', s)) for s in syllables]
         onsets = _line_onsets(novelty, voiced, a, b, weights, int((t + offset) / FRAME)) if b > a else None
         if onsets is None:  # no voice found: even notes on the line, at the song's usual pitch
@@ -619,7 +639,7 @@ def make_notes(lines, offset, energy, pitch, language):
         notes = []
         for k, (on, syllable) in enumerate(zip(onsets, syllables)):
             limit = onsets[k + 1] - 1 if k + 1 < len(onsets) else b
-            stop = max(on + MIN_SYLLABLE_FRAMES, _note_end(voiced, on, max(limit, on + MIN_SYLLABLE_FRAMES)))
+            stop = max(on + MIN_SYLLABLE_FRAMES, _note_end(song_voiced, on, max(limit, on + MIN_SYLLABLE_FRAMES)))
             for piece, (p, q) in enumerate(_melisma(smooth, on, stop)):
                 midi, _, _ = _steady_pitch(smooth, p, q)
                 notes.append([p, q, midi, syllable if piece == 0 else '~'])

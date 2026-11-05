@@ -305,8 +305,12 @@
 - Editor de sincronía: borrar la sílaba seleccionada con sus notas (Supr), borrar la línea (Ctrl+Supr), corregir el
   texto de una nota (doble clic) o de la línea (T, un trozo por nota separado por `|`); las notas de rap se pueden
   seleccionar.
-- Pendiente (B-75, letras): sílabas que siguen llegando tarde en líneas ligadas (un 25 % a más de 0,3 s) y coros
-  entre paréntesis de LRCLIB que no canta la voz principal.
+- Letras (versión 3 de las notas): ninguna oficial lleva paréntesis y 541 de 3367 líneas fabricadas (16 %) traían
+  coros de LRCLIB entre paréntesis cantados como sílabas de la voz principal → se quitan (`SongMaker.lead_vocal`).
+  Palabras pegadas: 0 (la unión de sílabas sobrantes de la versión 1 ya no existe); sílabas sobre silencio: 0,3 %.
+  Las 62 rehechas otra vez (txt de la versión 2 en `_papelera/notas_v2`) y reconvertidas; parche 739, 0 problemas.
+- Pendiente (B-75): en líneas ligadas un 23 % de las sílabas cae a más de 0,3 s de su sitio; con volumen y tono no
+  se distingue dónde acaba una sílaba (haría falta alinear la letra con un modelo de habla).
 
 <!-- Plantilla para nuevas entradas:
 ### AAAA-MM-DD — Título

@@ -21,10 +21,13 @@ editor de sincronía.
    queda la que mejor encaja (las líneas empiezan donde empieza a cantar).
 3. **Voz** separada con Demucs y seguida cada 20 ms (energía y tono, `SyncModel`); se guarda como `<id>.voice.npz`,
    la misma que usa el editor.
-4. **Notas** (versión 2, 2026-11-05), escritas como las oficiales (medido en 387 con `tools/note_style.py`: ~1 nota
+4. **Letra de la voz principal**: lo que LRCLIB pone entre paréntesis o corchetes (coros, "(yeah)", "(oye)") se
+   quita, como en las oficiales (ninguna de 387 lleva paréntesis); una línea que solo es coro no lleva notas.
+5. **Notas** (versión 3, 2026-11-05), escritas como las oficiales (medido en 387 con `tools/note_style.py`: ~1 nota
    por sílaba, 0,24 s de nota típica, el tono quieto o en pasos de 1–2 semitonos, el rap sin tono):
    - las sílabas de cada línea van a los ataques de la voz (subida de volumen tras una bajada, cambio de tono, inicio
      tras un silencio) con programación dinámica: cada sílaba espera una duración de 0,12–0,35 s según su longitud;
+     dentro de la línea solo cuenta como voz lo que suena a más del 25 % de su parte fuerte (no la reverberación);
    - cada sílaba es **una nota estable** hasta la siguiente (o hasta que calla la voz); solo una sílaba de 0,45 s o
      más cuyo tono se mueve 2 semitonos y se queda se parte en dos;
    - tono = el semitono que más suena en el centro de la nota; semitonos enteros en la tonalidad de la canción
@@ -34,12 +37,12 @@ editor de sincronía.
    - **rap**: líneas cuya voz desliza el tono dentro de la sílaba, tiene poco tono claro y tiembla, y van rápidas,
      cuando la de al lado también lo es (el rap viene por estrofas): se escriben como notas de rap (`R`, `#p1` en el
      juego: puntúa la voz, no el tono).
-5. **Sílabas**: español con sus reglas (diptongos, hiatos, grupos `pr`, `bl`, `ch`, `ll`, `rr`, `qu`/`gu` mudas);
+6. **Sílabas**: español con sus reglas (diptongos, hiatos, grupos `pr`, `bl`, `ch`, `ll`, `rr`, `qu`/`gu` mudas);
    inglés aproximado (grupos de vocales); coreano **romanizado** (romanización revisada, una sílaba por bloque de hangul,
    como lo muestra Let's Sing: "Muneul ppakchamyeon"); japonés **en romaji** (Hepburn con `pykakasi`, una sílaba por
    mora: "Ko-ko-ro ga sa-ke-n-de-ru"; la っ pequeña dobla la consonante: "Cho-tto ma-tte"). Cada sílaba va al inicio de nota con el ataque más fuerte; si hay
    más notas que sílabas, las demás son `~` (nota sostenida); si hay menos, se parten las más largas.
-6. `.txt` con `#BPM:400` (37,5 ms por pulso), `#GAP` = primera nota, una página por línea de la letra, y
+7. `.txt` con `#BPM:400` (37,5 ms por pulso), `#GAP` = primera nota, una página por línea de la letra, y
    `songmaker.json` (enlace, versión de LRCLIB, desfase, ajuste). Las descargas auxiliares quedan en
    `<canciones>/_songmaker_downloads/` (el conversor ignora las carpetas que empiezan por `_`).
 

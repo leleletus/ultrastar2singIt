@@ -535,6 +535,7 @@ estado de cada bug está en la tabla). "Evidencia" = verificado con prueba, con 
 - **Hecho (2026-11-05)**: el generador de notas se rehízo midiendo las oficiales (una nota por sílaba, sin unir
   sílabas sobrantes en una nota: `assign_syllables` ya no existe; rap como rap) y las 62 canciones se regeneraron
   (`tools/remake_notes.py`, sin tocar videos). El editor permite borrar sílabas/líneas y corregir el texto.
-- **Falta**: en líneas ligadas (sin silencios entre sílabas) un 25 % de las sílabas llega a más de 0,3 s de su sitio;
-  LRCLIB incluye coros entre paréntesis ("(yikes)", "(oye)") que la voz principal no canta.
+- **Hecho (versión 3)**: los coros entre paréntesis de LRCLIB ("(yikes)", "(oye)"; 16 % de las líneas) se quitan
+  como en las oficiales.
+- **Falta**: en líneas ligadas (sin silencios entre sílabas) un 23 % de las sílabas llega a más de 0,3 s de su sitio.
 
