@@ -63,14 +63,52 @@ def parse_lrc(text):
     return sorted(out)
 
 
-def lrclib_versions(artist, title):
-    """[(id, duration, [(seconds, line)])] of the timed lyrics LRCLIB has for the song."""
+def wait_for_network(log=print, host='www.youtube.com', every=30, give_up=3 * 3600):
+    """Waits until `host` resolves again (internet back), checking every `every` seconds."""
+    import socket
+    import time
+    waited = 0
+    while True:
+        try:
+            socket.getaddrinfo(host, 443)
+            return True
+        except OSError:
+            if waited >= give_up:
+                return False
+            if waited == 0:
+                log(f"    no internet: waiting for it to come back (checking every {every} s)")
+            time.sleep(every)
+            waited += every
+
+
+def with_retries(step, log=print, tries=5):
+    """Runs a step that needs internet; when it fails, waits for the connection and tries again."""
+    for attempt in range(1, tries + 1):
+        try:
+            return step()
+        except Exception as e:  # yt-dlp (CalledProcessError), requests, DNS...
+            if attempt == tries:
+                raise
+            log(f"    attempt {attempt} failed ({str(e)[:120]}); retrying")
+            wait_for_network(log)
+
+
+def lrclib_versions(artist, title, folder=None):
+    """[(id, duration, [(seconds, line)])] of the timed lyrics LRCLIB has for the song (kept in
+    <folder>/lrclib.json, so a song is made again without internet)."""
     import requests
-    response = requests.get(LRCLIB, params={'artist_name': artist, 'track_name': title}, timeout=20,
-                            headers={'User-Agent': USER_AGENT})
-    response.raise_for_status()
+    cache = Path(folder) / 'lrclib.json' if folder else None
+    if cache and cache.exists():
+        hits = json.loads(cache.read_text(encoding='utf-8'))
+    else:
+        response = requests.get(LRCLIB, params={'artist_name': artist, 'track_name': title}, timeout=20,
+                                headers={'User-Agent': USER_AGENT})
+        response.raise_for_status()
+        hits = response.json()
+        if cache:
+            cache.write_text(json.dumps(hits, ensure_ascii=False), encoding='utf-8')
     out = []
-    for hit in response.json():
+    for hit in hits:
         lines = parse_lrc(hit.get('syncedLyrics'))
         if len(lines) >= 4:
             out.append((hit['id'], hit.get('duration'), lines))
@@ -579,10 +617,41 @@ def duration_of(path):
     return float(out) if out else 0.0
 
 
+def fetch_song(artist, title, url, songs_dir, audio_url=None, yt_dlp=None, log=print):
+    """Everything that needs internet, kept in the song folder: the video, the official audio, the LRCLIB lyrics and
+    the Genius pages (choruses and sections, used by the conversion). make_song then works without internet."""
+    import SongSections
+    import UltrastarToSingit
+    sys.path.insert(0, str(Path(__file__).resolve().parent / 'tools'))
+    if yt_dlp is None:
+        from align_video import yt_dlp_command
+        yt_dlp = yt_dlp_command()
+    base = safe_folder(f"{artist} - {title}")
+    folder = Path(songs_dir) / base
+    folder.mkdir(parents=True, exist_ok=True)
+    if audio_url:
+        work = folder.parent / '_songmaker_downloads' / base
+        work.mkdir(parents=True, exist_ok=True)
+        if not (folder / f"{base}.m4a").exists():
+            with_retries(lambda: download_audio(audio_url, work, base, yt_dlp), log)
+        if not (folder / f"{base}.mp4").exists():
+            with_retries(lambda: download_video(url, work, base, yt_dlp), log)
+    else:
+        with_retries(lambda: download_video(url, folder, base, yt_dlp), log)
+    with_retries(lambda: lrclib_versions(artist, title, folder), log)
+    txt = folder / f"{base}.txt"  # the Genius caches are named after the txt the song will have
+    UltrastarToSingit._genius_offline = False
+    with_retries(lambda: UltrastarToSingit.genius_get_choruses(txt, artist=artist, title=title), log)
+    with_retries(lambda: SongSections.get_sections(txt, artist, title), log)
+    (folder / 'songmaker_fetched.json').write_text(json.dumps({'url': url, 'audio_url': audio_url}), encoding='utf-8')
+    log(f"Fetched: {base}")
+    return folder
+
+
 def make_song(artist, title, url, songs_dir, language='Spanish', year=None, genre=None, yt_dlp=None, log=print,
               audio_url=None):
     """Makes "<songs_dir>/<artist> - <title>/" and returns the path of its txt. audio_url: take the audio from
-    that upload and cut the video of `url` to it."""
+    that upload and cut the video of `url` to it. What fetch_song already downloaded is used as it is."""
     sys.path.insert(0, str(Path(__file__).resolve().parent / 'tools'))
     if yt_dlp is None:
         from align_video import yt_dlp_command
@@ -595,8 +664,8 @@ def make_song(artist, title, url, songs_dir, language='Spanish', year=None, genr
     if audio_url:
         work = folder.parent / '_songmaker_downloads' / base
         work.mkdir(parents=True, exist_ok=True)
-        official = download_audio(audio_url, work, base, yt_dlp)
-        clip, _, cover = download_video(url, work, base, yt_dlp)
+        official = with_retries(lambda: download_audio(audio_url, work, base, yt_dlp), log)
+        clip, _, cover = with_retries(lambda: download_video(url, work, base, yt_dlp), log)
         from align_video import measure
         offset, fits, sure = measure(official, clip)
         follows = min(fits) >= 0.8 and sure >= 0.2
@@ -621,7 +690,7 @@ def make_song(artist, title, url, songs_dir, language='Spanish', year=None, genr
             log(f"    video rebuilt from {len(cuts)} piece(s): " + ', '.join(
                 f"song {a:.0f}-{b:.0f} s = video {v:.0f} s" for a, b, v in cuts))
     else:
-        video, audio, cover = download_video(url, folder, base, yt_dlp)
+        video, audio, cover = with_retries(lambda: download_video(url, folder, base, yt_dlp), log)
     duration = duration_of(audio)
 
     log("2/4 Isolating the voice (Demucs, a few minutes)")
@@ -633,7 +702,7 @@ def make_song(artist, title, url, songs_dir, language='Spanish', year=None, genr
     energy, pitch = voice['energy'], voice['pitch']
 
     log("3/4 Timed lyrics (LRCLIB)")
-    versions = lrclib_versions(artist, title)
+    versions = with_retries(lambda: lrclib_versions(artist, title, folder), log)
     if not versions:
         raise RuntimeError(f"LRCLIB has no timed lyrics for {artist} - {title}")
     version, offset, score = fit_lyrics(versions, energy, song_length or duration, intro)

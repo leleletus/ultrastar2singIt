@@ -4,7 +4,7 @@ check it in the sync editor.
 
 Usage:
     python tools/make_song.py <songs folder> "<artist>" "<title>" <YouTube link of the video> [--language Spanish]
-        [--year 2008] [--genre Pop] [--audio <YouTube link of the official audio>]
+        [--year 2008] [--genre Pop] [--audio <YouTube link of the official audio>] [--fetch-only]
 Needs internet, ffmpeg, yt-dlp and Demucs (requirements-slow.txt); the voice takes a few minutes on CPU.
 """
 import argparse
@@ -25,9 +25,15 @@ def main():
     parser.add_argument('--language', default='Spanish', help="Spanish, English, Korean, ... (#LANGUAGE)")
     parser.add_argument('--year')
     parser.add_argument('--genre')
+    parser.add_argument('--fetch-only', action='store_true',
+                        help="only download what needs internet (video, audio, lyrics, Genius); make it later offline")
     parser.add_argument('--audio', help="YouTube link of the official audio, when the music video has intros or "
                                         "spoken scenes (the video is then cut to this audio)")
     args = parser.parse_args()
+    if args.fetch_only:
+        SongMaker.fetch_song(args.artist, args.title, args.url, args.songs, audio_url=args.audio,
+                             log=lambda m: print(m, flush=True))
+        return
     SongMaker.make_song(args.artist, args.title, args.url, args.songs, language=args.language, year=args.year,
                         genre=args.genre, log=lambda m: print(m, flush=True), audio_url=args.audio)
 

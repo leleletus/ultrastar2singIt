@@ -49,6 +49,14 @@ python tools/make_song.py <canciones> "TWICE" "SIGNAL" "<videoclip>" --audio "<a
 Necesita internet, ffmpeg, yt-dlp y pykakasi (`requirements.txt`) y Demucs (`requirements-slow.txt`). Tarda 2–3 minutos por canción (Demucs en CPU)
 más la conversión del video a `.bk2`.
 
+### Con conexión inestable: descargar primero
+
+`--fetch-only` (`SongMaker.fetch_song`) baja todo lo que necesita internet y lo deja en la carpeta: videoclip, audio
+oficial, versiones de la letra (`lrclib.json`) y las páginas de Genius (las cachés que usa luego la conversión para
+estribillos y secciones). Si se cae la conexión, espera a que vuelva (cada 30 s, hasta 3 h) y reintenta. Después,
+`make_song.py` sin `--fetch-only` fabrica la canción sin internet y la conversión tampoco lo necesita. Así se pueden
+descargar todas de una vez y fabricar/convertir en paralelo.
+
 ## Fiabilidad
 
 - Goma de Mascar: las notas coinciden con la voz real un 62 % (mediana por línea; las canciones oficiales dan 38–77 %)
