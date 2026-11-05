@@ -273,6 +273,18 @@
   Strategy), LE SSERAFIM (Smart, SPAGHETTI, BOOMPALA). Coincidencia con la voz 43–64 %, desplazamiento mediano 0,00 s
   en todas. SIGNAL tiene 15/76 líneas a más de 1 s: revisar en el editor.
 
+### 2026-11-05 (2) — 41 canciones nuevas en la Switch
+- Lista de 67 canciones pedidas (`~/LetsSing/canciones_pedidas.json`, informe `ESTADO_CANCIONES_PEDIDAS.md` con
+  `tools/song_status.py`): 23 ya estaban, 2 de USDB (Bailando, Milkshake), 39 fabricadas con SongMaker (Paty Cantú,
+  TWICE, LE SSERAFIM, BLACKPINK, LISA, JENNIE, (G)I-DLE, IZ*ONE, MOMOLAND, latinas y japonesas en romaji), 3 fuera.
+- Incidencias: corte de internet (17 fallaron → fase `--fetch-only` que espera a la red), apagado por batería (scripts
+  en /tmp perdidos → `tools/make_songs.py` reanudable y perfil de energía "performance" retenido), videoclip que empieza
+  después de la canción (Sin Aliento), duetos sin P2 en el modo clásico (`merge_duet`).
+- Sincronía de las 39: desplazamiento mediano 0,00 s en todas, coincidencia con la voz 40–79 %. Repasar en el editor:
+  SaWaDiKa, SIGNAL, You & Me, Fiel (Remix), AS IF IT'S YOUR LAST, New Woman, Dutty Love, BOOMPALA. Video = portada fija:
+  Koi no Uta, Maladie. Aviso: Gyal You a Party Animal (letra 6,5 s más larga que el audio).
+- Parche: 716 canciones, 0 problemas; 765 `.bk2`. Switch: 288 archivos (1,3 GB) copiados y verificados.
+
 <!-- Plantilla para nuevas entradas:
 ### AAAA-MM-DD — Título
 - Cambios: …
