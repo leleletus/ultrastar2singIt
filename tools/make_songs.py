@@ -95,9 +95,13 @@ def building(songs):
 def convert(songs):
     """Converts finished songs until `build` has ended and nothing is left; each song is tried once per run (one
     that fails is reported, not retried forever)."""
-    import ConvertFiles
     import logging
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s', stream=sys.stdout)
+    import ConvertFiles
+    # ConvertFiles puts its error.log handler on the root logger when imported, so basicConfig would do nothing
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setLevel(logging.INFO)
+    handler.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s'))
+    logging.getLogger().addHandler(handler)
     tried = set()
     while True:
         still_building = building(songs)
