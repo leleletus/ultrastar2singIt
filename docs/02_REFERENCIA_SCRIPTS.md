@@ -198,12 +198,12 @@ envejecen con cada cambio: para la línea actual, `grep -n "def <nombre>" <archi
 | SyncEditor:74 | `NoteLane` | notas como barras (como el juego), voz aislada y tono cantado; arrastrar una nota cambia su tono |
 | SyncEditor:209 | `SyncMap` | toda la canción en una franja, cada línea coloreada según coincida con la voz; cortes |
 | SyncEditor:270 | `Microphone` | tono del micrófono (modo cantar) |
-| SyncEditor:338 | `SyncEditorDialog` | reproductor, cortes (`cut_start`/`cut_end`), mover partes (`adjust`), `auto_adjust` (ajustar a la voz), `analyze_voice`, `save` (conserva codificación y finales de línea, `.bak` la primera vez) [B-26, B-51] |
+| SyncEditor:338 | `SyncEditorDialog` | reproductor, cortes (`cut_start`/`cut_end`), mover partes (`adjust`), `auto_adjust` (ajustar a la voz), `analyze_voice`, `delete_selected`/`delete_line` (sílaba o línea con sus notas), `edit_note_text`/`edit_line_text` (corregir la letra), `save` (conserva codificación y finales de línea, `.bak` la primera vez) [B-26, B-51] |
 | SyncModel:41 | `detect_pitch` | YIN |
-| SyncModel:108 / 134 | `load_txt` / `load_official` | notas y sílabas de un txt / de un vxla oficial (solo lectura en el editor) |
+| SyncModel | `txt_notes` / `song_from_notes` / `load_txt` / `load_official` | notas (con su texto, en orden del archivo) y sílabas de un txt, sin las borradas / de un vxla oficial (solo lectura en el editor) |
 | SyncModel:170 / 200 / 214 | `isolate_voice` / `analyze_voice` / `load_voice` | Demucs → `<id>.voice.npz` |
 | SyncModel:227 / 273 / 290 | `line_report` / `runs_out_of_time` / `song_verdict` | coincidencia por línea, bloques desfasados, veredicto (ok/parcial/desfase/dudosa/otra_version) |
-| SyncModel:316 | `rewrite_txt` | `#GAP` y notas movidas por cortes, en pulsos |
+| SyncModel | `rewrite_txt` | `#GAP`, notas movidas por cortes (en pulsos), tonos, textos corregidos y notas borradas (con sus saltos de página) |
 
 ## GuiElement.py (107), i18n.py (22), SupportedFormats.py (3), version.py
 
@@ -245,6 +245,11 @@ Todas se ejecutan con `python tools/<script>.py --help`. Las que cambian archivo
 | `reverse_vxla.py` | variante del extractor | [B-33] |
 | `unpacker.py` | menú Herramientas → Desempaquetar (usa la lógica del extractor) | [B-32] |
 | `cache_recovery.py` | menú Herramientas → Recuperar caché desde la salida | nunca sobrescribe [B-31] |
+| `make_song.py` | fabrica una canción que USDB no tiene (SongMaker) | `--fetch-only` para descargar primero |
+| `make_songs.py` | cola de SongMaker reanudable: `fetch`, `build`, `convert`, `all` | salta lo hecho; cola en disco |
+| `remake_notes.py` | rehace las notas de las canciones fabricadas con el generador actual | sin internet ni videos; txt anterior a `_papelera/notas_v1`; salta las corregidas a mano (`--force`) [B-75] |
+| `note_style.py` | compara cómo están escritas las notas: oficiales frente a fabricadas (duración, saltos, notas por sílaba, rap) | solo lee |
+| `note_calibrate.py` | mide el generador de notas contra las oficiales que tienen la voz analizada | solo lee |
 
 Quitados el 2026-11-01 (siguen en el historial de git, `git show fb416d5:<ruta>`): `desync_detector.py` (sustituido
 por `sync_scan.py`), `mass_test.py` (sustituido por `tests/`), `merge_dlc_json.py` (lo hace el conversor con

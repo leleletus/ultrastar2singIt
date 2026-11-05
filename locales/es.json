@@ -348,5 +348,21 @@
   "Only when the video has scenes that break the song": "Solo si el video tiene escenas que cortan la canción",
   "Year (optional)": "Año (opcional)",
   "Genre (optional)": "Género (opcional)",
-  "Artist, title and the link of the video are needed.": "Hacen falta el artista, el título y el enlace del video."
+  "Artist, title and the link of the video are needed.": "Hacen falta el artista, el título y el enlace del video.",
+  "Fix syllable": "Corregir sílaba",
+  "Text of this note. A space at the end ends the word; ~ holds the syllable before.": "Texto de esta nota. Un espacio al final termina la palabra; ~ alarga la sílaba anterior.",
+  "Fix the lyrics of line {n}": "Corregir la letra de la línea {n}",
+  "One piece per note, separated by |. A space at the end of a piece ends the word; ~ holds the syllable before. This line has {n} notes.": "Un trozo por nota, separados por |. Un espacio al final de un trozo termina la palabra; ~ alarga la sílaba anterior. Esta línea tiene {n} notas.",
+  "The line has {n} notes: write {n} pieces separated by | (there are {m}). To take out a syllable, select its note and delete it.": "La línea tiene {n} notas: escribe {n} trozos separados por | (hay {m}). Para quitar una sílaba, selecciona su nota y bórrala.",
+  "Delete line": "Borrar línea",
+  "Delete line {n} \"{text}\" and its {count} notes?": "¿Borrar la línea {n} «{text}» y sus {count} notas?",
+  "Delete the selected syllable with its notes (click a note first)": "Borrar la sílaba seleccionada con sus notas (antes haz clic en una nota)",
+  "Delete syllable": "Borrar sílaba",
+  "Delete the line being played (or the selected note's line) with all its notes": "Borrar la línea que suena (o la de la nota seleccionada) con todas sus notas",
+  "Fix the lyrics of the line being played (or the selected note's line). Double click a note to fix only its syllable.": "Corregir la letra de la línea que suena (o la de la nota seleccionada). Doble clic en una nota para corregir solo su sílaba.",
+  "Fix text": "Corregir texto",
+  "Selected: \"{text}\"": "Seleccionada: «{text}»",
+  "{n} notes deleted": "{n} notas borradas",
+  "{n} texts fixed": "{n} textos corregidos",
+  "save to keep it": "guarda para conservarlo"
 }

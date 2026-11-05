@@ -48,6 +48,9 @@ folder is cleared any video without a copy in its song folder is rescued.
   the song; a `.bak` of the txt is kept the first time a song is saved;
 - **Analyze voice**: the singer is isolated (Demucs) and drawn over the notes; a map colours every line by how well
   it matches the voice and *Fit to voice* moves a part to where the singer really is;
+- **Lyrics fixes** (UltraStar songs): delete the selected syllable with its notes (`Delete`) or the whole line
+  (`Ctrl+Delete`) when nothing is sung there, fix the text of a note (double click) or of the line (`T`, one piece
+  per note separated by `|`);
 - **Sing mode**: listens to the microphone, draws your voice over the notes and counts the notes you hit (any
   octave, like the game) to check that the pitch of a song is right;
 - songs that use an official Let's Sing lyrics file are shown read-only (the game uses their timing as is).

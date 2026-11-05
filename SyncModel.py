@@ -105,30 +105,45 @@ class Song:
             self.line_ends.append(max(n.t + n.d for n in own) if own else previous)
 
 
-def load_txt(us_data):
-    """Notes and shown syllables of an UltraStar txt, in seconds without #GAP."""
+def txt_notes(us_data):
+    """(notes, raw texts, line count, bpm) of an UltraStar txt: every note in file order with its text as written
+    ("~" held notes included), in seconds without #GAP."""
     bpm = float(us_data["BPM"].replace(',', '.'))
     beat = 60.0 / bpm / 4
-    notes, syllables, lines, line = [], [], [], []
-    has_notes = False
+    notes, texts, line_count, has_notes = [], [], 0, False
     for n in us_data["notes"]:
         if n[0] in (':', '*', 'F', 'R', 'G'):
             t, d = int(n[1]) * beat, max(int(n[2]), 1) * beat
-            notes.append(Note(t, d, int(n[3]) + 60, n[0], len(lines)))  # UltraStar pitch 0 = C4 = MIDI 60
+            notes.append(Note(t, d, int(n[3]) + 60, n[0], line_count))  # UltraStar pitch 0 = C4 = MIDI 60
+            texts.append(n[4])
             has_notes = True
-            text = n[4].replace('~', '')
-            if text.strip():
-                line.append(len(syllables))
-                syllables.append((t, d, text, len(lines)))
-            elif text and syllables:  # "~ ": the space ends the previous word
-                t0, d0, prev, ln = syllables[-1]
-                syllables[-1] = (t0, d0, prev if prev.endswith(' ') else prev + ' ', ln)
         elif n[0] == '-' and has_notes:
-            lines.append(line)
-            line, has_notes = [], False
-    if has_notes:
-        lines.append(line)
-    return Song(notes, syllables, lines, bpm)
+            line_count += 1
+            has_notes = False
+    return notes, texts, line_count + (1 if has_notes else 0), bpm
+
+
+def song_from_notes(notes, texts, line_count, bpm, deleted=()):
+    """Song of txt notes (txt_notes) leaving out the deleted note indices; lines keep their numbers (a line whose
+    notes are all deleted stays, empty)."""
+    kept, syllables, lines = [], [], [[] for _ in range(line_count)]
+    for i, (note, raw) in enumerate(zip(notes, texts)):
+        if i in deleted:
+            continue
+        kept.append(note)
+        text = raw.replace('~', '')
+        if text.strip():
+            lines[note.line].append(len(syllables))
+            syllables.append((note.t, note.d, text, note.line))
+        elif text and syllables:  # "~ ": the space ends the previous word
+            t0, d0, prev, ln = syllables[-1]
+            syllables[-1] = (t0, d0, prev if prev.endswith(' ') else prev + ' ', ln)
+    return Song(kept, syllables, lines, bpm)
+
+
+def load_txt(us_data):
+    """Notes and shown syllables of an UltraStar txt, in seconds without #GAP."""
+    return song_from_notes(*txt_notes(us_data))
 
 
 def load_official(path):
@@ -313,10 +328,13 @@ _NOTE_REST = re.compile(r'^(\s+-?\d+\s+)(-?\d+)(.*)$')
 _BREAK_LINE = re.compile(r'^(\s*-\s*)(-?\d+)(\s+(-?\d+))?(.*)$')
 
 
-def rewrite_txt(lines, gap_ms, line_beats=None, expected_notes=None, note_pitches=None):
+def rewrite_txt(lines, gap_ms, line_beats=None, expected_notes=None, note_pitches=None, note_texts=None,
+                deleted_notes=None):
     """The txt lines with #GAP set and, when line_beats is given, the notes of every lyrics line i moved by
     line_beats[i] beats (page breaks follow the line after them). Same line numbering as load_txt.
     note_pitches: {note index (order of load_txt): new UltraStar pitch} changes only those pitches.
+    note_texts: {note index: new syllable text}; deleted_notes: note indices taken out (a line left without notes
+    loses its page break too).
     Raises ValueError when the file cannot be changed safely."""
     out = list(lines)
     gap_line = f"#GAP:{int(round(gap_ms))}"
@@ -334,7 +352,7 @@ def rewrite_txt(lines, gap_ms, line_beats=None, expected_notes=None, note_pitche
                 break
         out.insert(insert_at, gap_line)
 
-    if (not line_beats or not any(line_beats)) and not note_pitches:
+    if (not line_beats or not any(line_beats)) and not note_pitches and not note_texts and not deleted_notes:
         return out
     line_beats = line_beats or [0]
     note_pitches = note_pitches or {}
@@ -380,4 +398,44 @@ def rewrite_txt(lines, gap_ms, line_beats=None, expected_notes=None, note_pitche
             open_break = (i, m.group(1), beat, rest)
     if expected_notes is not None and count != expected_notes:
         raise ValueError(f"found {count} notes in the file but {expected_notes} were loaded")
+    if note_texts or deleted_notes:
+        out = _edit_notes(out, note_texts or {}, set(deleted_notes or ()))
     return out
+
+
+_NOTE_TEXT = re.compile(r'^(\s*[:*FRG]\s+-?\d+\s+-?\d+\s+-?\d+)(?: (.*))?$')
+
+
+def _edit_notes(lines, texts, deleted):
+    """Changes the text of some notes and takes others out (note indices in file order); page breaks left with no
+    line before them go too (a break keeps the beat of the first one, which stays between the lines around it)."""
+    out, count = [], 0
+    for line in lines:
+        if not line.startswith('#') and _NOTE_LINE.match(line):
+            index, count = count, count + 1
+            if index in deleted:
+                continue
+            if index in texts:
+                m = _NOTE_TEXT.match(line)
+                if not m:
+                    raise ValueError(f"note {index + 1} has no text to change")
+                line = f"{m.group(1)} {texts[index]}"
+        out.append(line)
+    result, notes_since_break = [], False
+    for line in out:
+        if not line.startswith('#') and _BREAK_LINE.match(line):
+            if not notes_since_break:
+                continue  # nothing left before it (a deleted line, or the start)
+            notes_since_break = False
+        elif not line.startswith('#') and _NOTE_LINE.match(line):
+            notes_since_break = True
+        result.append(line)
+    # a page break with no notes after it (the last lines were deleted)
+    for i in range(len(result) - 1, -1, -1):
+        line = result[i]
+        if not line.startswith('#') and _NOTE_LINE.match(line):
+            break
+        if not line.startswith('#') and _BREAK_LINE.match(line):
+            del result[i]
+            break
+    return result

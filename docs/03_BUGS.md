@@ -81,7 +81,7 @@ estado de cada bug está en la tabla). "Evidencia" = verificado con prueba, con 
 | B-72 | MEDIO | Letras | La búsqueda de estribillos en Genius no lee cabeceras con nombres enlazados ("[Coro: Luis Fonsi," partida en líneas): 75 canciones con página y sin estribillos | CERRADO (a16d166: 72 releídas, 51 con estribillos) |
 | B-73 | ALTO | Feat | El modo Feat cerraba el juego: faltaba vxla_feat y todas decían "coopfriendly": "Coop" sin segunda voz | CERRADO (4c02966; solo 2026) |
 | B-74 | ALTO | usdb_syncer | usdb_syncer no marcaba ninguna canción descargada: la carpeta se guardó como texto y la ignoraba | CERRADO (configuración; 271 reconocidas) |
-| B-75 | MEDIO | SongMaker | Letras pegadas y palabras donde no se canta en las canciones fabricadas (Goma de Mascar) | ABIERTO (pendiente de revisar con el usuario) |
+| B-75 | MEDIO | SongMaker | Letras pegadas y palabras donde no se canta en las canciones fabricadas (Goma de Mascar) | EN CURSO (notas hechas 2026-11-05; falta la colocación de la letra) |
 
 ---
 
@@ -532,6 +532,9 @@ estado de cada bug está en la tabla). "Evidencia" = verificado con prueba, con 
   menos notas que sílabas (pueden quedar varias palabras en una nota); el reparto de sílabas por ataques puede poner
   una sílaba en una nota que es un adorno o un ruido de la voz separada; los tiempos por línea de LRCLIB son de otra
   versión y el desfase global no corrige diferencias dentro de la canción.
-- **Estado**: pendiente; afecta a las 39 + 23 canciones fabricadas (se corrigen regenerando su txt y su vxla, sin
-  tocar los videos).
+- **Hecho (2026-11-05)**: el generador de notas se rehízo midiendo las oficiales (una nota por sílaba, sin unir
+  sílabas sobrantes en una nota: `assign_syllables` ya no existe; rap como rap) y las 62 canciones se regeneraron
+  (`tools/remake_notes.py`, sin tocar videos). El editor permite borrar sílabas/líneas y corregir el texto.
+- **Falta**: en líneas ligadas (sin silencios entre sílabas) un 25 % de las sílabas llega a más de 0,3 s de su sitio;
+  LRCLIB incluye coros entre paréntesis ("(yikes)", "(oye)") que la voz principal no canta.
 

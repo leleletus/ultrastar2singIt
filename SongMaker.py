@@ -10,9 +10,10 @@ the singer's voice.
        different cuts (album, video), so every version is tried at every offset against the singer's voice and the one
        that fits best is used;
     3. the voice is isolated with Demucs and followed every 20 ms (SyncModel: energy and pitch);
-    4. in every line the voice is cut into notes at silences and pitch jumps, and the syllables of the line go to the
-       note starts with the strongest attack (more notes than syllables: the rest are held "~"; fewer: the longest
-       notes are split);
+    4. notes written the way the official songs are (measured on 387 of them, tools/note_style.py): the syllables
+       of every line go where the voice attacks (dynamic programming over the line), each one a single steady note
+       until the next (two only when a long syllable clearly moves), whole semitones in the song's key, wobbles and
+       pitch-tracker slips levelled, octaves kept together, and rapped lines written as rap (no pitch);
     5. the result is a plain UltraStar folder ("Artist - Title/" with .txt, .m4a, .mp4 and cover) that the converter
        and the sync editor use like any other song.
 
@@ -40,9 +41,6 @@ USER_AGENT = 'LetsSingUltraStarConverter (personal karaoke; https://github.com/l
 BPM = 400                       # UltraStar beat = 60 / BPM / 4 s = 37.5 ms
 BEAT_S = 60 / BPM / 4
 FRAME = SyncModel.FRAME         # 20 ms
-GAP_FRAMES = 3                  # a silence of 60 ms ends a note
-JUMP_SEMITONES = 1.2            # a pitch change this big, held 3 frames, starts a new note
-MIN_NOTE_FRAMES = 4             # 80 ms
 LINE_MAX_S = 12.0
 
 
@@ -354,103 +352,255 @@ def _smooth_pitch(pitch):
     return out
 
 
-def segment_notes(energy, pitch, a, b, threshold):
-    """[(first frame, end frame, midi)] of the voice between frames a and b."""
-    notes, start, values, silence, jump = [], None, [], 0, 0
-
-    def close(end):
-        heard = [v for v in values if not np.isnan(v)]
-        if start is not None and end - start >= MIN_NOTE_FRAMES and heard:
-            notes.append((start, end, float(np.median(heard))))
-
-    for i in range(max(a, 0), min(b, len(energy))):
-        voiced = energy[i] > threshold and not np.isnan(pitch[i])
-        if not voiced:
-            silence += 1
-            if silence == GAP_FRAMES:
-                close(i - GAP_FRAMES + 1)
-                start, values = None, []
-            continue
-        silence = 0
-        if start is None:
-            start, values, jump = i, [pitch[i]], 0
-            continue
-        if values and abs(pitch[i] - np.median(values)) > JUMP_SEMITONES:
-            jump += 1
-            if jump >= 3:
-                close(i - 2)
-                start, values, jump = i - 2, [v for v in pitch[i - 2:i + 1] if not np.isnan(v)], 0
-            continue
-        jump = 0
-        values.append(pitch[i])
-    close(min(b, len(energy)))
-    return notes
+# How the official Let's Sing songs are written (tools/note_style.py over 387 of them): about one note per syllable
+# (1.07), notes of 0.24 s typically and almost never under 0.12 s, the pitch held steady (a third of the neighbouring
+# notes repeat it, two fifths move 1-2 semitones, under a tenth jump 5 or more) and rap written as pitchless notes.
+# make_notes writes like that: the syllables go where the voice attacks, each one is a single steady note until
+# the next, and only a long syllable whose pitch clearly moves gets a second note.
+NOTE_MAKER_VERSION = 2          # 1: notes cut from the voice (2026-11-04); 2: written like the official songs
+MIN_SYLLABLE_FRAMES = 3         # 60 ms
+SYLLABLE_S = (0.12, 0.35)       # expected length of a syllable (the line's voice shared out, kept in this range)
+ONSET_DURATION_WEIGHT = 4.0     # how much a syllable far from its expected length costs, against attack strength
+MIN_NOTE_S = 0.12               # shorter notes are made this long when the next one leaves room
+NOTE_GAP_FRAMES = 2             # a silence this long (40 ms) ends a note before the next syllable
+MELISMA_MIN_S = 0.45            # a syllable this long may hold two notes...
+MELISMA_SEMITONES = 2.0         # ...when its pitch moves this much and stays
+FIRST_SYLLABLE_SLACK_S = 0.6    # the line's time from LRCLIB is approximate
 
 
-def _attack(energy, frame):
-    before = energy[max(0, frame - 3):frame]
-    after = energy[frame:frame + 3]
-    return float(after.mean() - (before.mean() if len(before) else 0.0)) if len(after) else 0.0
+def _novelty(energy, pitch):
+    """How much a syllable seems to start at every frame: the loudness rising after a dip, the pitch changing, the
+    voice starting after a silence."""
+    loud = np.log(np.maximum(energy, 1e-5))
+    smooth = np.convolve(loud, np.ones(3) / 3, mode='same')
+    n = len(smooth)
+    dip = np.array([smooth[max(0, i - 4):i + 1].min() for i in range(n)])
+    ahead = np.concatenate([smooth[2:], [smooth[-1]] * 2]) if n > 2 else smooth
+    rise = np.clip(ahead - dip, 0, 3)
+    change = np.zeros(n)
+    for i in range(4, n - 4):
+        before, after = pitch[i - 4:i], pitch[i:i + 4]
+        before, after = before[~np.isnan(before)], after[~np.isnan(after)]
+        if len(before) >= 2 and len(after) >= 2:
+            change[i] = min(4.0, abs(float(np.median(after) - np.median(before)))) / 4
+    return rise + change
 
 
-def assign_syllables(notes, syllables, energy):
-    """[(first frame, end frame, midi, text)]: one syllable per note start, '~' for the held rest."""
-    notes = list(notes)
-    count = len(syllables)
-    while len(notes) < count:  # fewer notes than syllables: split the longest
-        k = max(range(len(notes)), key=lambda i: notes[i][1] - notes[i][0])
-        a, b, m = notes[k]
-        if b - a < 2:
-            break
-        mid = (a + b) // 2
-        notes[k:k + 1] = [(a, mid, m), (mid, b, m)]
-    if len(notes) < count:  # still short: the rest share the last note
-        syllables = syllables[:len(notes) - 1] + [''.join(syllables[len(notes) - 1:])]
-        count = len(syllables)
-    # choose which notes start a syllable (the first always): dynamic programming on the attack strength
-    n = len(notes)
-    strength = [_attack(energy, a) + 0.02 * min(10, a - notes[i - 1][1] if i else 10) for i, (a, b, m) in enumerate(notes)]
-    best = {(0, 0): (0.0, None)}
+def _line_onsets(novelty, voiced, a, b, weights, first_time):
+    """Start frame of each syllable (len(weights) of them) between frames a and b: dynamic programming that takes
+    strong onsets and gives each syllable voice in proportion to its length (weights)."""
+    count = len(weights)
+    span = np.flatnonzero(voiced[a:b]) + a
+    if len(span) < count * MIN_SYLLABLE_FRAMES:
+        return None
+    region_start = [i for i in span if i == a or not voiced[i - 1]]
+    peaks = [i for i in span if (i == a or novelty[i] >= novelty[i - 1]) and (i + 1 >= b or novelty[i] >= novelty[i + 1])]
+    candidates = sorted(set(region_start) | set(peaks))
+    if len(candidates) < count:
+        candidates = list(span)
+    cand = np.array(candidates)
+    voiced_before = np.cumsum(np.concatenate([[0], voiced[a:b].astype(int)]))  # voiced frames in a..i
+
+    def voiced_between(i, j):
+        return voiced_before[j - a] - voiced_before[i - a]
+
+    # a syllable is expected to last about as long as the line's voice shared out, but within what is sung
+    # (official syllables: 0.24 s typically); the last one holds what is left, a long final note is common
+    mean_weight = sum(weights) / count
+    each = min(max(len(span) / count, SYLLABLE_S[0] / FRAME), SYLLABLE_S[1] / FRAME)
+    expected = [each * w / mean_weight for w in weights]
+    bonus = novelty[cand] + np.isin(cand, region_start) * 0.5
+    first_cost = 0.6 * np.maximum(0, np.abs((cand - first_time) * FRAME) - 0.15) / FIRST_SYLLABLE_SLACK_S
+    m = len(cand)
+    score = np.full((count, m), -np.inf)
+    back = np.zeros((count, m), dtype=int)
+    score[0] = bonus - first_cost
     for j in range(1, count):
-        for i in range(j, n - (count - 1 - j)):
-            options = [(best[(k, j - 1)][0] + strength[i], k) for k in range(j - 1, i) if (k, j - 1) in best]
-            if options:
-                best[(i, j)] = max(options)
-    starts, i = [], max((k for k in range(n) if (k, count - 1) in best), key=lambda k: best[(k, count - 1)][0])
-    for j in range(count - 1, -1, -1):
-        starts.append(i)
-        i = best[(i, j)][1]
-    starts = starts[::-1]
-    out, syllable = [], -1
-    for k, (a, b, m) in enumerate(notes):
-        if syllable + 1 < count and k == starts[syllable + 1]:
-            syllable += 1
-            text = syllables[syllable]
-        else:
-            text = '~'
-        out.append((a, b, m, text))
-    return out
-
-
-def fold_octaves(notes, center):
-    """Pitch tracker octave errors: every note to the octave nearest the line's median."""
+        for k in range(j, m - (count - 1 - j)):
+            best, arg = -np.inf, -1
+            for q in range(k - 1, j - 2, -1):
+                if score[j - 1, q] == -np.inf:
+                    continue
+                held = voiced_between(cand[q], cand[k])
+                if held < MIN_SYLLABLE_FRAMES:
+                    continue
+                if (cand[k] - cand[q]) * FRAME > 4.0:
+                    break
+                ratio = np.log((held + 1) / (expected[j - 1] + 1))
+                value = score[j - 1, q] - ONSET_DURATION_WEIGHT * ratio * ratio
+                if value > best:
+                    best, arg = value, q
+            if arg >= 0:
+                score[j, k] = best + bonus[k]
+                back[j, k] = arg
+    last = score[count - 1]
+    if not np.isfinite(last).any():
+        return None
+    # the last syllable holds the rest of its voice: a gentle cost if that is far longer than expected
+    tail = np.array([voiced_between(c, b) for c in cand])
+    last = last - 0.3 * np.maximum(0, np.log((tail + 1) / (expected[-1] + 1)))
+    k = int(np.argmax(last))
     out = []
-    for a, b, m, text in notes:
-        while m - center > 7:
-            m -= 12
-        while center - m > 7:
-            m += 12
-        out.append((a, b, m, text))
+    for j in range(count - 1, -1, -1):
+        out.append(int(cand[k]))
+        k = back[j, k]
+    return out[::-1]
+
+
+def _note_end(voiced, start, limit):
+    """The end frame of a note starting at `start`: at the next syllable (limit) or where the voice stops."""
+    silence = 0
+    for i in range(start, limit):
+        silence = silence + 1 if not voiced[i] else 0
+        if silence >= NOTE_GAP_FRAMES:
+            return i - silence + 1
+    return limit
+
+
+def _steady_pitch(pitch, a, b):
+    """(midi of the steady part of the note, frames with pitch / frames, spread in semitones)."""
+    length = b - a
+    core = pitch[a + length // 4:b - length // 10] if length >= 5 else pitch[a:b]
+    heard = core[~np.isnan(core)]
+    if len(heard) < 2:
+        heard = pitch[a:b][~np.isnan(pitch[a:b])]
+    if not len(heard):
+        return None, 0.0, 0.0
+    m = float(np.median(heard))
+    if len(heard) >= 4:  # the semitone heard the longest, not the median of a slide
+        rounded = np.round(heard)
+        values, counts = np.unique(rounded, return_counts=True)
+        m = float(np.median(heard[np.abs(heard - values[np.argmax(counts)]) <= 0.5]))
+    return m, len(heard) / max(1, len(core)), float(np.percentile(np.abs(heard - m), 75))
+
+
+def _melisma(pitch, a, b):
+    """[(a, b)] pieces of a long syllable whose pitch moves (two or three steady notes), or [(a, b)]."""
+    if (b - a) * FRAME < MELISMA_MIN_S:
+        return [(a, b)]
+    least = int(0.15 / FRAME)
+    best, where = 0.0, None
+    for k in range(a + least, b - least):
+        left, right = pitch[a:k], pitch[k:b]
+        left, right = left[~np.isnan(left)], right[~np.isnan(right)]
+        if len(left) < least // 2 or len(right) < least // 2:
+            continue
+        ml, mr = np.median(left), np.median(right)
+        if np.percentile(np.abs(left - ml), 75) > 0.8 or np.percentile(np.abs(right - mr), 75) > 0.8:
+            continue
+        if abs(mr - ml) > best:
+            best, where = abs(mr - ml), k
+    if where is None or best < MELISMA_SEMITONES:
+        return [(a, b)]
+    return _melisma(pitch, a, where) + _melisma(pitch, where, b)
+
+
+_MAJOR = np.array([6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88])
+
+
+def song_scale(midis, durations):
+    """The 7 pitch classes of the song's key (Krumhansl), from its notes weighted by length."""
+    hist = np.zeros(12)
+    for m, d in zip(midis, durations):
+        hist[int(round(m)) % 12] += d
+    best = max(range(12), key=lambda k: np.corrcoef(hist, np.roll(_MAJOR, k))[0, 1])
+    return {(best + step) % 12 for step in (0, 2, 4, 5, 7, 9, 11)}
+
+
+def level_pitches(midis, durations, scale):
+    """Whole semitones the way the official songs write them: a pitch between two semitones goes to the one in the
+    key; a short note one semitone away from two equal neighbours takes theirs (a wobble, not a melody), and so does
+    a short note 5 or more away from two close neighbours (the pitch tracker failing)."""
+    out = []
+    for m in midis:
+        if m is None:
+            out.append(None)
+            continue
+        r = int(round(m))
+        if r % 12 not in scale:
+            other = r + 1 if m > r else r - 1
+            if other % 12 in scale and abs(m - other) < 0.75:
+                r = other
+        out.append(r)
+    for i in range(1, len(out) - 1):
+        a, x, c = out[i - 1], out[i], out[i + 1]
+        if None in (a, x, c) or durations[i] >= 0.3:
+            continue
+        if a == c and abs(x - a) == 1:
+            out[i] = a
+        elif abs(x - a) >= 5 and abs(x - c) >= 5 and abs(a - c) <= 3:  # a short note far from both: a tracker error
+            out[i] = a if abs(x - a) < abs(x - c) else c
     return out
+
+
+# Rap: measured on the official rap lines (tools/note_calibrate.py) the raw pitch inside a rapped syllable slides
+# (25 semitones a second against 7 when sung), less of the voice has a pitch (61 % against 80 %), more of the notes
+# wobble over a semitone (73 % against 33 %) and the syllables go faster. The score adds those, is smoothed with the
+# neighbouring lines (rap comes in verses) and a line is rap above RAP_SCORE when a neighbour is too.
+RAP_SCORE = 3.0
+
+
+def rap_features(pitch, notes, rate):
+    """(median slide of the pitch inside the notes in semitones/s, share of frames with pitch, share of notes that
+    wobble over a semitone, syllables a second) of a line; pitch is the raw track, notes are (first, end frame)."""
+    slides, shares, wobbly = [], [], []
+    for a, b in notes:
+        q = pitch[a:b]
+        ok = ~np.isnan(q)
+        shares.append(float(ok.mean()) if len(q) else 0.0)
+        if ok.sum() >= 3:
+            y = q[ok]
+            slides.append(abs(float(np.polyfit(np.flatnonzero(ok) * FRAME, y, 1)[0])))
+            wobbly.append(float(np.percentile(np.abs(y - np.median(y)), 75)) > 1)
+    return (float(np.median(slides)) if slides else 30.0, float(np.mean(shares)) if shares else 0.0,
+            float(np.mean(wobbly)) if wobbly else 1.0, rate)
+
+
+def rap_lines(features):
+    """[True for the rapped lines] from rap_features of every line."""
+    if not features:
+        return []
+    score = np.array([np.log(max(slide, 0.5)) - 3 * share + 0.3 * rate + wobble
+                      for slide, share, wobble, rate in features])
+    padded = np.concatenate([[score[0]], score, [score[-1]]])
+    smooth = 0.25 * padded[:-2] + 0.5 * padded[1:-1] + 0.25 * padded[2:]
+    over = smooth > RAP_SCORE
+    return [bool(over[i] and ((i > 0 and over[i - 1]) or (i + 1 < len(over) and over[i + 1])))
+            for i in range(len(over))]
+
+
+def smooth_octaves(midis, center):
+    """Octave of every note (the pitch tracker jumps octaves): the path closest to the neighbours and to the line."""
+    if not midis:
+        return []
+    options = [[m + 12 * k for k in (-1, 0, 1)] for m in midis]
+    cost = [abs(o - center) * 0.1 + (0 if k == 1 else 1.0) for k, o in enumerate(options[0])]
+    back = []
+    for i in range(1, len(midis)):
+        new, arg = [], []
+        for k, o in enumerate(options[i]):
+            steps = [cost[q] + max(0.0, abs(o - options[i - 1][q]) - 2) for q in range(3)]
+            q = int(np.argmin(steps))
+            new.append(steps[q] + abs(o - center) * 0.1 + (0 if k == 1 else 1.0))
+            arg.append(q)
+        cost, back = new, back + [arg]
+    k = int(np.argmin(cost))
+    out = [options[-1][k]]
+    for i in range(len(midis) - 1, 0, -1):
+        k = back[i - 1][k]
+        out.append(options[i - 1][k])
+    return out[::-1]
 
 
 def make_notes(lines, offset, energy, pitch, language):
-    """[[(start s, end s, midi, syllable)] per line]."""
+    """[[(start s, end s, midi or None for rap, syllable)] per line]."""
     threshold = _voice_threshold(energy)
-    pitch = _smooth_pitch(pitch)
-    heard = pitch[(energy > threshold) & ~np.isnan(pitch)]
+    smooth = _smooth_pitch(pitch)
+    voiced = energy > threshold
+    novelty = _novelty(energy, smooth)
+    heard = smooth[voiced & ~np.isnan(smooth)]
     song_median = float(np.median(heard)) if len(heard) else 60.0
-    result = []
+    result, features, rows = [], [], []  # rows: the lines with notes from the voice (rap is looked for in them)
     for index, (t, text) in enumerate(lines):
         syllables = line_syllables(text, language)
         if not syllables:
@@ -458,16 +608,61 @@ def make_notes(lines, offset, energy, pitch, language):
         start = t + offset - 0.25
         end = min((lines[index + 1][0] + offset - 0.05) if index + 1 < len(lines) else start + LINE_MAX_S,
                   start + LINE_MAX_S)
-        a, b = int(start / FRAME), int(end / FRAME)
-        notes = segment_notes(energy, pitch, a, b, threshold)
-        if not notes:  # no voice found: even notes on the line, at the song's usual pitch
-            step = max(MIN_NOTE_FRAMES, (b - a) // (len(syllables) + 1))
-            notes = [(a + k * step, a + (k + 1) * step - 1, song_median) for k in range(len(syllables))]
-        notes = assign_syllables(notes, syllables, energy)
-        line_center = float(np.median([m for *_, m, _ in notes]))
-        notes = fold_octaves(notes, line_center)
-        result.append([(a * FRAME, b * FRAME, m, s) for a, b, m, s in notes])
-    return result
+        a, b = max(0, int(start / FRAME)), min(len(energy), int(end / FRAME))
+        weights = [1 + 0.2 * len(re.sub(r'\W', '', s)) for s in syllables]
+        onsets = _line_onsets(novelty, voiced, a, b, weights, int((t + offset) / FRAME)) if b > a else None
+        if onsets is None:  # no voice found: even notes on the line, at the song's usual pitch
+            step = max(MIN_SYLLABLE_FRAMES + 1, (b - a) // (len(syllables) + 1))
+            result.append([((a + k * step) * FRAME, (a + (k + 1) * step - 1) * FRAME, song_median, s)
+                           for k, s in enumerate(syllables)])
+            continue
+        notes = []
+        for k, (on, syllable) in enumerate(zip(onsets, syllables)):
+            limit = onsets[k + 1] - 1 if k + 1 < len(onsets) else b
+            stop = max(on + MIN_SYLLABLE_FRAMES, _note_end(voiced, on, max(limit, on + MIN_SYLLABLE_FRAMES)))
+            for piece, (p, q) in enumerate(_melisma(smooth, on, stop)):
+                midi, _, _ = _steady_pitch(smooth, p, q)
+                notes.append([p, q, midi, syllable if piece == 0 else '~'])
+        known = [n[2] for n in notes if n[2] is not None]
+        center = float(np.median(known)) if known else song_median
+        for n in notes:
+            if n[2] is None:
+                n[2] = center
+            while n[2] - center > 7:
+                n[2] -= 12
+            while center - n[2] > 7:
+                n[2] += 12
+        for n, m in zip(notes, smooth_octaves([n[2] for n in notes], center)):
+            n[2] = m
+        span = (notes[-1][1] - notes[0][0]) * FRAME
+        features.append(rap_features(pitch, [(p, q) for p, q, _, _ in notes], len(syllables) / max(0.2, span)))
+        result.append([(p * FRAME, q * FRAME, m, s) for p, q, m, s in notes])
+        rows.append(len(result) - 1)
+    for i, rap in zip(rows, rap_lines(features)):
+        if rap:
+            result[i] = [(a, b, None, s) for a, b, m, s in result[i]]
+    sung = [(n[2], n[1] - n[0]) for line in result for n in line if n[2] is not None]
+    scale = song_scale(*zip(*sung)) if len(sung) >= 8 else set(range(12))
+    song_center = float(np.median([m for m, _ in sung])) if sung else song_median
+    out = []
+    for line in result:
+        levelled = level_pitches([n[2] for n in line], [n[1] - n[0] for n in line], scale)
+        known = [m for m in levelled if m is not None]
+        shift = 0
+        if known:  # a whole line an octave away from the rest of the song: the tracker, not the singer
+            center = float(np.median(known))
+            while center + shift - song_center > 7:
+                shift -= 12
+            while song_center - (center + shift) > 7:
+                shift += 12
+        notes = []
+        for k, ((a, b, _, s), m) in enumerate(zip(line, levelled)):
+            if b - a < MIN_NOTE_S:  # official notes are hardly ever shorter
+                b = max(b, min(a + MIN_NOTE_S, line[k + 1][0] - NOTE_GAP_FRAMES * FRAME if k + 1 < len(line)
+                               else a + MIN_NOTE_S))
+            notes.append((a, b, None if m is None else m + shift, s))
+        out.append(notes)
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -488,7 +683,10 @@ def ultrastar_text(lines_notes, tags):
         for start, end, midi, text in notes:
             beat = max(last_end, int(round((start - first) / BEAT_S)))
             length = max(1, int(round((end - first) / BEAT_S)) - beat)
-            rows.append(f": {beat} {length} {int(round(midi)) - 60} {text}")
+            if midi is None:  # rap: no pitch (Let's Sing #p1)
+                rows.append(f"R {beat} {length} 0 {text}")
+            else:
+                rows.append(f": {beat} {length} {int(round(midi)) - 60} {text}")
             last_end = beat + length
     rows.append('E')
     return '\n'.join(rows) + '\n'
@@ -727,6 +925,58 @@ def make_song(artist, title, url, songs_dir, language='Spanish', year=None, genr
     txt.write_text(ultrastar_text(lines_notes, tags), encoding='utf-8')
     (folder / 'songmaker.json').write_text(json.dumps({
         'url': url, 'lrclib_id': version[0], 'offset': offset, 'fit': round(score, 3),
-        'notes': sum(len(n) for n in lines_notes), 'lines': len(lines_notes)}, indent=1), encoding='utf-8')
+        'notes': sum(len(n) for n in lines_notes), 'lines': len(lines_notes),
+        'note_maker': NOTE_MAKER_VERSION}, indent=1), encoding='utf-8')
     log(f"Done: {txt} ({sum(len(n) for n in lines_notes)} notes in {len(lines_notes)} lines)")
+    return txt
+
+
+def remake_notes(folder, keep_dir=None, log=print, force=False):
+    """Writes the notes of a song made by SongMaker again with the current note maker, from what its folder already
+    has (voice analysis, LRCLIB version and offset in songmaker.json): no video or Demucs work. The header tags of the
+    txt are kept; the old txt is copied to keep_dir first. A song fixed by hand in the sync editor (it has a .bak of
+    its txt) is left alone unless force. Returns the txt, or None when skipped."""
+    import requests
+    folder = Path(folder)
+    meta = json.loads((folder / 'songmaker.json').read_text(encoding='utf-8'))
+    if meta.get('note_maker', 1) >= NOTE_MAKER_VERSION and not force:
+        log(f"{folder.name}: notes already made with version {NOTE_MAKER_VERSION}")
+        return None
+    txts = sorted(folder.glob('*.txt'))
+    txt = folder / f"{folder.name}.txt" if (folder / f"{folder.name}.txt").exists() else (txts[0] if txts else None)
+    if txt is None:
+        raise RuntimeError(f"{folder.name}: no txt")
+    if Path(str(txt) + '.bak').exists() and not force:
+        log(f"{folder.name}: SKIPPED, fixed by hand in the sync editor ({txt.name}.bak exists)")
+        return None
+    old = txt.read_text(encoding='utf-8')
+    tags = {}
+    for row in old.splitlines():
+        if row.startswith('#') and ':' in row:
+            key, value = row[1:].split(':', 1)
+            if key.upper() not in ('BPM', 'GAP'):
+                tags[key] = value
+    cache = folder / 'lrclib.json'
+    if not cache.exists():  # songs made before the cache: the chosen version by its id
+        response = requests.get(f"https://lrclib.net/api/get/{meta['lrclib_id']}", timeout=20,
+                                headers={'User-Agent': USER_AGENT})
+        response.raise_for_status()
+        cache.write_text(json.dumps([response.json()], ensure_ascii=False), encoding='utf-8')
+    versions = {v[0]: v for v in lrclib_versions(None, None, folder)}
+    if meta['lrclib_id'] not in versions:
+        raise RuntimeError(f"{folder.name}: LRCLIB version {meta['lrclib_id']} is not in lrclib.json")
+    voice = np.load(SyncModel.voice_cache_path(str(folder)))
+    energy, pitch = voice['energy'].astype(np.float32), voice['pitch'].astype(np.float32)
+    language = tags.get('LANGUAGE', 'Spanish').strip()
+    lines_notes = [n for n in make_notes(versions[meta['lrclib_id']][2], meta['offset'], energy, pitch, language) if n]
+    if keep_dir:
+        keep = Path(keep_dir) / folder.name
+        keep.mkdir(parents=True, exist_ok=True)
+        (keep / txt.name).write_text(old, encoding='utf-8')
+    txt.write_text(ultrastar_text(lines_notes, tags), encoding='utf-8')
+    meta.update({'notes': sum(len(n) for n in lines_notes), 'lines': len(lines_notes),
+                 'note_maker': NOTE_MAKER_VERSION})
+    (folder / 'songmaker.json').write_text(json.dumps(meta, indent=1), encoding='utf-8')
+    rap = sum(1 for line in lines_notes if line and line[0][2] is None)
+    log(f"{folder.name}: {meta['notes']} notes in {meta['lines']} lines" + (f", {rap} rapped" if rap else ''))
     return txt

@@ -285,6 +285,29 @@
   Koi no Uta, Maladie. Aviso: Gyal You a Party Animal (letra 6,5 s más larga que el audio).
 - Parche: 716 canciones, 0 problemas; 765 `.bk2`. Switch: 288 archivos (1,3 GB) copiados y verificados.
 
+### 2026-11-05 (3) — LISA, notas como las oficiales y editor de letra
+- Lote de LISA (23 canciones, solistas y colaboraciones, `~/LetsSing/cola_lisa.json`): descargadas, fabricadas y
+  convertidas sin fallos (unidad `letssing-lisa`, perfil "performance").
+- Queja del usuario tras probar LISA y Goma de Mascar: notas que saltan demasiado, letra donde no se canta, rap sin
+  tratar. Medido en vez de supuesto (`tools/note_style.py`, 387 oficiales frente a 61 fabricadas): las oficiales
+  tienen ~1 nota por sílaba, notas de 0,24 s (1 % por debajo de 0,12 s), 9 % de saltos de 5+ semitonos y el rap en
+  notas sin tono (`#p1`, 4,5 % de las notas); las fabricadas, 1,22 notas por sílaba, 0,15 s, 41 % cortas y 17 % de
+  saltos grandes.
+- Nuevo generador de notas (`SongMaker.make_notes`, versión 2), afinado contra 20 oficiales con su voz analizada
+  (`tools/note_calibrate.py`: recibe solo las líneas de la letra y la voz y se compara con las notas oficiales):
+  sílabas en los ataques de la voz (programación dinámica por línea), una nota estable por sílaba, semitonos en la
+  tonalidad de la canción, temblores y errores del detector nivelados, octavas por línea, rap detectado (deslizamiento
+  del tono, voz sin tono, notas que tiemblan; líneas seguidas). Resultado: 388 notas por canción (oficial 394), salto
+  medio 1,84 semitonos (1,86), rango 20,5 (21), 2 % de notas cortas, tono ±1 semitono 79 % (el detector de tono da
+  83 % como mucho con los tiempos oficiales), inicio de sílaba a 0,13 s de mediana (antes 0,19).
+- `tools/remake_notes.py`: rehechas las 62 canciones fabricadas (txt anterior en `~/LetsSing/_papelera/notas_v1/`)
+  y reconvertidas (solo vxla y Feat; los `.bk2` no se tocan). Parche: 739 canciones, 0 problemas.
+- Editor de sincronía: borrar la sílaba seleccionada con sus notas (Supr), borrar la línea (Ctrl+Supr), corregir el
+  texto de una nota (doble clic) o de la línea (T, un trozo por nota separado por `|`); las notas de rap se pueden
+  seleccionar.
+- Pendiente (B-75, letras): sílabas que siguen llegando tarde en líneas ligadas (un 25 % a más de 0,3 s) y coros
+  entre paréntesis de LRCLIB que no canta la voz principal.
+
 <!-- Plantilla para nuevas entradas:
 ### AAAA-MM-DD — Título
 - Cambios: …

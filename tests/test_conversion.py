@@ -476,6 +476,28 @@ class SyncModelTest(unittest.TestCase):
         self.assertGreater(report[1][2], 0.95)  # and all of it once moved
 
 
+class LyricsEditTest(unittest.TestCase):
+    TXT = ["#TITLE:T", "#BPM:400", "#GAP:1000", ": 0 4 0 Ho", ": 4 4 0 la ", "- 10", ": 12 4 2 tú", ": 16 4 2 ~",
+           "- 22", "R 24 4 0 yo", "E"]
+
+    def test_fix_text_and_delete_notes(self):
+        import SyncModel
+        out = SyncModel.rewrite_txt(self.TXT, 1000, note_texts={0: 'Hu'}, deleted_notes={2, 3}, expected_notes=5)
+        self.assertEqual(out[3:], [": 0 4 0 Hu", ": 4 4 0 la ", "- 10", "R 24 4 0 yo", "E"])  # one break left
+        self.assertEqual(SyncModel.rewrite_txt(self.TXT, 1000, deleted_notes={4})[-3:], [": 12 4 2 tú", ": 16 4 2 ~", "E"])
+        self.assertEqual(SyncModel.rewrite_txt(self.TXT, 1000, deleted_notes={0, 1})[3], ": 12 4 2 tú")
+
+    def test_song_without_deleted_notes_keeps_line_numbers(self):
+        import SyncModel
+        data = UltrastarToSingit.parse_file(write(Path(tempfile.mkdtemp()) / 's.txt', '\n'.join(self.TXT) + '\n'))
+        notes, texts, count, bpm = SyncModel.txt_notes(data)
+        self.assertEqual((len(notes), count), (5, 3))
+        song = SyncModel.song_from_notes(notes, texts, count, bpm, deleted={2, 3})
+        self.assertEqual(len(song.lines), 3)
+        self.assertEqual(song.lines[1], [])
+        self.assertEqual([s[2] for s in song.syllables], ['Ho', 'la ', 'yo'])
+
+
 class LanguageTest(unittest.TestCase):
     def test_tag_first_language_and_aliases(self):
         self.assertEqual(ConvertFiles.song_language({'LANGUAGE': 'Spanish, English', 'notes': []}), 'Spanish')
@@ -804,29 +826,53 @@ class SongMakerTest(unittest.TestCase):
         lrc = '[ti:Song]\n[00:08.16] Maldito el día\n\n[01:02.50][02:10.00] Coro\n[00:20.00]\n'
         self.assertEqual(SongMaker.parse_lrc(lrc), [(8.16, 'Maldito el día'), (62.5, 'Coro'), (130.0, 'Coro')])
 
-    def test_syllables_go_to_the_strongest_note_starts(self):
+    def test_syllables_go_where_the_voice_attacks(self):
         import numpy as np
         import SongMaker
-        energy = np.zeros(100, dtype=np.float32)
-        for start in (0, 30, 60):                      # three attacks; the notes at 15 and 45 are held parts
-            energy[start:start + 10] = 1.0
-        energy[10:30] = energy[40:60] = 0.5
-        notes = [(0, 15, 60.0), (15, 30, 62.0), (30, 45, 64.0), (45, 60, 64.0), (60, 75, 62.0)]
-        out = SongMaker.assign_syllables(notes, ['a', 'b', 'c'], energy)
-        self.assertEqual([t for *_, t in out], ['a', '~', 'b', '~', 'c'])
-        more = SongMaker.assign_syllables([(0, 40, 60.0)], ['x', 'y'], energy)   # fewer notes: split the longest
-        self.assertEqual([(a, b, t) for a, b, m, t in more], [(0, 20, 'x'), (20, 40, 'y')])
+        energy = np.full(120, 0.001, dtype=np.float32)
+        pitch = np.full(120, np.nan, dtype=np.float32)
+        for start, midi in ((10, 60.0), (40, 64.0), (70, 67.0)):   # three sung syllables with silences between
+            energy[start:start + 20] = 1.0
+            pitch[start:start + 20] = midi
+        lines = SongMaker.make_notes([(0.25, 'la la la')], 0.0, energy, pitch, 'Spanish')
+        self.assertEqual(len(lines), 1)
+        notes = lines[0]
+        self.assertEqual([s for *_, s in notes], ['la ', 'la ', 'la'])
+        self.assertEqual([round(a / SongMaker.FRAME) for a, *_ in notes], [10, 40, 70])
+        self.assertEqual([m for _, _, m, _ in notes], [60, 64, 67])
+
+    def test_level_pitches(self):
+        import SongMaker
+        scale = {0, 2, 4, 5, 7, 9, 11}                                   # C major
+        self.assertEqual(SongMaker.level_pitches([60.6], [0.5], scale), [60])   # between C and C#: C (in the key)
+        self.assertEqual(SongMaker.level_pitches([61.4], [0.5], scale), [62])   # between C# and D: D
+        self.assertEqual(SongMaker.level_pitches([61.0], [0.5], scale), [61])   # a clear C# stays
+        wobble = SongMaker.level_pitches([62, 63, 62], [0.4, 0.2, 0.4], scale)
+        self.assertEqual(wobble, [62, 62, 62])
+        slip = SongMaker.level_pitches([60, 69, 61, 62], [0.4, 0.15, 0.4, 0.4], set(range(12)))
+        self.assertEqual(slip, [60, 61, 61, 62])                          # 69 between 60 and 61: a tracker slip
+        self.assertEqual(SongMaker.level_pitches([60, None, 62], [0.3] * 3, scale), [60, None, 62])
+
+    def test_octaves_and_rap(self):
+        import SongMaker
+        self.assertEqual(SongMaker.smooth_octaves([60, 74, 62], 62), [60, 62, 62])
+        sung = (5.0, 0.95, 0.1, 3.0)          # slide, share with pitch, wobbly notes, syllables a second
+        rap = (40.0, 0.5, 0.9, 6.0)
+        self.assertEqual(SongMaker.rap_lines([sung, sung, rap, rap, rap, sung]),
+                         [False, False, True, True, True, False])
+        self.assertEqual(SongMaker.rap_lines([sung, rap, sung]), [False, False, False])  # one line alone is not rap
 
     def test_ultrastar_text(self):
         import SongMaker
-        lines = [[(10.0, 10.3, 62.4, 'Ho'), (10.3, 10.6, 64.0, 'la ')], [(12.0, 12.6, 60.0, 'tú')]]
+        lines = [[(10.0, 10.3, 62.4, 'Ho'), (10.3, 10.6, 64.0, 'la ')], [(12.0, 12.6, 60.0, 'tú'), (12.6, 12.9, None, 'yo')]]
         text = SongMaker.ultrastar_text(lines, {'TITLE': 'T', 'ARTIST': 'A', 'YEAR': None})
         self.assertIn('#GAP:10000', text)
         self.assertNotIn('#YEAR', text)
         body = [l for l in text.splitlines() if not l.startswith('#')]
-        self.assertEqual(body, [': 0 8 2 Ho', ': 8 8 4 la ', '- 52', ': 53 16 0 tú', 'E'])
+        self.assertEqual(body, [': 0 8 2 Ho', ': 8 8 4 la ', '- 52', ': 53 16 0 tú', 'R 69 8 0 yo', 'E'])
         parsed = UltrastarToSingit.parse_file(write(Path(tempfile.mkdtemp()) / 's.txt', text))
         self.assertEqual(len([n for n in parsed['notes'] if n[0] == ':']), 3)
+        self.assertEqual(len([n for n in parsed['notes'] if n[0] == 'R']), 1)  # rap: #p1 in the game
 
 
 class DuetClassicTest(TempDirTest):

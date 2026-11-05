@@ -17,7 +17,8 @@ import numpy as np
 from PySide6.QtCore import Qt, QUrl, QTimer, QElapsedTimer, QRectF, QPointF, QSize
 from PySide6.QtGui import QPainter, QColor, QPen, QFont, QKeySequence, QShortcut, QPolygonF
 from PySide6.QtWidgets import (QApplication, QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QSlider,
-                               QWidget, QMessageBox, QComboBox, QSpinBox, QStyle, QFrame, QSizePolicy, QToolButton)
+                               QWidget, QMessageBox, QComboBox, QSpinBox, QStyle, QFrame, QSizePolicy, QToolButton,
+                               QInputDialog)
 from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput, QAudioSource, QAudioFormat, QMediaDevices
 from PySide6.QtMultimediaWidgets import QVideoWidget
 
@@ -97,11 +98,12 @@ class NoteLane(QWidget):
     def note_at(self, pos):
         ed = self.editor
         t0, x_of, y_of, _, bar, _ = self.geometry_now()
+        _, _, _, _, _, rap_band = self.geometry_now()
         for note in ed.notes_between(t0, t0 + LANE_SECONDS):
-            if not note.sung:
-                continue
             t = ed.note_time(note)
-            rect = QRectF(x_of(t), y_of(note.pitch) - bar / 2 - 3, max(3.0, note.d / LANE_SECONDS * self.width()), bar + 6)
+            width = max(3.0, note.d / LANE_SECONDS * self.width())
+            rect = QRectF(x_of(t), y_of(note.pitch) - bar / 2 - 3, width, bar + 6) if note.sung \
+                else QRectF(x_of(t), rap_band - 10, width, 14)  # rap notes: the grey band at the bottom
             if rect.contains(QPointF(pos)):
                 return note
         return None
@@ -112,9 +114,20 @@ class NoteLane(QWidget):
         if ed.official or event.button() != Qt.LeftButton:
             return super().mousePressEvent(event)
         ed.selected_note = self.note_at(event.position())
-        self._drag = (event.position().y(), ed.selected_note.pitch) if ed.selected_note is not None else None
+        note = ed.selected_note
+        self._drag = (event.position().y(), note.pitch) if note is not None and note.sung else None
         self.update()
         ed.refresh_labels()
+
+    def mouseDoubleClickEvent(self, event):
+        """Double click a note to fix its text."""
+        ed = self.editor
+        note = self.note_at(event.position()) if not ed.official and event.button() == Qt.LeftButton else None
+        if note is None:
+            return super().mouseDoubleClickEvent(event)
+        self._drag = None
+        ed.selected_note = note
+        ed.edit_note_text(note)
 
     def mouseMoveEvent(self, event):
         ed = self.editor
@@ -358,8 +371,17 @@ class SyncEditorDialog(QDialog):
         official = os.path.join(self.song_dir, naming.OFFICIAL_VXLA_NAME)
         # songs rebuilt from DLC use their official vxla as it is: #GAP of the txt is not used there
         self.official = os.path.isfile(official)
-        self.song = SyncModel.load_official(official) if self.official else load_txt(self.us_data)
-        self.original_pitches = [n.pitch for n in self.song.notes]
+        if self.official:
+            self.song = SyncModel.load_official(official)
+            self.all_notes, self.raw_texts, self.line_count = self.song.notes, [], len(self.song.lines)
+        else:
+            # every note of the file (in its order, the one saving uses); self.song leaves out the deleted ones
+            self.all_notes, self.raw_texts, self.line_count, bpm = SyncModel.txt_notes(self.us_data)
+            self.song = SyncModel.song_from_notes(self.all_notes, self.raw_texts, self.line_count, bpm)
+        self.note_index = {id(n): i for i, n in enumerate(self.all_notes)}
+        self.text_edits = {}      # note index -> new text (fixed lyrics)
+        self.deleted = set()      # note indices taken out (lyrics that are not sung there)
+        self.original_pitches = [n.pitch for n in self.all_notes]
         self.selected_note = None  # note whose pitch is being edited (click it in the lane)
         self.splits = {}          # first line of a part -> extra seconds of that part (up to the next cut)
         self.selected = 0         # part moved by the arrows: 0 = all the lyrics (#GAP)
@@ -560,6 +582,25 @@ class SyncEditorDialog(QDialog):
         sync.addWidget(self.btn_save)
         layout.addLayout(sync)
 
+        # --- lyrics: take out what is not sung, fix misspelt words
+        words = QHBoxLayout()
+        self.btn_del_syllable = tool_button('trash', tr("Delete the selected syllable with its notes (click a note "
+                                                        "first)"), self.delete_selected, self, ("Delete",),
+                                            text=tr("Delete syllable"), color=RED)
+        self.btn_del_line = tool_button('row-remove', tr("Delete the line being played (or the selected note's line) "
+                                                         "with all its notes"), self.delete_line, self,
+                                        ("Ctrl+Delete",), text=tr("Delete line"), color=RED)
+        self.btn_text = tool_button('cursor-text', tr("Fix the lyrics of the line being played (or the selected "
+                                                      "note's line). Double click a note to fix only its syllable."),
+                                    self.edit_line_text, self, ("T",), text=tr("Fix text"), color=BLUE)
+        for b in (self.btn_del_syllable, self.btn_del_line, self.btn_text):
+            words.addWidget(b)
+            self.edit_buttons.append(b)
+        self.lbl_edits = QLabel()
+        self.lbl_edits.setStyleSheet("color: #6b7280;")
+        words.addWidget(self.lbl_edits, stretch=1)
+        layout.addLayout(words)
+
         part_row = QHBoxLayout()
         part_row.addWidget(self.lbl_gap)
         self.lbl_part = QLabel()
@@ -727,12 +768,117 @@ class SyncEditorDialog(QDialog):
     # ------------------------------------------------------------------ editing
     def changed(self):
         return self.gap_ms != self.original_gap_ms or any(abs(d) > 1e-9 for d in self.splits.values()) \
-            or bool(self.pitch_edits())
+            or bool(self.pitch_edits()) or bool(self.text_edits) or bool(self.deleted)
 
     def pitch_edits(self):
         """{note index: new UltraStar pitch} of the notes moved up or down."""
-        return {i: int(round(n.pitch)) - 60 for i, n in enumerate(self.song.notes)
-                if n.sung and n.pitch != self.original_pitches[i]}
+        return {i: int(round(n.pitch)) - 60 for i, n in enumerate(self.all_notes)
+                if n.sung and n.pitch != self.original_pitches[i] and i not in self.deleted}
+
+    # ------------------------------------------------------------------ lyrics editing (not for official files)
+    def text_of(self, index):
+        return self.text_edits.get(index, self.raw_texts[index])
+
+    def rebuild_song(self):
+        """self.song again from every note, without the deleted ones and with the fixed texts."""
+        texts = [self.text_of(i) for i in range(len(self.all_notes))]
+        self.song = SyncModel.song_from_notes(self.all_notes, texts, self.line_count, self.song.bpm, self.deleted)
+        if self.selected_note is not None and self.note_index[id(self.selected_note)] in self.deleted:
+            self.selected_note = None
+        self.lane.update()
+        self.sync_map.update()
+        self.refresh_labels()
+        self.schedule_report()
+
+    def set_text(self, index, text):
+        text = text if text.strip() else '~'  # an empty piece holds the syllable before
+        if text == self.raw_texts[index]:
+            self.text_edits.pop(index, None)
+        else:
+            self.text_edits[index] = text
+
+    def line_notes(self, line):
+        return [i for i, n in enumerate(self.all_notes) if n.line == line and i not in self.deleted]
+
+    def edit_note_text(self, note):
+        """Fixes the text of one note (a misspelt syllable)."""
+        if self.official or note is None:
+            return
+        index = self.note_index[id(note)]
+        text, ok = QInputDialog.getText(
+            self, tr("Fix syllable"),
+            tr("Text of this note. A space at the end ends the word; ~ holds the syllable before."),
+            text=self.text_of(index))
+        if ok:
+            self.set_text(index, text)
+            self.rebuild_song()
+
+    def edit_line_text(self):
+        """Fixes the text of the line being played (or of the selected note's line), one piece per note."""
+        if self.official:
+            return
+        line = self.selected_note.line if self.selected_note is not None else self.current_line()
+        indices = self.line_notes(line)
+        if not indices:
+            return
+        current = '|'.join(self.text_of(i) for i in indices)
+        text, ok = QInputDialog.getText(
+            self, tr("Fix the lyrics of line {n}").format(n=line + 1),
+            tr("One piece per note, separated by |. A space at the end of a piece ends the word; ~ holds the "
+               "syllable before. This line has {n} notes.").format(n=len(indices)),
+            text=current)
+        if not ok or text == current:
+            return
+        pieces = text.split('|')
+        if len(pieces) != len(indices):
+            QMessageBox.warning(self, tr("Fix the lyrics of line {n}").format(n=line + 1),
+                                tr("The line has {n} notes: write {n} pieces separated by | (there are {m}). To take "
+                                   "out a syllable, select its note and delete it.").format(n=len(indices),
+                                                                                           m=len(pieces)))
+            return
+        for i, piece in zip(indices, pieces):
+            self.set_text(i, piece)
+        self.rebuild_song()
+
+    def delete_selected(self):
+        """Takes out the selected syllable with its notes (its held "~" notes too): lyrics where nothing is sung."""
+        note = self.selected_note
+        if self.official or note is None:
+            return
+        first = self.note_index[id(note)]
+        indices = [first]
+        if self.text_of(first).strip() not in ('~', ''):
+            j = first + 1
+            while j < len(self.all_notes) and self.all_notes[j].line == note.line and \
+                    (j in self.deleted or self.text_of(j).strip() in ('~', '')):
+                if j not in self.deleted:
+                    indices.append(j)
+                j += 1
+        ended_word = self.text_of(first).endswith(' ') or self.text_of(indices[-1]).endswith(' ')
+        before = [i for i in self.line_notes(note.line) if i < first]
+        if ended_word and before and not self.text_of(before[-1]).endswith(' '):
+            self.set_text(before[-1], self.text_of(before[-1]) + ' ')  # the word before still ends there
+        self.deleted.update(indices)
+        self.selected_note = None
+        self.rebuild_song()
+
+    def delete_line(self):
+        """Takes out the line being played (or the selected note's line) with all its notes."""
+        if self.official:
+            return
+        line = self.selected_note.line if self.selected_note is not None else self.current_line()
+        indices = self.line_notes(line)
+        if not indices:
+            return
+        words = ''.join(self.text_of(i).replace('~', '') for i in indices).strip()
+        reply = QMessageBox.question(self, tr("Delete line"),
+                                     tr("Delete line {n} \"{text}\" and its {count} notes?").format(
+                                         n=line + 1, text=words, count=len(indices)))
+        if reply != QMessageBox.Yes:
+            return
+        self.deleted.update(indices)
+        self.selected_note = None
+        self.rebuild_song()
 
     def move_selected_note(self, semitones):
         """Moves the selected note up or down (pitch editing; not for official lyrics files)."""
@@ -813,9 +959,13 @@ class SyncEditorDialog(QDialog):
             self.schedule_report()
 
     def undo_all(self):
-        for note, pitch in zip(self.song.notes, self.original_pitches):
+        for note, pitch in zip(self.all_notes, self.original_pitches):
             note.pitch = pitch
         self.selected_note = None
+        if self.text_edits or self.deleted:
+            self.text_edits.clear()
+            self.deleted.clear()
+            self.rebuild_song()
         self.gap_ms = self.original_gap_ms
         self.splits.clear()
         self.selected = 0
@@ -881,6 +1031,18 @@ class SyncEditorDialog(QDialog):
         self.lbl_part.setStyleSheet("color: #dc2626; font-weight: bold;" if overlap is not None else "color: #6b7280;")
         self.lbl_part.setText(hint)
         self.btn_save.setEnabled(overlap is None and not self.official)
+        if hasattr(self, 'lbl_edits'):
+            parts = []
+            if self.selected_note is not None and not self.official:
+                parts.append(tr("Selected: \"{text}\"").format(
+                    text=self.text_of(self.note_index[id(self.selected_note)])))
+            if self.deleted:
+                parts.append(tr("{n} notes deleted").format(n=len(self.deleted)))
+            if self.text_edits:
+                parts.append(tr("{n} texts fixed").format(n=len(self.text_edits)))
+            if self.deleted or self.text_edits:
+                parts.append(tr("save to keep it"))
+            self.lbl_edits.setText(" · ".join(parts))
         self.btn_uncut.setEnabled(part != 0 and not self.official)
         self.btn_all.setChecked(part == 0)
         self.update_info()
@@ -1169,7 +1331,8 @@ class SyncEditorDialog(QDialog):
             text = raw.decode(encoding)
             newline = '\r\n' if '\r\n' in text else '\n'
             lines = SyncModel.rewrite_txt(text.splitlines(), self.gap_ms, self.line_beats(),
-                                          expected_notes=len(self.song.notes), note_pitches=self.pitch_edits())
+                                          expected_notes=len(self.all_notes), note_pitches=self.pitch_edits(),
+                                          note_texts=self.text_edits, deleted_notes=self.deleted)
             if not os.path.exists(self.txt_path + '.bak'):
                 # the first time a song is re-synced its original txt is kept, it can always be restored
                 with open(self.txt_path + '.bak', 'wb') as f:
@@ -1180,7 +1343,9 @@ class SyncEditorDialog(QDialog):
             os.replace(tmp_path, self.txt_path)
 
             self.original_gap_ms = self.gap_ms  # Prevent unsaved changes prompt on app exit
-            self.original_pitches = [n.pitch for n in self.song.notes]
+            self.original_pitches = [n.pitch for n in self.all_notes]
+            self.text_edits.clear()
+            self.deleted.clear()
             self.splits.clear()
             self.saved = True
             self.accept()
