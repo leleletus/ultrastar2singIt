@@ -81,6 +81,7 @@ estado de cada bug está en la tabla). "Evidencia" = verificado con prueba, con 
 | B-72 | MEDIO | Letras | La búsqueda de estribillos en Genius no lee cabeceras con nombres enlazados ("[Coro: Luis Fonsi," partida en líneas): 75 canciones con página y sin estribillos | CERRADO (a16d166: 72 releídas, 51 con estribillos) |
 | B-73 | ALTO | Feat | El modo Feat cerraba el juego: faltaba vxla_feat y todas decían "coopfriendly": "Coop" sin segunda voz | CERRADO (4c02966; solo 2026) |
 | B-74 | ALTO | usdb_syncer | usdb_syncer no marcaba ninguna canción descargada: la carpeta se guardó como texto y la ignoraba | CERRADO (configuración; 271 reconocidas) |
+| B-75 | MEDIO | SongMaker | Letras pegadas y palabras donde no se canta en las canciones fabricadas (Goma de Mascar) | ABIERTO (pendiente de revisar con el usuario) |
 
 ---
 
@@ -522,4 +523,15 @@ estado de cada bug está en la tabla). "Evidencia" = verificado con prueba, con 
 - **Arreglo**: `settings.set_song_dir(Path(...))` con el Python de usdb_syncer (copia
   `usdb_syncer.conf.antes_song_dir_20261105`) y su propia sincronización de carpeta: 271 canciones reconocidas. Para
   cambiar la carpeta: el botón de usdb_syncer, nunca editar el `.conf`.
+
+### B-75 · MEDIO · SongMaker: letras pegadas y palabras fuera de sitio
+- **Dónde**: canciones fabricadas con `SongMaker.py`. Reportado por el usuario en la consola con Goma de Mascar
+  (2026-11-05), la única que ha probado.
+- **Síntoma**: palabras que salen pegadas y palabras que aparecen donde no se canta.
+- **Pistas a revisar** (sin confirmar): `assign_syllables` junta en la última nota las sílabas que sobran cuando hay
+  menos notas que sílabas (pueden quedar varias palabras en una nota); el reparto de sílabas por ataques puede poner
+  una sílaba en una nota que es un adorno o un ruido de la voz separada; los tiempos por línea de LRCLIB son de otra
+  versión y el desfase global no corrige diferencias dentro de la canción.
+- **Estado**: pendiente; afecta a las 39 + 23 canciones fabricadas (se corrigen regenerando su txt y su vxla, sin
+  tocar los videos).
 
