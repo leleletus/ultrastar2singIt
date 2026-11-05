@@ -11,3 +11,7 @@ pillow==12.3.0
 numpy==2.5.3
 pyqtdarktheme==0.1.7
 pytablericons==1.0.1
+# SongMaker and "Add a video": download from YouTube (keep it updated: pip install -U yt-dlp)
+yt-dlp==2026.10.26
+# SongMaker: Japanese lyrics to romaji (kanji and kana)
+pykakasi==2.3.0

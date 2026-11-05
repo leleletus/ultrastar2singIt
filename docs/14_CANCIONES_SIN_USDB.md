@@ -26,7 +26,8 @@ editor de sincronía.
    línea.
 5. **Sílabas**: español con sus reglas (diptongos, hiatos, grupos `pr`, `bl`, `ch`, `ll`, `rr`, `qu`/`gu` mudas);
    inglés aproximado (grupos de vocales); coreano **romanizado** (romanización revisada, una sílaba por bloque de hangul,
-   como lo muestra Let's Sing: "Muneul ppakchamyeon"). Cada sílaba va al inicio de nota con el ataque más fuerte; si hay
+   como lo muestra Let's Sing: "Muneul ppakchamyeon"); japonés **en romaji** (Hepburn con `pykakasi`, una sílaba por
+   mora: "Ko-ko-ro ga sa-ke-n-de-ru"; la っ pequeña dobla la consonante: "Cho-tto ma-tte"). Cada sílaba va al inicio de nota con el ataque más fuerte; si hay
    más notas que sílabas, las demás son `~` (nota sostenida); si hay menos, se parten las más largas.
 6. `.txt` con `#BPM:400` (37,5 ms por pulso), `#GAP` = primera nota, una página por línea de la letra, y
    `songmaker.json` (enlace, versión de LRCLIB, desfase, ajuste). Las descargas auxiliares quedan en
@@ -45,7 +46,7 @@ python tools/make_song.py <canciones> "Paty Cantú" "Goma de Mascar" "https://ww
 python tools/make_song.py <canciones> "TWICE" "SIGNAL" "<videoclip>" --audio "<audio oficial>" --language Korean
 ```
 
-Necesita internet, ffmpeg, yt-dlp y Demucs (`requirements-slow.txt`). Tarda 2–3 minutos por canción (Demucs en CPU)
+Necesita internet, ffmpeg, yt-dlp y pykakasi (`requirements.txt`) y Demucs (`requirements-slow.txt`). Tarda 2–3 minutos por canción (Demucs en CPU)
 más la conversión del video a `.bk2`.
 
 ## Fiabilidad

@@ -1,4 +1,5 @@
-# Optional: "slow" pitch correction (CREPE neural pitch tracker) and vocal isolation (Demucs).
+# Optional: "slow" pitch correction (CREPE neural pitch tracker) and vocal isolation (Demucs), needed by the
+# sync editor's voice analysis, tools/sync_scan.py and SongMaker.
 # Large downloads (TensorFlow / PyTorch). Install with: pip install -r requirements-slow.txt
 -r requirements.txt
 numpy==2.5.3

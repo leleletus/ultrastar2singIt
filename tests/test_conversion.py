@@ -792,6 +792,13 @@ class SongMakerTest(unittest.TestCase):
         self.assertEqual(SongMaker.line_syllables('Sign을 보내, signal', 'Korean'),
                          ['Sign', 'eul ', 'bo', 'nae, ', 'sig', 'nal'])
 
+    def test_japanese_is_romanized_one_syllable_per_mora(self):
+        import SongMaker
+        self.assertEqual(SongMaker.line_syllables('心が叫んでる', 'Japanese'),
+                         ['Ko', 'ko', 'ro ', 'ga ', 'sa', 'ke', 'n ', 'de', 'ru'])
+        self.assertEqual(SongMaker.line_syllables('ちょっと待って', 'Japanese'), ['Cho', 'tto ', 'ma', 'tte'])
+        self.assertEqual(SongMaker.line_syllables('Oddloop 恋', 'Japanese'), ['Odd', 'loop ', 'ko', 'i'])
+
     def test_lrc_lines(self):
         import SongMaker
         lrc = '[ti:Song]\n[00:08.16] Maldito el día\n\n[01:02.50][02:10.00] Coro\n[00:20.00]\n'

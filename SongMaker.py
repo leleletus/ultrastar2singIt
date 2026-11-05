@@ -16,7 +16,8 @@ the singer's voice.
     5. the result is a plain UltraStar folder ("Artist - Title/" with .txt, .m4a, .mp4 and cover) that the converter
        and the sync editor use like any other song.
 
-Korean lyrics are romanized (Revised Romanization, one syllable per Hangul block) as Let's Sing shows them.
+Korean lyrics are romanized (Revised Romanization, one syllable per Hangul block) as Let's Sing shows them, and
+Japanese lyrics too (Hepburn romaji with pykakasi, one syllable per mora).
 The notes are a starting point: check the song in the sync editor (notes can be moved in time and in pitch there).
 """
 import json
@@ -202,9 +203,60 @@ def is_hangul(char):
     return 0xAC00 <= ord(char) < 0xAC00 + 11172
 
 
+_KAKASI = None
+
+
+def is_japanese(text):
+    return bool(re.search(r'[\u3040-\u30ff\u4e00-\u9fff]', text))
+
+
+def romaji_words(text):
+    """[(word, is romaji)] of a Japanese line (Hepburn, pykakasi). A small っ doubles the next consonant and joins
+    the next piece to its word ("踊って" -> "odotte")."""
+    global _KAKASI
+    if _KAKASI is None:
+        import pykakasi
+        _KAKASI = pykakasi.kakasi()
+    words, double = [], False
+    for item in _KAKASI.convert(text):
+        orig, roman = item['orig'], item['hepburn']
+        if not is_japanese(orig):
+            words += [(w, False) for w in orig.split()]
+            double = False
+            continue
+        pieces = roman.split()
+        if not pieces:
+            continue
+        if double and pieces[0][:1].isalpha() and pieces[0][:1] not in 'aeiou':
+            pieces[0] = pieces[0][:1] + pieces[0]
+        if double and words and words[-1][1]:
+            words[-1] = (words[-1][0] + pieces[0], True)
+            pieces = pieces[1:]
+        double = orig.endswith(('っ', 'ッ'))
+        if double and pieces and pieces[-1].endswith('tsu'):
+            pieces[-1] = pieces[-1][:-3]
+        words += [(w, True) for w in pieces]
+    return [(w, j) for w, j in words if w]
+
+
+def syllables_romaji(word):
+    """Morae of a romaji word: "kokoro" -> ko ko ro, "shinjite" -> shi n ji te, "kitto" -> ki tto."""
+    pieces = re.findall(r"n(?![aeiouyAEIOUY])|[^aeiouAEIOU]*?[aeiouAEIOU]|[^aeiouAEIOU]+$", word)
+    return [p for p in pieces if p] or [word]
+
+
 def line_syllables(line, language):
     """[syllable text] of a lyrics line; the last syllable of every word ends with a space (UltraStar style)."""
     out = []
+    if is_japanese(line):
+        for word, japanese in romaji_words(line):
+            pieces = syllables_romaji(word) if japanese else syllables_en(word)
+            pieces[-1] += ' '
+            out += pieces
+        if out:
+            out[0] = out[0][:1].upper() + out[0][1:]
+            out[-1] = out[-1].rstrip()
+        return out
     for word in line.split():
         if any(is_hangul(c) for c in word):
             pieces, latin = [], ''

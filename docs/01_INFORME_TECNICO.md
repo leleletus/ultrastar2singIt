@@ -168,13 +168,15 @@ Fuera de las carpetas de canciones:
 | Genius (web) | estribillos; secciones y cantantes para el modo Feat | opcional ("Buscar estribillos en internet"); caché también de "no encontrado" |
 | CREPE / TensorFlow / librosa | tono "slow" | `requirements-slow.txt` o `plugins/`; importación perezosa |
 | Demucs (+ torch) | análisis de voz (editor, sync_scan), tono slow con aislamiento | `requirements-slow.txt`; `python -m demucs` (no funciona en el ejecutable empaquetado) |
-| yt-dlp | "Añadir un video" con enlace | `YT_DLP`, PATH, el de usdb_syncer (pipx) o el módulo `yt_dlp` |
+| yt-dlp | "Añadir un video" con enlace, SongMaker | `requirements.txt`; `YT_DLP`, PATH, el de usdb_syncer (pipx) o el módulo `yt_dlp` |
+| pykakasi | SongMaker: letras japonesas a romaji | `requirements.txt` |
+| LRCLIB (web) | SongMaker: letras con tiempos por línea | lrclib.net, sin cuenta |
 | kioclient (KDE) + DBI | `tools/switch_update.py` (MTP) | PATH; solo Linux con KDE |
 | systemd-run | límite de memoria de las herramientas pesadas | PATH; si no existe, se ejecutan sin límite |
 | MusicBrainz / iTunes (web) | años, géneros, voz, portadas | herramientas `fix_*` y `artist_genders` |
 | SQLite `data/repository/data.db` | catálogo de DLC | `DlcRepository.init()` lo rehace desde la lista del código |
 
-Python: `requirements.txt` (programa), `requirements-slow.txt` (IA de voz/tono, varios GB), `requirements-dev.txt`
+Python: `requirements.txt` (programa, incluidos yt-dlp y pykakasi), `requirements-slow.txt` (IA de voz/tono, varios GB; también la usan el editor de sincronía, `sync_scan` y SongMaker), `requirements-dev.txt`
 (PyInstaller). El ejecutable se construye con `Lets Sing Ultrastar Converter.spec` y `.github/workflows/build.yml`.
 
 ## 7. Mapa de impacto — "si tocas X, revisa Y"
