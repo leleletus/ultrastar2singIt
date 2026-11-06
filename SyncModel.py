@@ -212,13 +212,18 @@ def voice_track(vocals_path):
     return energy, pitch
 
 
-def analyze_voice(audio_path, cache_path):
-    """Isolates the voice of audio_path and saves its loudness and pitch to cache_path."""
+def analyze_voice(audio_path, cache_path, vocals_out=None):
+    """Isolates the voice of audio_path and saves its loudness and pitch to cache_path (and the voice itself, 16 kHz
+    mono FLAC, to vocals_out: what VoiceAlign needs, so Demucs runs once)."""
     # on disk, not in /tmp: /tmp is often in RAM and the separated tracks of a song take hundreds of MB
     work_root = os.path.join(os.path.expanduser('~'), '.cache', 'letssing_converter')
     os.makedirs(work_root, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=work_root) as tmp:
-        energy, pitch = voice_track(isolate_voice(audio_path, tmp))
+        vocals = isolate_voice(audio_path, tmp)
+        energy, pitch = voice_track(vocals)
+        if vocals_out:
+            import VoiceAlign
+            VoiceAlign.save_vocals(vocals, vocals_out)
     tmp_path = cache_path + '.tmp.npz'
     np.savez_compressed(tmp_path, energy=energy.astype(np.float16), pitch=pitch.astype(np.float16),
                         audio=os.path.basename(audio_path), audio_size=os.path.getsize(audio_path),

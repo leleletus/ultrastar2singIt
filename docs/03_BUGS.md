@@ -81,7 +81,7 @@ estado de cada bug está en la tabla). "Evidencia" = verificado con prueba, con 
 | B-72 | MEDIO | Letras | La búsqueda de estribillos en Genius no lee cabeceras con nombres enlazados ("[Coro: Luis Fonsi," partida en líneas): 75 canciones con página y sin estribillos | CERRADO (a16d166: 72 releídas, 51 con estribillos) |
 | B-73 | ALTO | Feat | El modo Feat cerraba el juego: faltaba vxla_feat y todas decían "coopfriendly": "Coop" sin segunda voz | CERRADO (4c02966; solo 2026) |
 | B-74 | ALTO | usdb_syncer | usdb_syncer no marcaba ninguna canción descargada: la carpeta se guardó como texto y la ignoraba | CERRADO (configuración; 271 reconocidas) |
-| B-75 | MEDIO | SongMaker | Letras pegadas y palabras donde no se canta en las canciones fabricadas (Goma de Mascar) | EN CURSO (notas hechas 2026-11-05; falta la colocación de la letra) |
+| B-75 | MEDIO | SongMaker | Letras pegadas y palabras donde no se canta en las canciones fabricadas (Goma de Mascar) | RESUELTO 2026-11-05 (notas como las oficiales; sílabas con modelo de habla: 4 % fuera de sitio) |
 
 ---
 
@@ -538,4 +538,8 @@ estado de cada bug está en la tabla). "Evidencia" = verificado con prueba, con 
 - **Hecho (versión 3)**: los coros entre paréntesis de LRCLIB ("(yikes)", "(oye)"; 16 % de las líneas) se quitan
   como en las oficiales.
 - **Falta**: en líneas ligadas (sin silencios entre sílabas) un 23 % de las sílabas llega a más de 0,3 s de su sitio.
+- **Hecho (versión 5)**: las sílabas las coloca un modelo de habla (MMS forced aligner, `VoiceAlign.py`): contra 20
+  oficiales, sílabas a más de 0,3 s del 23 % al 4 %, error de inicio de 0,14 s a 0,03 s. Las 62 rehechas y
+  reconvertidas. Lo que queda por revisar a mano está en `~/LetsSing/INFORME_SONGMAKER.md`
+  (`tools/songmaker_report.py`).
 

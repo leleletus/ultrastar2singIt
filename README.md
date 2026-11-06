@@ -63,6 +63,7 @@ sung and fix misspelt words, and sing over it with a microphone. Every button an
 | `fix_covers.py` | gives every song its own cover: USDB link, official cover, single/album of the store (never compilations) |
 | `fix_years.py` | real release year (MusicBrainz, iTunes) for songs rebuilt from DLCs that had the DLC year |
 | `artist_genders.py` | men / women / both for each artist (MusicBrainz), used for the "gender" of Let's Sing 2026 |
+| `align_voices.py` / `songmaker_report.py` | speech-model alignment of SongMaker lyrics (resumable batch) / report of the made songs with what to fix by hand |
 | `validate_patch.py` | checks the patch before copying it: files, values the game accepts, covers, lyrics |
 | `switch_update.py` | copies to the Switch over MTP (DBI) only the files that changed; `--prune` removes renamed ones |
 

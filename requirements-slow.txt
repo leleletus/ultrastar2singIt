@@ -10,3 +10,4 @@ crepe==0.0.16
 tensorflow
 demucs==4.1.0
 torch==2.14.0
+transformers==5.22.1   # SongMaker: lyrics aligned to the voice (MMS forced aligner, ~1.2 GB download the first time)

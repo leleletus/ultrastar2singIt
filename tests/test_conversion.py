@@ -851,6 +851,23 @@ class SongMakerTest(unittest.TestCase):
         self.assertEqual(SongMaker.lead_vocal("it) and then"), "and then")
         self.assertEqual(SongMaker.lead_vocal("[Chorus] La la"), "La la")
 
+    def test_voice_align(self):
+        import numpy as np
+        import VoiceAlign
+        vocab = {'<blank>': 0, 'a': 1, 'b': 2, 'l': 3, 'o': 4}
+        sung = [0] * 5 + [2, 2, 0, 1, 1, 1] + [0] * 4 + [3, 0, 3, 4, 4] + [0] * 5  # "ba", silence, "llo"
+        logp = np.full((len(sung), 5), -10.0, dtype=np.float32)
+        logp[np.arange(len(sung)), sung] = -0.05
+        spans, sure, _ = VoiceAlign.align_line(logp, vocab, 0, len(sung), ['Ba', 'llo'])
+        self.assertEqual(spans, [(5, 10), (15, 19)])                     # a double letter needs a blank between
+        self.assertGreater(sure, -1)
+        self.assertIsNone(VoiceAlign.align_line(logp, vocab, 0, 3, ['Ba', 'llo']))   # window too short
+        self.assertEqual(VoiceAlign.letters('Ñá-ß!', {'n': 1, 'a': 2, 's': 3}), [1, 2, 3, 3])
+        long_line = np.full((400, 3), -10.0, dtype=np.float32)            # more than 127 states (int8 back pointers)
+        long_line[np.arange(400), [1 + (t // 4) % 2 for t in range(400)]] = -0.05
+        spans, _, _ = VoiceAlign.align_line(long_line, {'<blank>': 0, 'a': 1, 'b': 2}, 0, 400, ['ab'] * 50)
+        self.assertEqual(spans[-1], (392, 399))
+
     def test_level_pitches(self):
         import SongMaker
         scale = {0, 2, 4, 5, 7, 9, 11}                                   # C major

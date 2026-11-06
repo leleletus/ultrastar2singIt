@@ -19,6 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import SongMaker  # noqa: E402
+import VoiceAlign  # noqa: E402
 from note_style import stats, KEYS  # noqa: E402
 
 FRAME = SongMaker.FRAME
@@ -88,16 +89,17 @@ def compare(official_notes, official_lines, made_lines):
         'covered': float(both.sum() / max(1, official_time)),
         'extra': float(((~np.isnan(gen)) & np.isnan(off) & ~off_rap).sum() / max(1, made_time)),
         'onset_err': statistics.median(errors) if errors else float('nan'),
+        'off>0.3': sum(e > 0.3 for e in errors) / len(errors) if errors else float('nan'),
         'same_syl': same / max(1, len(official_lines)),
         'rap_found': float(((gen == -1) & off_rap).sum() / max(1, off_rap.sum())) if off_rap.any() else float('nan'),
         'false_rap': float(((gen == -1) & ~np.isnan(off)).sum() / max(1, official_time)),
     }
 
 
-MKEYS = ['pitch±1', 'pitch_exact', 'covered', 'extra', 'onset_err', 'same_syl', 'rap_found', 'false_rap']
+MKEYS = ['pitch±1', 'pitch_exact', 'covered', 'extra', 'onset_err', 'off>0.3', 'same_syl', 'rap_found', 'false_rap']
 
 
-def run(songs, maker, each=False):
+def run(songs, maker, each=False, align=True):
     rows = []
     for d in sorted(os.listdir(songs)):
         folder = Path(songs) / d
@@ -108,7 +110,10 @@ def run(songs, maker, each=False):
         data = np.load(npz[0])
         energy, pitch = data['energy'].astype(np.float32), data['pitch'].astype(np.float32)
         lines, syllables, notes = read_official(vx)
-        made = maker([(t, text) for t, text, _ in lines], 0.0, energy, pitch, language_of(folder))
+        ctc = VoiceAlign.load_emissions(VoiceAlign.paths(str(folder))[1]) if align else None
+        if align == 'only' and ctc is None:
+            continue
+        made = maker([(t, text) for t, text, _ in lines], 0.0, energy, pitch, language_of(folder), ctc=ctc)
         m = compare(notes, lines, made)
         s = stats([(a, b, p, t != '~') for line in made for a, b, p, t in line])
         o = stats([(a, b, p, True) for a, b, p in notes])
@@ -131,8 +136,10 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('songs')
     parser.add_argument('--each', action='store_true')
+    parser.add_argument('--align', choices=('yes', 'no', 'only'), default='yes',
+                        help='use the speech model where it was run (only: just those songs)')
     args = parser.parse_args()
-    run(args.songs, SongMaker.make_notes, args.each)
+    run(args.songs, SongMaker.make_notes, args.each, {'yes': True, 'no': False, 'only': 'only'}[args.align])
 
 
 if __name__ == '__main__':

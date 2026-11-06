@@ -316,6 +316,30 @@
   con Ctrl+Supr; una línea quitada no se puede volver a añadir allí). Rehechas las 12 afectadas (txt anteriores en
   `_papelera/notas_v3`) y reconvertidas, sin tocar los .bk2; parche 739, 0 problemas.
 - README: guía completa del editor de sincronía (cada botón, su icono, nombre en español y atajo).
+
+### 2026-11-05 (4) — Sílabas colocadas por un modelo de habla (versión 5) e informe de las fabricadas
+
+- Modelo: MMS forced aligner (wav2vec2 CTC de 1130 idiomas en letras latinas, `MahmoudAshraf/mms-300m-1130-forced-aligner`,
+  1,2 GB) cargado con `transformers` (torchaudio no existe para torch 2.14 y no se bajó torch). Viterbi CTC propio por
+  línea (`VoiceAlign.align_line`). Las sílabas de SongMaker ya están en letras latinas (coreano romanizado, japonés en
+  romaji), así que sirve para todos los idiomas. Sin GPU: ~3 min por canción con Demucs. La descarga por el protocolo
+  xet de Hugging Face se quedaba parada en 0 bytes: `HF_HUB_DISABLE_XET=1`.
+- Calibrado con 20 oficiales (`note_calibrate.py --align`): cada línea se busca desde 0,6 s antes, nunca antes del
+  final de la anterior (si no, la primera sílaba se quedaba con el final de la línea de atrás: 14 % → 5 %); dos sílabas
+  a menos de 0,18 s se separan (el modelo pone la primera tarde y la segunda pronto: notas cortas 16 % → 3 %); la nota
+  sigue hasta la siguiente sílaba si el hueco es < 0,25 s, con el tono medido solo en la parte cantada; confianza
+  < −6 → método anterior (en esas líneas el modelo falla un 35 %). Resultado: sílabas a más de 0,3 s 23 % → 4 %,
+  inicio 0,14 → 0,03 s, tono exacto 69 → 72 %, rap en U Can't Touch This 67 → 78 %.
+- Fallo arreglado: los punteros del Viterbi eran int8 y desbordaban en líneas de más de 63 letras.
+- `tools/align_voices.py` (lote reanudable, unidad `letssing-align`, 82 canciones en 3 h 44 min) y las 62 rehechas
+  (txt v4 en `_papelera/notas_v4`) y reconvertidas (62, 0 fallos, ningún `.bk2` tocado); parche 739, 0 problemas.
+- Antes, la Switch se actualizó con la versión 4 (23 de LISA + 62; 277 archivos, 596 MB, respaldo
+  `switch_backup_2026-11-05_163430`).
+- `tools/songmaker_report.py` → `~/LetsSing/INFORME_SONGMAKER.md`. Comprobado con las oficiales que las medidas contra la
+  propia voz no son la verdad (las notas oficiales dan 16 % de líneas «desfasadas» y 53 % de coincidencia), así que
+  «revisar primero» solo usa lo que no falla con ellas: 82 avisos en 29 canciones; 497 líneas dudosas aparte; 15
+  canciones donde el modelo reconoce < 75 % de las líneas (Cut U Off 46 %, Cristina 45 %: ningún desfase global lo
+  mejora, es la voz o la letra de LRCLIB).
 - Pendiente (B-75): en líneas ligadas un 23 % de las sílabas cae a más de 0,3 s de su sitio; con volumen y tono no
   se distingue dónde acaba una sílaba (haría falta alinear la letra con un modelo de habla).
 

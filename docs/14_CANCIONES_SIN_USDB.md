@@ -21,12 +21,21 @@ editor de sincronía.
    queda la que mejor encaja (las líneas empiezan donde empieza a cantar).
 3. **Voz** separada con Demucs y seguida cada 20 ms (energía y tono, `SyncModel`); se guarda como `<id>.voice.npz`,
    la misma que usa el editor.
-4. **Letra de la voz principal**: lo que LRCLIB pone entre paréntesis o corchetes (coros, "(yeah)", "(oye)") se
-   quita, como en las oficiales (ninguna de 387 lleva paréntesis); una línea que solo es coro no lleva notas.
+4. **Letra de la voz principal**: lo que LRCLIB pone entre paréntesis o corchetes dentro de una línea (ecos y
+   coletillas: "Baila (baila)", "(yeah)", "(ATL Jacob)") se quita, como en las oficiales (ninguna de 387 lleva
+   paréntesis); el estribillo no se toca. Una línea **entera** entre paréntesis se conserva sin ellos: tiene su propio
+   tiempo y suele cantarse sola (el gancho de vocales de «aiue», «(El destino nos unió)»); si no se canta, se borra en
+   el editor con Ctrl+Supr.
 5. **Notas** (versión 3, 2026-11-05), escritas como las oficiales (medido en 387 con `tools/note_style.py`: ~1 nota
    por sílaba, 0,24 s de nota típica, el tono quieto o en pasos de 1–2 semitonos, el rap sin tono):
-   - las sílabas de cada línea van a los ataques de la voz (subida de volumen tras una bajada, cambio de tono, inicio
-     tras un silencio) con programación dinámica: cada sílaba espera una duración de 0,12–0,35 s según su longitud;
+   - **dónde empieza cada sílaba** (versión 5, 2026-11-05): un modelo de reconocimiento de habla (MMS forced aligner,
+     wav2vec2 de 1130 idiomas que lee letras latinas, `VoiceAlign.py`) alinea las letras de cada sílaba con la voz
+     separada: sirve igual para español, inglés, coreano romanizado y japonés en romaji. Cada línea se busca desde
+     0,6 s antes de su hora de LRCLIB, pero nunca antes de que acabe la línea anterior; dos sílabas a menos de 0,18 s
+     se separan (el modelo tiende a poner la primera tarde y la segunda pronto); una nota sigue hasta la siguiente
+     sílaba si el hueco es de menos de 0,25 s (las oficiales son ligadas). Si el modelo no está instalado o no está
+     seguro de una línea, se usa el método anterior: los ataques de la voz (subida de volumen tras una bajada, cambio
+     de tono, inicio tras un silencio) con programación dinámica, cada sílaba espera 0,12–0,35 s según su longitud;
      dentro de la línea solo cuenta como voz lo que suena a más del 25 % de su parte fuerte (no la reverberación);
    - cada sílaba es **una nota estable** hasta la siguiente (o hasta que calla la voz); solo una sílaba de 0,45 s o
      más cuyo tono se mueve 2 semitonos y se queda se parte en dos;
@@ -72,7 +81,22 @@ descargar todas de una vez y fabricar/convertir en paralelo.
 
 ## Fiabilidad
 
-- Medido contra 20 canciones oficiales con su voz analizada (`python tools/note_calibrate.py <canciones> --each`: el
+- Con el modelo de habla (versión 5), en las mismas 20 oficiales: inicio de sílaba a **0,03 s** de la oficial
+  (antes 0,14 s), sílabas a más de 0,3 s de su sitio **5 %** (antes 23 %), tono exacto 73 % (antes 69 %), ±1
+  semitono 81 %; notas cortas 3 % (oficial 1 %), saltos de 5+ semitonos 10 % (8 %); rap en U Can't Touch This 78 %
+  (antes 67 %). Necesita `torch` y `transformers` (`requirements-slow.txt`) y baja el modelo (~1,2 GB) la primera
+  vez; cada canción guarda `<id>.vocals.flac` y `<id>.ctc.npz` (unos MB) para no repetirlo. Sin GPU tarda ~1 min
+  más por canción. Para canciones ya fabricadas: `python tools/align_voices.py <canciones> --songmaker` y luego
+  `tools/remake_notes.py`.
+- **Informe para revisar a mano**: `python tools/songmaker_report.py <canciones> --md informe.md --version
+  "original=<canciones>/../_papelera/notas_v1" --calibrate` (el de la biblioteca: `~/LetsSing/INFORME_SONGMAKER.md`).
+  Cuidado al leerlo: las medidas contra la propia voz no son la verdad. Con las notas oficiales (correctas) un 16 % de
+  las líneas «encajaría en otro sitio» y la coincidencia es 53 %; la versión original, cortada pegada a la voz, sale
+  alta aunque sus sílabas estuvieran mal puestas. Por eso el informe solo marca como «revisar primero» lo que falla
+  poco con las oficiales (bloques desfasados: 0 en ellas; líneas sin voz debajo; líneas cuya voz está claramente en
+  otro sitio) y aparte las líneas que el modelo no reconoce (en las oficiales reconoce el 98 %; por debajo del 75 %
+  avisa: rap muy rápido, autotune o una letra de LRCLIB de otra versión del audio, p. ej. Cut U Off y Cristina).
+- Medido (versión 3, sin el modelo) contra 20 canciones oficiales con su voz analizada (`python tools/note_calibrate.py <canciones> --each`: el
   generador recibe solo las líneas de la letra oficial y la voz): tono a ±1 semitono el 79 % del tiempo (con los
   tiempos oficiales el detector de tono llega al 83 %), 388 notas por canción (oficial 394), salto medio entre notas
   1,84 semitonos (1,86), rango 20,5 (21), inicio de sílaba a 0,13 s de la oficial (mediana).
@@ -84,7 +108,7 @@ descargar todas de una vez y fabricar/convertir en paralelo.
 - Goma de Mascar: las notas coinciden con la voz real un 62 % (mediana por línea; las canciones oficiales dan 38–77 %)
   y el mejor desplazamiento es +0,00 s (la letra no va adelantada ni atrasada).
 - Lo automático acierta los tiempos de las líneas y la melodía general; los fallos típicos son sílabas en la nota de al
-  lado (en líneas muy ligadas llegan tarde), adornos y coros entre paréntesis que LRCLIB incluye. Se corrigen en el
+  lado (con el modelo, ~4 %; antes 23 % en líneas ligadas), adornos y líneas de LRCLIB que no se cantan. Se corrigen en el
   editor de sincronía: mover partes, mover notas en vertical, **borrar una sílaba o una línea con sus notas** (Supr,
   Ctrl+Supr), **corregir el texto** (doble clic en una nota, o T para la línea), modo cantar.
 - El inglés se silabea de forma aproximada.

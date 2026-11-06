@@ -7,7 +7,7 @@ Resumen al 2026-11-05: **75 bugs registrados, 73 cerrados, 2 pendientes**. El de
 | ID | Severidad | Área | Problema | Estado |
 |---|---|---|---|---|
 | B-61 | ALTO | GUI | La ventana se congeló una vez (hilo principal bloqueado, con el video de BBHMM abierto) | ABIERTO (vigilante hang_trace.log en 6e74b01) |
-| B-75 | MEDIO | SongMaker | Letras pegadas y palabras donde no se canta en las canciones fabricadas (Goma de Mascar) | EN CURSO (notas hechas 2026-11-05; falta la colocación de la letra) |
+| B-75 | MEDIO | SongMaker | Letras pegadas y palabras donde no se canta en las canciones fabricadas (Goma de Mascar) | RESUELTO 2026-11-05 (notas como las oficiales; sílabas con modelo de habla: 4 % fuera de sitio) |
 
 ## Mejoras pendientes (no son bugs)
 

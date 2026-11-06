@@ -201,7 +201,8 @@ envejecen con cada cambio: para la línea actual, `grep -n "def <nombre>" <archi
 | SyncEditor:338 | `SyncEditorDialog` | reproductor, cortes (`cut_start`/`cut_end`), mover partes (`adjust`), `auto_adjust` (ajustar a la voz), `analyze_voice`, `delete_selected`/`delete_line` (sílaba o línea con sus notas), `edit_note_text`/`edit_line_text` (corregir la letra), `save` (conserva codificación y finales de línea, `.bak` la primera vez) [B-26, B-51] |
 | SyncModel:41 | `detect_pitch` | YIN |
 | SyncModel | `txt_notes` / `song_from_notes` / `load_txt` / `load_official` | notas (con su texto, en orden del archivo) y sílabas de un txt, sin las borradas / de un vxla oficial (solo lectura en el editor) |
-| SyncModel:170 / 200 / 214 | `isolate_voice` / `analyze_voice` / `load_voice` | Demucs → `<id>.voice.npz` |
+| SyncModel:170 / 200 / 214 | `isolate_voice` / `analyze_voice` / `load_voice` | Demucs → `<id>.voice.npz` (y, con `vocals_out`, la voz a 16 kHz para VoiceAlign) |
+| VoiceAlign | `prepare` / `save_vocals` / `emissions` / `load_emissions` / `align_line` | alineación forzada de la letra con el modelo de habla MMS (wav2vec2 CTC, 1130 idiomas en letras latinas; `transformers`): `<id>.vocals.flac` + `<id>.ctc.npz`; Viterbi CTC propio por línea → inicio de cada sílaba |
 | SyncModel:227 / 273 / 290 | `line_report` / `runs_out_of_time` / `song_verdict` | coincidencia por línea, bloques desfasados, veredicto (ok/parcial/desfase/dudosa/otra_version) |
 | SyncModel | `rewrite_txt` | `#GAP`, notas movidas por cortes (en pulsos), tonos, textos corregidos y notas borradas (con sus saltos de página) |
 
@@ -249,7 +250,9 @@ Todas se ejecutan con `python tools/<script>.py --help`. Las que cambian archivo
 | `make_songs.py` | cola de SongMaker reanudable: `fetch`, `build`, `convert`, `all` | salta lo hecho; cola en disco |
 | `remake_notes.py` | rehace las notas de las canciones fabricadas con el generador actual | sin internet ni videos; txt anterior a `_papelera/notas_v1`; salta las corregidas a mano (`--force`) [B-75] |
 | `note_style.py` | compara cómo están escritas las notas: oficiales frente a fabricadas (duración, saltos, notas por sílaba, rap) | solo lee |
-| `note_calibrate.py` | mide el generador de notas contra las oficiales que tienen la voz analizada | solo lee |
+| `note_calibrate.py` | mide el generador de notas contra las oficiales que tienen la voz analizada | solo lee; `--align yes/no/only` (con o sin el modelo de habla) |
+| `songmaker_report.py` | informe de las canciones fabricadas: coincidencia con la voz, tono, bloques desfasados, inicio/fin, estilo, líneas que el modelo no reconoce; versiones antiguas al lado (`--version`) y prueba contra las oficiales (`--calibrate`) → `.md` con casillas para revisar a mano | solo lee |
+| `align_voices.py` | separa la voz (Demucs) y pasa el modelo de habla a una lista de canciones (`--songmaker`, `--list`, `--only`) | reanudable; una canción a la vez; `--vocals-only` sin el modelo |
 
 Quitados el 2026-11-01 (siguen en el historial de git, `git show fb416d5:<ruta>`): `desync_detector.py` (sustituido
 por `sync_scan.py`), `mass_test.py` (sustituido por `tests/`), `merge_dlc_json.py` (lo hace el conversor con
