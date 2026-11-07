@@ -129,7 +129,7 @@ def main():
     for f in (patch / 'romfs').glob('songs_*.json'):
         json_songs = json.load(open(f, encoding='utf-8-sig')).get('songs', [])
     photo_path = patch.parent.parent / (patch.name + '.switch.json')
-    switch_photo = json.load(open(photo_path)) if photo_path.exists() else {}
+    switch_photo = json.load(open(photo_path, encoding='utf-8')) if photo_path.exists() else {}
     usdb = []
     if USDB_DB.exists():
         db = sqlite3.connect(f'file:{USDB_DB}?mode=ro', uri=True)
