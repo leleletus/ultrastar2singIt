@@ -651,7 +651,7 @@ def genius_lyrics(folder):
         out = []
         for section in data.get('sections', []):
             for text, _style in section.get('lines', []):
-                line = lead_vocal(text)
+                line = lead_vocal(text.replace('*', ' '))  # Genius marks some lines *like this*
                 if re.search(r'\w', line):
                     out += split_long_line(line)
         if out:
@@ -659,21 +659,34 @@ def genius_lyrics(folder):
     return []
 
 
-def align_lyrics(ctc, texts):
+def voice_end_s(energy):
+    """Second where the voice of the song is last heard."""
+    on = np.nonzero(energy > _voice_threshold(energy))[0]
+    return float(on[-1] * FRAME) if len(on) else None
+
+
+def align_lyrics(ctc, texts, language='Spanish', voice_end=None):
     """[(start s, line, confidence)] of whole lyrics on the whole song: the speech model looks for every line in
     order over all of it (no times needed), then measures each line again around where it fell (its confidence:
-    mean log-probability of its letters, below ALIGN_MIN_LOGP the model is not sure)."""
+    mean log-probability of its letters, below ALIGN_MIN_LOGP the model is not sure). The model reads the lines as
+    the notes will show them (Korean and Japanese romanized). Lines that fall after voice_end (+1 s) are left out:
+    Genius has lines this version does not sing, and the model piles them up after the last voice."""
     import VoiceAlign
     logp, vocab = ctc
-    found = VoiceAlign.align_line(logp, vocab, 0, len(logp), texts)
+    if not texts:
+        raise RuntimeError("no lyrics to place")
+    spoken = [''.join(line_syllables(text, language)) for text in texts]
+    found = VoiceAlign.align_line(logp, vocab, 0, len(logp), spoken)
     if found is None:
         raise RuntimeError("the lyrics do not fit in the song (more letters than the audio can hold)")
     out = []
-    for text, span in zip(texts, found[0]):
+    for text, said, span in zip(texts, spoken, found[0]):
         if span is None:
             continue
         a, b = span
-        again = VoiceAlign.align_line(logp, vocab, a - LINE_PAD_FRAMES, b + LINE_PAD_FRAMES, [text])
+        if voice_end is not None and a * FRAME > voice_end + 1.0:
+            break
+        again = VoiceAlign.align_line(logp, vocab, a - LINE_PAD_FRAMES, b + LINE_PAD_FRAMES, [said])
         out.append((a * FRAME, text, round(again[1], 2) if again else None))
     return out
 
@@ -1149,11 +1162,18 @@ def lyrics_from_genius(folder, keep_dir=None, log=print, dry_run=False):
     folder = Path(folder)
     texts = genius_lyrics(folder)
     if not texts:
-        raise RuntimeError(f"{folder.name}: no Genius lyrics (convert the song once so they are looked up)")
+        raise RuntimeError(f"{folder.name}: no Genius lyrics (Genius did not find the song, or it was never "
+                           f"converted)")
     ctc = speech_model(folder, None, log, make=False)
     if ctc is None:
         raise RuntimeError(f"{folder.name}: no speech model output (tools/align_voices.py)")
-    timed = align_lyrics(ctc, texts)
+    txts = sorted(folder.glob('*.txt'))
+    language = 'Spanish'
+    for row in (txts[0].read_text(encoding='utf-8').splitlines() if txts else []):
+        if row.upper().startswith('#LANGUAGE:'):
+            language = row.split(':', 1)[1].strip() or language
+    voice = np.load(SyncModel.voice_cache_path(str(folder)))
+    timed = align_lyrics(ctc, texts, language, voice_end_s(voice['energy'].astype(np.float32)))
     if dry_run:
         return timed
     meta_path = folder / 'songmaker.json'

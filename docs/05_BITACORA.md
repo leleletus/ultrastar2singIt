@@ -397,4 +397,16 @@
   coletillas encima).
 - Spotify/Shazam: Shazam no da tiempos; la letra con tiempos de Spotify es de Musixmatch y pide sesión. No hace
   falta: con la letra completa el modelo encuentra los tiempos.
+- Pasada a todas las de SongMaker (pedido del usuario; Goma de Mascar fuera, corregida a mano): LRCLIB contra Genius
+  medidos igual (líneas cuyas sílabas el modelo reconoce en su sitio, y hasta dónde llega la letra frente al final
+  de la voz). 26 sin Genius (no la encontró al convertir, casi todas de LISA). Genius solo donde mejora ≥ 5 puntos o
+  completa una letra que se cortaba 15 s+ antes: Dutty Love, Virtual Diva, Oddloop, BOOMPALA, SPAGHETTI, New Woman,
+  SaWaDiKa, aiue (LRCLIB acababa en 1:04 de 3:41), Suerte, Tempted to Touch, SIGNAL, Strategy (le faltaban 37 s).
+  Maladie no: sin la cola acababa antes que LRCLIB.
+- Genius trae a veces líneas que esa versión no canta y el modelo las amontonaba tras la última voz (Suerte: 4 en
+  1 s): `align_lyrics(voice_end=…)` deja fuera lo que cae más de 1 s después. Genius marca algunas líneas `*así*`:
+  se quitan los asteriscos.
+- Alcaline y Fiel (Remix), editadas a medias: la versión del usuario sale igual o mejor que la regenerada (100 % y
+  93 %), se quedan. Queencard: la del usuario está completa salvo la repetición final «You wanna be the kwinka?» a
+  3:10 (el modelo la oye ahí, -1,9), añadida sin tocar lo demás. Copias en `~/LetsSing/_respaldo_editor/`.
 
