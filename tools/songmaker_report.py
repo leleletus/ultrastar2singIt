@@ -137,14 +137,19 @@ def language_of(txt):
 def placement(folder):
     """How the current notes placed each line (made again in memory, nothing written), or None."""
     meta = json.loads((folder / 'songmaker.json').read_text(encoding='utf-8'))
-    versions = {v[0]: v for v in SongMaker.lrclib_versions(None, None, folder)}
-    if meta.get('lrclib_id') not in versions:
-        return None
+    if meta.get('lyrics') == 'genius':  # whole Genius lyrics placed by the speech model (lyrics_from_genius)
+        timed = json.loads((folder / SongMaker.LYRICS_FILE).read_text(encoding='utf-8'))['lines']
+        lines, offset = [(t, text) for t, text, _ in timed], 0.0
+    else:
+        versions = {v[0]: v for v in SongMaker.lrclib_versions(None, None, folder)}
+        if meta.get('lrclib_id') not in versions:
+            return None
+        lines, offset = versions[meta['lrclib_id']][2], meta['offset']
     voice = np.load(SyncModel.voice_cache_path(str(folder)))
     language = language_of(current_txt(folder))
     ctc = VoiceAlign.load_emissions(VoiceAlign.paths(str(folder))[1])
     info = []
-    SongMaker.make_notes(versions[meta['lrclib_id']][2], meta['offset'], voice['energy'].astype(np.float32),
+    SongMaker.make_notes(lines, offset, voice['energy'].astype(np.float32),
                          voice['pitch'].astype(np.float32), language, ctc=ctc, report=info)
     return info, meta, ctc is not None
 
@@ -189,7 +194,9 @@ def song_section(name, rows, place, edited):
                          "escucharla entera en el editor")
         notes.append(f"sílabas colocadas por el modelo de habla en {by_model} de {len(info)} líneas"
                      + ("" if has_model else " (sin modelo para esta canción)")
-                     + f"; LRCLIB #{meta.get('lrclib_id')}, desfase {meta.get('offset', 0):+.2f} s".replace('.', ','))
+                     + ("; letra completa de Genius colocada por el modelo en toda la canción"
+                        if meta.get('lyrics') == 'genius' else
+                        f"; LRCLIB #{meta.get('lrclib_id')}, desfase {meta.get('offset', 0):+.2f} s".replace('.', ',')))
     for n in notes:
         out.append(f"- {n}")
     todo = to_check(cur, place)
