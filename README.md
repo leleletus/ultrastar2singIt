@@ -107,6 +107,13 @@ their timing as it is, so only playback, voice analysis and sing mode work; the 
 | Drag the **right edge** of a note (the cursor becomes ↔) | makes it longer or shorter |
 | Drag the left edge of a note | moves its start, its end stays |
 | Double click a note | fixes the text of that syllable (see [Lyrics](#lyrics-fix-misspelt-words-delete-what-is-not-sung)) |
+| `Ctrl` + click a note | adds it to the selection, or takes it out: **several notes selected** |
+| `Shift` + click a note | selects every note from the selected one to this one |
+| `Shift` + drag an empty place | selects the notes that start in that stretch (shaded while dragging; with `Ctrl` too, they are added to the ones already selected) |
+| `Ctrl+A` | selects the whole line of the selected note (or the line being played) |
+| Drag one of the selected notes | **they all move together**: sideways in time (they stop at the first note that is not selected) or up/down in pitch |
+| Click one of the selected notes | only that one stays selected |
+| `Esc` | nothing selected. With nothing selected, `Esc` closes the editor and asks first if there are unsaved changes |
 
 Moving and resizing go in whole beats of the song (37.5 ms in SongMaker songs) and a note never goes over the notes
 before and after it (shorten or move the neighbour first).
@@ -156,8 +163,8 @@ before it (fix it before saving). Parts are saved in steps of one beat of the so
 | Action | Shortcut | What it does |
 |---|---|---|
 | Drag the selected note | | up / down by semitones, sideways in time, by its edge longer/shorter |
-| Note up / down | `Shift+Up` / `Shift+Down` | one semitone up / down |
-| Note earlier / later | `Alt+Left` / `Alt+Right` | moves the selected note one beat |
+| Note up / down | `Shift+Up` / `Shift+Down` | one semitone up / down (every selected note) |
+| Note earlier / later | `Alt+Left` / `Alt+Right` | moves the selected note one beat (several selected: all of them together) |
 | Note shorter / longer | `Ctrl+Shift+Left` / `Ctrl+Shift+Right` | one beat shorter / longer (its end moves) |
 
 ### Lyrics: fix misspelt words, delete what is not sung
@@ -166,7 +173,7 @@ how many notes were deleted / texts fixed.
 
 | Button | Name | Shortcut | What it does |
 |---|---|---|---|
-| 🗑 Delete syllable | Delete syllable (*Borrar sílaba*) | `Delete` | deletes the selected note's syllable with its notes (also the `~` notes that hold it). Click the note first |
+| 🗑 Delete syllable | Delete syllable (*Borrar sílaba*) | `Delete` | deletes the selected note's syllable with its notes (also the `~` notes that hold it). Click the note first; with several selected, all of them go |
 | row minus | Delete line (*Borrar línea*) | `Ctrl+Delete` | deletes the line being sung (or the selected note's line) with all its notes, after asking |
 | I-beam Fix text | Fix text (*Corregir texto*) | `T` | fixes the text of the line being sung (or of the selected note's line); you can also **add** missing syllables (see below) |
 | ⑂ Split note | Split note (*Dividir nota*) | `S` | splits the selected note in two (same pitch) and asks for the text of the new half: a syllable that was missing. The note needs 2 beats or more |

@@ -380,4 +380,8 @@
   `refresh_labels`; un arrastre se graba al soltar). Ctrl+Z, Ctrl+Y / Ctrl+Shift+Z, hasta 500 pasos. «Deshacer todos
   los cambios» pregunta antes y también se puede deshacer.
 - `Gui.open_sync_editor` hace `gc.collect()` al cerrar el editor: los cerrados quedaban vivos en ciclos de referencias.
+- Selección de varias notas (pedido del usuario): Ctrl+clic, Shift+clic (tramo), Shift+arrastrar en vacío (recuadro
+  por tiempo), Ctrl+A (línea), Esc (ninguna). Arrastrar una seleccionada o Alt+flechas mueve todas juntas
+  (`group_range`: hasta la primera nota no seleccionada), Shift+arriba/abajo cambia el tono de todas y Supr las borra.
+- Esc cerraba el editor **sin preguntar** (`reject` no pasaba por `closeEvent`): ahora pregunta si hay cambios.
 

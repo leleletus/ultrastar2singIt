@@ -379,5 +379,6 @@
   "Undo all the changes (Ctrl+Z brings them back)": "Deshacer todos los cambios (Ctrl+Z los recupera)",
   "Undo all the changes": "Deshacer todos los cambios",
   "Undo every change made since the editor was opened? (Ctrl+Z brings them back)": "¿Deshacer todos los cambios hechos desde que se abrió el editor? (Ctrl+Z los recupera)",
-  "Nothing to undo.": "No hay nada que deshacer."
+  "Nothing to undo.": "No hay nada que deshacer.",
+  "{n} notes selected (drag one or Alt+arrows: they move together; Esc: none)": "{n} notas seleccionadas (arrastra una o Alt+flechas: se mueven juntas; Esc: ninguna)"
 }

@@ -139,16 +139,33 @@ class NoteLane(QWidget):
         if ed.official:  # read-only: the lane only scrolls
             self._drag = {'zone': 'pan', 'x': event.position().x(), 'time': ed.position_s()}
             return
-        ed.selected_note = self.note_at(event.position())
-        note = ed.selected_note
+        pos, mods = event.position(), event.modifiers()
+        note = self.note_at(pos)
         self._drag = None
-        if note is None:  # dragging the empty lane scrolls through the song
-            self._drag = {'zone': 'pan', 'x': event.position().x(), 'time': ed.position_s()}
-            self.setCursor(Qt.ClosedHandCursor)
+        if note is None:
+            if mods & Qt.ShiftModifier:  # Shift + drag the empty lane: select the notes in a time range
+                t0, _, _, _, _, _ = self.geometry_now()
+                at = t0 + pos.x() / max(1, self.width()) * LANE_SECONDS
+                self._drag = {'zone': 'box', 'x': pos.x(), 'from': at, 'to': at,
+                              'keep': set(ed.selected_indices()) if mods & Qt.ControlModifier else set()}
+            else:  # dragging the empty lane scrolls through the song
+                ed.clear_selection()
+                self._drag = {'zone': 'pan', 'x': pos.x(), 'time': ed.position_s()}
+                self.setCursor(Qt.ClosedHandCursor)
+        elif mods & Qt.ControlModifier:  # Ctrl + click: add the note to the selection, or take it out
+            ed.toggle_selected(note)
+        elif mods & Qt.ShiftModifier:    # Shift + click: every note from the selected one to this one
+            ed.select_range(note)
         else:
-            pos = event.position()
-            self._drag = {'zone': self.zone_at(note, pos), 'x': pos.x(), 'y': pos.y(), 'pitch': note.pitch,
-                          't': note.t, 'd': note.d, 'axis': None}
+            if not ed.is_selected(note) or len(ed.selected_indices()) < 2:
+                ed.clear_selection()
+            ed.selected_note = note
+            zone = self.zone_at(note, pos)
+            group = ed.selection() if zone == 'body' and len(ed.selected_indices()) > 1 else [note]
+            self._drag = {'zone': zone, 'x': pos.x(), 'y': pos.y(), 'pitch': note.pitch,
+                          't': note.t, 'd': note.d, 'axis': None, 'moved': False,
+                          'group': [(n, n.t, n.d, n.pitch) for n in group],
+                          'range': ed.group_range(group) if len(group) > 1 else None}
         self.update()
         ed.refresh_labels()
 
@@ -169,6 +186,12 @@ class NoteLane(QWidget):
             dx = pos.x() - self._drag['x']
             ed.seek_s(max(0.0, self._drag['time'] - dx / max(1, self.width()) * LANE_SECONDS))
             return
+        if self._drag is not None and self._drag['zone'] == 'box':
+            t0, _, _, _, _, _ = self.geometry_now()
+            self._drag['to'] = t0 + pos.x() / max(1, self.width()) * LANE_SECONDS
+            ed.select_time_range(self._drag['from'], self._drag['to'], self._drag['keep'])
+            self.update()
+            return
         if self._drag is None or ed.selected_note is None:
             if not ed.official and not event.buttons():  # hover: the cursor tells what a drag would do
                 note = self.note_at(pos)
@@ -179,6 +202,8 @@ class NoteLane(QWidget):
         drag, note = self._drag, ed.selected_note
         dx, dy = pos.x() - drag['x'], pos.y() - drag['y']
         seconds = dx / max(1, self.width()) * LANE_SECONDS
+        if max(abs(dx), abs(dy)) > DRAG_START_PX:
+            drag['moved'] = True
         if drag['zone'] == 'end':
             ed.set_note_time(note, drag['t'], drag['t'] + drag['d'] + seconds)
         elif drag['zone'] == 'start':
@@ -186,18 +211,24 @@ class NoteLane(QWidget):
         else:
             if drag['axis'] is None and max(abs(dx), abs(dy)) > DRAG_START_PX:  # the first move decides
                 drag['axis'] = 'x' if abs(dx) > abs(dy) or not note.sung else 'y'
-            if drag['axis'] == 'x':
+            if drag['axis'] == 'x' and drag['range'] is not None:  # several notes selected: they move together
+                ed.shift_group(drag['group'], seconds, drag['range'])
+            elif drag['axis'] == 'x':
                 ed.set_note_time(note, drag['t'] + seconds, drag['t'] + drag['d'] + seconds, keep_length=True)
             elif drag['axis'] == 'y':
                 _, _, _, pitch_of, _, _ = self.geometry_now()
                 steps = int(round(pitch_of(pos.y()) - pitch_of(drag['y'])))
-                if drag['pitch'] + steps != note.pitch:
-                    ed.move_selected_note(drag['pitch'] + steps - note.pitch)
+                ed.set_group_pitch(drag['group'], steps)
 
     def mouseReleaseEvent(self, event):
-        if self._drag is not None and self._drag['zone'] == 'pan':
+        drag = self._drag
+        if drag is not None and drag['zone'] == 'pan':
             self.setCursor(Qt.ArrowCursor)
+        if drag is not None and drag.get('group') and len(drag['group']) > 1 and not drag['moved']:
+            self.editor.clear_selection()  # a plain click on one of the selected notes: only that one is left
         self._drag = None
+        self.update()
+        self.editor.refresh_labels()
         self.editor.record_state()
         super().mouseReleaseEvent(event)
 
@@ -247,6 +278,10 @@ class NoteLane(QWidget):
 
         current = None
         syllable_font = QFont(self.font().family(), 8)
+        chosen = set(ed.selected_indices())
+        if self._drag is not None and self._drag['zone'] == 'box':  # the range being selected
+            xa, xb = sorted((x_of(self._drag['from']), x_of(self._drag['to'])))
+            p.fillRect(QRectF(xa, 0, xb - xa, h), QColor(255, 255, 255, 28))
         for note in ed.notes_between(t0, t0 + LANE_SECONDS):
             t = ed.note_time(note)
             active = t <= now < t + note.d
@@ -259,12 +294,13 @@ class NoteLane(QWidget):
             else:
                 rect = QRectF(x_of(t), rap_band - 6, max(3.0, note.d / LANE_SECONDS * w), 6)
                 color = QColor('#9a9a9a')
-            p.setPen(QPen(QColor('#ffffff'), 2) if note is ed.selected_note else Qt.NoPen)
+            picked = ed.note_index.get(id(note)) in chosen
+            p.setPen(QPen(QColor('#ffffff'), 3 if note is ed.selected_note else 2) if picked else Qt.NoPen)
             p.setBrush(color)
             p.drawRoundedRect(rect, 3, 3)
             text = ed.note_text(note)
             if text:  # the syllable under its note (above it for rap notes, at the bottom)
-                p.setPen(QColor('#ffffff' if note is ed.selected_note else '#aab4be'))
+                p.setPen(QColor('#ffffff' if picked else '#aab4be'))
                 p.setFont(syllable_font)
                 y = rect.bottom() + 12 if note.sung else rect.top() - 3
                 p.drawText(QPointF(rect.left() + 1, y), text)
@@ -465,6 +501,7 @@ class SyncEditorDialog(QDialog):
         self.original_pitches = [n.pitch for n in self.all_notes]
         self.original_times = [(n.t, n.d) for n in self.all_notes]
         self.selected_note = None  # note whose pitch is being edited (click it in the lane)
+        self.chosen = set()        # more notes selected with it (Ctrl/Shift + click): they move together
         self.splits = {}          # first line of a part -> extra seconds of that part (up to the next cut)
         self.selected = 0         # part moved by the arrows: 0 = all the lyrics (#GAP)
         self.line_extra = [0.0] * len(self.song.lines)
@@ -683,6 +720,7 @@ class SyncEditorDialog(QDialog):
         QShortcut(QKeySequence("Alt+Right"), self, activated=lambda: self.nudge_selected(beats=1))
         QShortcut(QKeySequence("Ctrl+Shift+Left"), self, activated=lambda: self.nudge_selected(longer=-1))
         QShortcut(QKeySequence("Ctrl+Shift+Right"), self, activated=lambda: self.nudge_selected(longer=1))
+        QShortcut(QKeySequence("Ctrl+A"), self, activated=self.select_line)
         sync.addWidget(self.btn_save)
         layout.addLayout(sync)
 
@@ -954,10 +992,126 @@ class SyncEditorDialog(QDialog):
         note, beat = self.selected_note, self.beat_s()
         if note is None or not beat:
             return
+        group = self.selection()
+        if beats and len(group) > 1:
+            lo, hi = self.group_range(group)
+            k = max(lo, min(hi, beats))
+            if k:
+                self.shift_group([(n, n.t, n.d, n.pitch) for n in group], k * beat, (lo, hi))
+            return
         if beats:
             self.set_note_time(note, note.t + beats * beat, note.t + note.d + beats * beat, keep_length=True)
         elif longer:
             self.set_note_time(note, note.t, note.t + note.d + longer * beat)
+
+    # ------------------------------------------------------------------ several notes selected
+    def selected_indices(self):
+        """Indices of the selected notes (the clicked one and the ones added with Ctrl/Shift), in time order."""
+        chosen = set(self.chosen)
+        if self.selected_note is not None and id(self.selected_note) in self.note_index:
+            chosen.add(self.note_index[id(self.selected_note)])
+        return [i for i in self.order if i in chosen and i not in self.deleted]
+
+    def selection(self):
+        return [self.all_notes[i] for i in self.selected_indices()]
+
+    def is_selected(self, note):
+        return self.note_index.get(id(note)) in set(self.selected_indices())
+
+    def clear_selection(self):
+        self.chosen.clear()
+
+    def toggle_selected(self, note):
+        index = self.note_index[id(note)]
+        chosen = set(self.selected_indices())
+        if index in chosen:
+            chosen.discard(index)
+            rest = [i for i in self.order if i in chosen]
+            self.selected_note = self.all_notes[rest[-1]] if rest else None
+        else:
+            chosen.add(index)
+            self.selected_note = note
+        self.chosen = chosen
+
+    def select_range(self, note):
+        """Every note from the selected one (or the first selected) to this one."""
+        index = self.note_index[id(note)]
+        chosen = self.selected_indices()
+        if not chosen:
+            self.selected_note, self.chosen = note, set()
+            return
+        live = [i for i in self.order if i not in self.deleted]
+        anchor = self.note_index[id(self.selected_note)] if self.selected_note is not None else chosen[0]
+        a, b = sorted((live.index(anchor), live.index(index)))
+        self.chosen = set(live[a:b + 1])
+        self.selected_note = note
+
+    def select_time_range(self, t_a, t_b, keep=()):
+        """Selects the notes that start between two lane times (Shift + drag on the empty lane)."""
+        t_a, t_b = sorted((t_a, t_b))
+        picked = [i for i in self.order if i not in self.deleted
+                  and t_a <= self.note_time(self.all_notes[i]) <= t_b]
+        self.chosen = set(keep) | set(picked)
+        self.selected_note = self.all_notes[picked[-1]] if picked else \
+            (self.selected_note if self.chosen else None)
+        self.refresh_labels()
+
+    def select_line(self):
+        """Ctrl+A: every note of the selected note's line (or of the line being played)."""
+        if self.official:
+            return
+        line = self.selected_note.line if self.selected_note is not None else self.current_line()
+        notes = self.line_notes(line)
+        if notes:
+            self.chosen = set(notes)
+            self.selected_note = self.all_notes[notes[0]]
+            self.lane.update()
+            self.refresh_labels()
+
+    def group_range(self, notes):
+        """(fewest, most) beats the notes can move together without going over the notes that are not moved."""
+        beat = self.beat_s()
+        group = {self.note_index[id(n)] for n in notes}
+        live = [i for i in self.order if i not in self.deleted]
+        where = {i: k for k, i in enumerate(live)}
+        lo, hi = -10 ** 9, 10 ** 9
+        for n in notes:
+            k = where[self.note_index[id(n)]]
+            start = int(round(n.t / beat))
+            end = start + max(1, int(round(n.d / beat)))
+            if k > 0 and live[k - 1] not in group:
+                before = self.all_notes[live[k - 1]]
+                lo = max(lo, int(round((before.t + before.d) / beat)) - start)
+            if k + 1 < len(live) and live[k + 1] not in group:
+                hi = min(hi, int(round(self.all_notes[live[k + 1]].t / beat)) - end)
+        return min(lo, 0), max(hi, 0)
+
+    def shift_group(self, group, seconds, limits):
+        """Moves notes together in time from where they were ([(note, start, length, pitch)]), in whole beats and
+        without going over the other notes."""
+        beat = self.beat_s()
+        if self.official or not beat:
+            return
+        k = max(limits[0], min(limits[1], int(round(seconds / beat))))
+        changed = False
+        for note, t, d, _ in group:
+            new = (int(round(t / beat)) + k) * beat, max(1, int(round(d / beat))) * beat
+            if (note.t, note.d) != new:
+                note.t, note.d = new
+                changed = True
+        if changed:
+            self.rebuild_song()
+
+    def set_group_pitch(self, group, steps):
+        """Pitch of notes dragged up/down together: each one steps semitones from where it was."""
+        changed = False
+        for note, _, _, pitch in group:
+            if note.sung and note.pitch != max(0, min(127, pitch + steps)):
+                note.pitch = max(0, min(127, pitch + steps))
+                changed = True
+        if changed:
+            self.lane.update()
+            self.refresh_labels()
 
     def note_text(self, note):
         """The syllable drawn under a note ('' for held notes and official files)."""
@@ -979,6 +1133,7 @@ class SyncEditorDialog(QDialog):
         self.song = SyncModel.song_from_notes(notes, texts, self.line_count, self.song.bpm, deleted)
         if self.selected_note is not None and self.note_index[id(self.selected_note)] in self.deleted:
             self.selected_note = None
+        self.chosen = {i for i in self.chosen if i < len(self.all_notes) and i not in self.deleted}
         self.lane.update()
         self.sync_map.update()
         self.refresh_labels()
@@ -1112,10 +1267,19 @@ class SyncEditorDialog(QDialog):
         return plan
 
     def delete_selected(self):
-        """Takes out the selected syllable with its notes (its held "~" notes too): lyrics where nothing is sung."""
-        note = self.selected_note
-        if self.official or note is None:
+        """Takes out the selected syllables with their notes (their held "~" notes too): lyrics where nothing is
+        sung."""
+        notes = self.selection()
+        if self.official or not notes:
             return
+        for note in notes:
+            if self.note_index[id(note)] not in self.deleted:
+                self.delete_note(note)
+        self.selected_note = None
+        self.chosen.clear()
+        self.rebuild_song()
+
+    def delete_note(self, note):
         first = self.note_index[id(note)]
         pos = self.order.index(first)
         indices = [first]
@@ -1131,8 +1295,6 @@ class SyncEditorDialog(QDialog):
         if ended_word and before and not self.text_of(before[-1]).endswith(' '):
             self.set_text(before[-1], self.text_of(before[-1]) + ' ')  # the word before still ends there
         self.deleted.update(indices)
-        self.selected_note = None
-        self.rebuild_song()
 
     def delete_line(self):
         """Takes out the line being played (or the selected note's line) with all its notes."""
@@ -1154,12 +1316,16 @@ class SyncEditorDialog(QDialog):
 
     def move_selected_note(self, semitones):
         """Moves the selected note up or down (pitch editing; not for official lyrics files)."""
-        note = self.selected_note
-        if note is None or self.official or not note.sung:
+        if self.official:
             return
-        note.pitch = max(0, min(127, note.pitch + semitones))
-        self.lane.update()
-        self.refresh_labels()
+        changed = False
+        for note in self.selection():
+            if note.sung:
+                note.pitch = max(0, min(127, note.pitch + semitones))
+                changed = True
+        if changed:
+            self.lane.update()
+            self.refresh_labels()
 
     def beat_s(self):
         return 60.0 / self.song.bpm / 4 if self.song.bpm else 0.0
@@ -1277,6 +1443,7 @@ class SyncEditorDialog(QDialog):
         self.order = list(data['order'])
         if self.selected_note is not None and id(self.selected_note) not in self.note_index:
             self.selected_note = None
+        self.chosen = {i for i in self.chosen if i < len(self.all_notes)}
         self.recompute_extra()
         self.selected = data['selected'] if data['selected'] == 0 or data['selected'] in self.splits else 0
         if not self.official:
@@ -1402,7 +1569,11 @@ class SyncEditorDialog(QDialog):
         self.btn_save.setEnabled(overlap is None and not self.official)
         if hasattr(self, 'lbl_edits'):
             parts = []
-            if self.selected_note is not None and not self.official:
+            count = len(self.selected_indices())
+            if count > 1 and not self.official:
+                parts.append(tr("{n} notes selected (drag one or Alt+arrows: they move together; Esc: none)")
+                             .format(n=count))
+            elif self.selected_note is not None and not self.official:
                 parts.append(tr("Selected: \"{text}\"").format(
                     text=self.text_of(self.note_index[id(self.selected_note)])))
             if self.deleted:
@@ -1666,7 +1837,25 @@ class SyncEditorDialog(QDialog):
         self.stop_players()
         super().accept()
 
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Escape and (self.selected_note is not None or self.chosen):
+            self.selected_note = None
+            self.chosen.clear()
+            self.lane.update()
+            self.refresh_labels()
+            return
+        super().keyPressEvent(event)
+
     def reject(self):
+        """Esc (or closing): unsaved changes are not lost without asking."""
+        if self.changed():
+            reply = QMessageBox.question(self, tr('Unsaved changes'), tr('Save the sync changes before closing?'),
+                                         QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel, QMessageBox.Yes)
+            if reply == QMessageBox.Cancel:
+                return
+            if reply == QMessageBox.Yes:
+                self.save()  # closes the editor when it worked
+                return
         self.stop_players()
         super().reject()
 
