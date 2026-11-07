@@ -130,7 +130,7 @@ before and after it (shorten or move the neighbour first).
 | ⏩ 5 | Forward 5 seconds (*Avanzar 5 segundos*) | `L` | |
 | ⏭ next track | Next line (*Línea siguiente*) | `Down` | half a second before the next line |
 | text icon | Go to just before the first lyrics (*Ir justo antes de la primera letra*) | `F` | 2 s before the first line, to skip the intro |
-| speedometer + list | Speed (*Velocidad*) | | 0.5×, 0.75×, 1×, 1.25× (slow it down to place a fast part) |
+| speedometer + list | Speed (*Velocidad*) | | 0.25× to 2× in steps of 0.25 (slow it down to place a fast part, speed it up to go through the song) |
 | speaker + slider | Volume (*Volumen*) | | |
 | time | | | position / length of the song |
 

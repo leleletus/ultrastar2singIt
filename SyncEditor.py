@@ -52,7 +52,7 @@ LANE_SECONDS = 6.0        # seconds of notes visible in the lane
 EDGE_PX = 7                # a note's edge this wide is dragged to make it longer/shorter
 DRAG_START_PX = 6          # moving a note: the first move this far decides sideways (time) or up/down (pitch)
 PLAYHEAD = 0.3            # playhead position in the lane (fraction of its width)
-SPEEDS = (0.5, 0.75, 1.0, 1.25)
+SPEEDS = (0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0)
 BLUE, GREEN, ORANGE, RED, GREY = '#2b7bb9', '#16a34a', '#d97706', '#dc2626', '#6b7280'
 
 
