@@ -448,4 +448,10 @@
 - Editor: «Ajustar a las palabras» (R) coloca con el modelo las sílabas de lo seleccionado o de la línea (líneas
   movidas 0,8 s a propósito vuelven a 0,01–0,02 s de su sitio) y les mide el tono; E / Shift+E seleccionan hasta el
   final de la línea / la canción para mover un tramo que empieza a mitad de línea; Ctrl+Alt+flechas mueve 8 pulsos.
+- Líneas amontonadas: cuando la letra tiene más repeticiones de las que se cantan (un estribillo de más, «la-la-la»),
+  el modelo mete las sobrantes en menos de un segundo (121 líneas a 12–23 sílabas/s en 27 canciones) y también
+  ponía coletillas («Ah», «Yeah») donde solo hay eco o acompañamiento. `align_lyrics` ahora quita esas líneas
+  (más de 12 sílabas/s, o coletilla con menos del 25 % de voz debajo) y vuelve a colocar el resto, hasta que no
+  queda ninguna. Elastigirl 17 quitadas → 97 % reconocidas; New Woman 13 → 100 %. Lista para el usuario en
+  `~/LetsSing/LINEAS_QUITADAS.md`.
 

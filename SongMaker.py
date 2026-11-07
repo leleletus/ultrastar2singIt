@@ -666,17 +666,15 @@ def voice_end_s(energy):
     return float(on[-1] * FRAME) if len(on) else None
 
 
-def align_lyrics(ctc, texts, language='Spanish', voice_end=None):
-    """[(start s, line, confidence)] of whole lyrics on the whole song: the speech model looks for every line in
-    order over all of it (no times needed), then measures each line again around where it fell (its confidence:
-    mean log-probability of its letters, below ALIGN_MIN_LOGP the model is not sure). The model reads the lines as
-    the notes will show them (Korean and Japanese romanized). Lines that fall after voice_end (+1 s) are left out:
-    Genius has lines this version does not sing, and the model piles them up after the last voice."""
+CRAMMED_RATE = 12.0     # syllables a second: no line is sung faster; lyrics with lines this version does not sing
+                        # (an extra chorus, a repeated "la-la-la") get them piled up there by the model
+_ADLIB = re.compile(r"^(?:[\s,!?.'¡¿-]*(?:ah+|oh+|uh+|eh+|ay+|yeah|yea|ya|hey|woah|whoa|wo+|ooh+|mm+|hmm+|na+|la+|ow|"
+                    r"huh|ha+|ja+)[\s,!?.'¡¿-]*)+$", re.IGNORECASE)
+
+
+def _place_lines(ctc, texts, spoken, voice_end):
     import VoiceAlign
     logp, vocab = ctc
-    if not texts:
-        raise RuntimeError("no lyrics to place")
-    spoken = [''.join(line_syllables(text, language)) for text in texts]
     found = VoiceAlign.align_line(logp, vocab, 0, len(logp), spoken)
     if found is None:
         raise RuntimeError("the lyrics do not fit in the song (more letters than the audio can hold)")
@@ -690,6 +688,41 @@ def align_lyrics(ctc, texts, language='Spanish', voice_end=None):
         again = VoiceAlign.align_line(logp, vocab, a - LINE_PAD_FRAMES, b + LINE_PAD_FRAMES, [said])
         out.append((a * FRAME, text, round(again[1], 2) if again else None))
     return out
+
+
+def align_lyrics(ctc, texts, language='Spanish', voice_end=None, energy=None, dropped=None):
+    """[(start s, line, confidence)] of whole lyrics on the whole song: the speech model looks for every line in
+    order over all of it (no times needed), then measures each line again around where it fell (its confidence:
+    mean log-probability of its letters, below ALIGN_MIN_LOGP the model is not sure). The model reads the lines as
+    the notes will show them (Korean and Japanese romanized).
+    Only what is sung is kept: lines that fall after voice_end (+1 s), lines piled up faster than CRAMMED_RATE
+    (lyrics with more repetitions than this version sings) and, with energy, ad-libs alone ("Ah", "Yeah") with
+    almost no voice under them (an echo or the backing track) are left out, and the rest placed again. dropped: a
+    list that gets the lines left out."""
+    if not texts:
+        raise RuntimeError("no lyrics to place")
+    texts = list(texts)
+    voiced = energy > _voice_threshold(energy) if energy is not None else None
+    for _ in range(6):
+        spoken = [''.join(line_syllables(text, language)) for text in texts]
+        timed = _place_lines(ctc, texts, spoken, voice_end)
+        bad = set()
+        for k, (t, text, _) in enumerate(timed):
+            following = timed[k + 1][0] if k + 1 < len(timed) else t + 4.0
+            count = len(line_syllables(text, language))
+            if count >= 3 and count / max(FRAME, following - t) > CRAMMED_RATE:
+                bad.add(k)
+            elif voiced is not None and _ADLIB.match(text):
+                a, b = int(t / FRAME), int(min(following, t + 3.0) / FRAME)
+                if b > a and float(voiced[a:b].mean()) < 0.25:
+                    bad.add(k)
+        if not bad:
+            return timed
+        keep = [x for k, x in enumerate(timed) if k not in bad]
+        if dropped is not None:
+            dropped += [(round(timed[k][0], 1), timed[k][1]) for k in sorted(bad)]
+        texts = [text for _, text, _ in keep]
+    return timed
 
 
 def _aligned_onsets(ctc, syllables, a, b, after=0, info=None):
@@ -1222,7 +1255,8 @@ def lyrics_from_genius(folder, keep_dir=None, log=print, dry_run=False):
         if row.upper().startswith('#LANGUAGE:'):
             language = row.split(':', 1)[1].strip() or language
     voice = np.load(SyncModel.voice_cache_path(str(folder)))
-    timed = align_lyrics(ctc, texts, language, voice_end_s(voice['energy'].astype(np.float32)))
+    energy = voice['energy'].astype(np.float32)
+    timed = align_lyrics(ctc, texts, language, voice_end_s(energy), energy)
     if dry_run:
         return timed
     meta_path = folder / 'songmaker.json'
