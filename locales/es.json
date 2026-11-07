@@ -366,5 +366,7 @@
   "{n} texts fixed": "{n} textos corregidos",
   "save to keep it": "guarda para conservarlo",
   "Only SongMaker": "Solo hechas con SongMaker",
-  "Show only the songs made with SongMaker (no lyrics with notes on USDB): their notes come from the voice, so check them in the sync editor (right click → Fix sync...).": "Muestra solo las canciones hechas con SongMaker (sin letra con notas en USDB): sus notas salen de la voz, así que revísalas en el editor de sincronía (clic derecho → Arreglar sincronización...)."
+  "Show only the songs made with SongMaker (no lyrics with notes on USDB): their notes come from the voice, so check them in the sync editor (right click → Fix sync...).": "Muestra solo las canciones hechas con SongMaker (sin letra con notas en USDB): sus notas salen de la voz, así que revísalas en el editor de sincronía (clic derecho → Arreglar sincronización...).",
+  "{n} notes moved or resized": "{n} notas movidas o alargadas",
+  "Click a note to select it. Drag it up/down to change its pitch (Shift+Up/Down), sideways to move it in time (Alt+Left/Right), its right edge to make it longer or shorter (Ctrl+Shift+Left/Right). Double click: fix its syllable. Save to keep it.": "Clic en una nota para seleccionarla. Arrástrala arriba/abajo para cambiar el tono (Mayús+↑/↓), a los lados para moverla en el tiempo (Alt+←/→), y su borde derecho para alargarla o acortarla (Ctrl+Mayús+←/→). Doble clic: corregir su sílaba. Guarda para conservarlo."
 }

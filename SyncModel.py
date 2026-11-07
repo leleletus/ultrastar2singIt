@@ -330,16 +330,18 @@ def song_verdict(report, line_times, audio_end, lyrics_end):
 # ---------------------------------------------------------------------------------------------- saving
 _NOTE_LINE = re.compile(r'^(\s*[:*FRG]\s+)(-?\d+)(\s.*)?$')
 _NOTE_REST = re.compile(r'^(\s+-?\d+\s+)(-?\d+)(.*)$')
+_NOTE_LENGTH = re.compile(r'^(\s+)(-?\d+)(\s.*)?$')
 _BREAK_LINE = re.compile(r'^(\s*-\s*)(-?\d+)(\s+(-?\d+))?(.*)$')
 
 
 def rewrite_txt(lines, gap_ms, line_beats=None, expected_notes=None, note_pitches=None, note_texts=None,
-                deleted_notes=None):
+                deleted_notes=None, note_times=None):
     """The txt lines with #GAP set and, when line_beats is given, the notes of every lyrics line i moved by
     line_beats[i] beats (page breaks follow the line after them). Same line numbering as load_txt.
     note_pitches: {note index (order of load_txt): new UltraStar pitch} changes only those pitches.
     note_texts: {note index: new syllable text}; deleted_notes: note indices taken out (a line left without notes
-    loses its page break too).
+    loses its page break too); note_times: {note index: (start beat, length in beats)} as in the file before the
+    line moves (a note moved or made longer/shorter).
     Raises ValueError when the file cannot be changed safely."""
     out = list(lines)
     gap_line = f"#GAP:{int(round(gap_ms))}"
@@ -357,8 +359,10 @@ def rewrite_txt(lines, gap_ms, line_beats=None, expected_notes=None, note_pitche
                 break
         out.insert(insert_at, gap_line)
 
-    if (not line_beats or not any(line_beats)) and not note_pitches and not note_texts and not deleted_notes:
+    if (not line_beats or not any(line_beats)) and not note_pitches and not note_texts and not deleted_notes \
+            and not note_times:
         return out
+    note_times = note_times or {}
     line_beats = line_beats or [0]
     note_pitches = note_pitches or {}
     headers = {l.split(':', 1)[0].strip().upper(): l.split(':', 1)[-1].strip().upper() for l in out if l.startswith('#')}
@@ -372,15 +376,23 @@ def rewrite_txt(lines, gap_ms, line_beats=None, expected_notes=None, note_pitche
         m = _NOTE_LINE.match(line)
         if m:
             delta = line_beats[min(line_no, len(line_beats) - 1)]
-            start = int(m.group(2)) + delta
-            length = int(m.group(3).split()[0]) if m.group(3) and m.group(3).split() else 0
+            rest = m.group(3) or ''
+            if count in note_times:  # " <length> <pitch> <text>": start and length change
+                new_start, new_length = note_times[count]
+                q = _NOTE_LENGTH.match(rest)
+                if not q:
+                    raise ValueError(f"note {count + 1} has no length to change")
+                rest = f"{q.group(1)}{max(1, int(new_length))}{q.group(3)}"
+                start = int(new_start) + delta
+            else:
+                start = int(m.group(2)) + delta
+            length = int(rest.split()[0]) if rest.split() else 0
             if not has_notes and previous_end is not None and start < previous_end:
                 raise ValueError(f"line {line_no + 1} would start before the end of line {line_no}")
             if open_break is not None:
-                j, prefix, beat, rest = open_break
-                out[j] = f"{prefix}{min(beat, start)}{rest}"  # the break stays between the two lines
+                j, prefix, beat, after = open_break
+                out[j] = f"{prefix}{min(beat, start)}{after}"  # the break stays between the two lines
                 open_break = None
-            rest = m.group(3) or ''
             if count in note_pitches:  # " <length> <pitch> <text>": only the pitch changes
                 p = _NOTE_REST.match(rest)
                 if not p:

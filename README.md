@@ -92,7 +92,7 @@ their timing as it is, so only playback, voice analysis and sing mode work; the 
 |---|---|
 | Info line | audio and video files used, and warnings (still-image video, lyrics longer than the audio, official file...) |
 | Video | the song's video, in sync with the audio |
-| Note lane | the notes as bars like the game: **blue** = normal note, **yellow** = golden note, **grey bar at the bottom** = rap note (only the timing counts, not the pitch). The white vertical line is "now"; the name of the note being sung is shown next to it. Horizontal guides = one per semitone (labelled on every C). After *Analyze voice*, **light-blue dots** = the singer's real voice. In sing mode, **green / red dots** = your voice on / off the note. A **white outline** = the selected note. The **orange tint** = the part the arrows move; **orange lines** = cuts |
+| Note lane | the notes as bars like the game, **with their syllable written under them**: **blue** = normal note, **yellow** = golden note, **grey bar at the bottom** = rap note (only the timing counts, not the pitch). The white vertical line is "now"; the name of the note being sung is shown next to it. Horizontal guides = one per semitone (labelled on every C). After *Analyze voice*, **light-blue dots** = the singer's real voice. In sing mode, **green / red dots** = your voice on / off the note. A **white outline** = the selected note. The **orange tint** = the part the arrows move; **orange lines** = cuts |
 | Karaoke lyrics | the line being sung, coloured as it goes, and the next one |
 | Timeline | click anywhere to jump there |
 | Line map | one block per lyrics line: **green** = on the voice, **orange** = a bit off, **red** = out of time, **grey** = voice not analysed yet (or the line is barely sung). Orange triangles = cuts, white box = selected part, red line = end of the audio. Click to jump there (and select that part) |
@@ -101,8 +101,14 @@ their timing as it is, so only playback, voice analysis and sing mode work; the 
 | Action | What it does |
 |---|---|
 | Click a note | selects it (white outline); rap notes can be selected too |
-| Drag a note up / down | changes its pitch by semitones (sung notes only) |
+| Drag the middle of a note up / down | changes its pitch by semitones (sung notes only) |
+| Drag the middle of a note sideways | moves it in time (the first move decides: sideways = time, up/down = pitch) |
+| Drag the **right edge** of a note (the cursor becomes ↔) | makes it longer or shorter |
+| Drag the left edge of a note | moves its start, its end stays |
 | Double click a note | fixes the text of that syllable (see [Lyrics](#lyrics-fix-misspelt-words-delete-what-is-not-sung)) |
+
+Moving and resizing go in whole beats of the song (37.5 ms in SongMaker songs) and a note never goes over the notes
+before and after it (shorten or move the neighbour first).
 
 ### Playback
 | Button | Name | Shortcut | What it does |
@@ -135,19 +141,21 @@ their timing as it is, so only playback, voice analysis and sing mode work; the 
 | ↔ All the lyrics | All the lyrics (*Toda la letra*) | `G` | selects the whole song (`#GAP`): the arrows move every part together |
 | | previous / next part | `[` / `]` | selects the part before / after (or click it on the line map) |
 | ✨ Fit to voice | Fit to voice (*Ajustar a la voz*) | `A` | moves the line being sung, and its part up to the next cut, to where the voice analysis found the singer. Needs *Analyze voice* first |
-| 〜 Analyze voice | Analyze voice (*Analizar voz*) | | isolates the voice with Demucs (about 2–3 minutes, once per song; then it is kept next to the song): draws the singer over the notes and colours the line map |
-| ↶ | Undo changes (*Deshacer cambios*) | | back to how the song was when the editor opened: timing, cuts, pitches, deleted and fixed lyrics |
+| 〜 Analyze voice | Analyze voice (*Analizar voz*) | | isolates the voice with Demucs (about 2–3 minutes, once per song; then it is kept next to the song): draws the singer over the notes and colours the line map. SongMaker songs are already analysed (from their original audio; the editor moves it to the converted audio) |
+| ↶ | Undo changes (*Deshacer cambios*) | | back to how the song was when the editor opened: timing, cuts, pitches, moved/resized notes, deleted and fixed lyrics |
 | 💾 Save | Save (*Guardar*) | `Ctrl+S` | writes the txt (a `.bak` copy of the original txt is kept the first time). Convert the song afterwards so the game gets it |
 
 The label under the buttons shows what the arrows move (all the lyrics, or lines *a–b* and their shift), how many
 parts there are, how far the voice of the current line is, and a warning when a moved part would overlap the line
 before it (fix it before saving). Parts are saved in steps of one beat of the song (shown there).
 
-### Pitch
+### Pitch and length of a note
 | Action | Shortcut | What it does |
 |---|---|---|
-| Drag the selected note | | up / down by semitones |
+| Drag the selected note | | up / down by semitones, sideways in time, by its edge longer/shorter |
 | Note up / down | `Shift+Up` / `Shift+Down` | one semitone up / down |
+| Note earlier / later | `Alt+Left` / `Alt+Right` | moves the selected note one beat |
+| Note shorter / longer | `Ctrl+Shift+Left` / `Ctrl+Shift+Right` | one beat shorter / longer (its end moves) |
 
 ### Lyrics: fix misspelt words, delete what is not sung
 UltraStar songs only. Nothing is written until you save; the grey label of this row shows the selected syllable and

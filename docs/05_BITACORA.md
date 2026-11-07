@@ -351,3 +351,17 @@
 - Pruebas realizadas: …
 - Pendiente: …
 -->
+
+### 2026-11-06 — Editor: alargar/mover notas, sílaba bajo cada nota, voz de las canciones de SongMaker
+
+- Pedido al revisar Queencard («ni?» más corto que la voz). Arrastrar el borde derecho de una nota la alarga o acorta,
+  el izquierdo mueve su inicio y el centro hacia los lados la mueve en el tiempo (el primer movimiento decide: lados =
+  tiempo, arriba/abajo = tono); `Alt+←/→` mueve un pulso, `Ctrl+Mayús+←/→` acorta/alarga un pulso. En pulsos enteros y
+  sin pasar a las notas vecinas. `SyncModel.rewrite_txt(note_times=…)` escribe inicio y duración (arreglado de paso un
+  nombre de variable reutilizado, `rest`, que habría vaciado el texto de la primera nota de una línea movida).
+- La sílaba se dibuja bajo cada nota.
+- Los puntos de la voz no salían en las canciones de SongMaker: su `voice.npz` es del `.m4a` y el editor reproduce el
+  `.ogg` convertido, así que `load_voice` lo descartaba por tamaño. Ahora `voice_of_source` lo usa movido al tiempo del
+  `.ogg` (VIDEOGAP − recorte de #START; 0 en SongMaker).
+- GUI: casilla «Solo hechas con SongMaker».
+

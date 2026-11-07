@@ -49,6 +49,8 @@ def looks_still(video, duration):
 
 
 LANE_SECONDS = 6.0        # seconds of notes visible in the lane
+EDGE_PX = 7                # a note's edge this wide is dragged to make it longer/shorter
+DRAG_START_PX = 6          # moving a note: the first move this far decides sideways (time) or up/down (pitch)
 PLAYHEAD = 0.3            # playhead position in the lane (fraction of its width)
 SPEEDS = (0.5, 0.75, 1.0, 1.25)
 BLUE, GREEN, ORANGE, RED, GREY = '#2b7bb9', '#16a34a', '#d97706', '#dc2626', '#6b7280'
@@ -80,6 +82,8 @@ class NoteLane(QWidget):
         self.editor = editor
         self.setMinimumHeight(170)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        self.setMouseTracking(True)  # the cursor shows what dragging a note would do (move / make longer)
+        self._drag = None
 
     def geometry_now(self):
         """(start time, x of a time, y of a pitch, pitch of a y, bar height, rap band y) of the lane as drawn now."""
@@ -108,14 +112,33 @@ class NoteLane(QWidget):
                 return note
         return None
 
+    def zone_at(self, note, pos):
+        """What dragging a note from pos does: 'end' (its right edge: longer/shorter), 'start' (its left edge) or
+        'body' (move it: sideways in time, up/down in pitch)."""
+        _, x_of, _, _, _, _ = self.geometry_now()
+        x1 = x_of(self.editor.note_time(note))
+        width = max(3.0, note.d / LANE_SECONDS * self.width())
+        x = pos.x()
+        edge = min(EDGE_PX, width / 3)
+        if x >= x1 + width - edge:
+            return 'end'
+        if x <= x1 + edge and width >= 3 * EDGE_PX:
+            return 'start'
+        return 'body'
+
     def mousePressEvent(self, event):
-        """Click a note to select it; drag it up or down to change its pitch (Shift+Up/Down too)."""
+        """Click a note to select it. Drag its middle up/down to change its pitch or sideways to move it in time,
+        drag its right edge to make it longer or shorter (its left edge moves its start)."""
         ed = self.editor
         if ed.official or event.button() != Qt.LeftButton:
             return super().mousePressEvent(event)
         ed.selected_note = self.note_at(event.position())
         note = ed.selected_note
-        self._drag = (event.position().y(), note.pitch) if note is not None and note.sung else None
+        self._drag = None
+        if note is not None:
+            pos = event.position()
+            self._drag = {'zone': self.zone_at(note, pos), 'x': pos.x(), 'y': pos.y(), 'pitch': note.pitch,
+                          't': note.t, 'd': note.d, 'axis': None}
         self.update()
         ed.refresh_labels()
 
@@ -131,13 +154,31 @@ class NoteLane(QWidget):
 
     def mouseMoveEvent(self, event):
         ed = self.editor
-        if getattr(self, '_drag', None) is None or ed.selected_note is None:
+        pos = event.position()
+        if self._drag is None or ed.selected_note is None:
+            if not ed.official and not event.buttons():  # hover: the cursor tells what a drag would do
+                note = self.note_at(pos)
+                zone = self.zone_at(note, pos) if note is not None else None
+                self.setCursor(Qt.SizeHorCursor if zone in ('start', 'end') else
+                               Qt.OpenHandCursor if zone == 'body' else Qt.ArrowCursor)
             return super().mouseMoveEvent(event)
-        _, _, _, pitch_of, _, _ = self.geometry_now()
-        start_y, start_pitch = self._drag
-        steps = int(round(pitch_of(event.position().y()) - pitch_of(start_y)))
-        if start_pitch + steps != ed.selected_note.pitch:
-            ed.move_selected_note(start_pitch + steps - ed.selected_note.pitch)
+        drag, note = self._drag, ed.selected_note
+        dx, dy = pos.x() - drag['x'], pos.y() - drag['y']
+        seconds = dx / max(1, self.width()) * LANE_SECONDS
+        if drag['zone'] == 'end':
+            ed.set_note_time(note, drag['t'], drag['t'] + drag['d'] + seconds)
+        elif drag['zone'] == 'start':
+            ed.set_note_time(note, drag['t'] + seconds, drag['t'] + drag['d'])
+        else:
+            if drag['axis'] is None and max(abs(dx), abs(dy)) > DRAG_START_PX:  # the first move decides
+                drag['axis'] = 'x' if abs(dx) > abs(dy) or not note.sung else 'y'
+            if drag['axis'] == 'x':
+                ed.set_note_time(note, drag['t'] + seconds, drag['t'] + drag['d'] + seconds, keep_length=True)
+            elif drag['axis'] == 'y':
+                _, _, _, pitch_of, _, _ = self.geometry_now()
+                steps = int(round(pitch_of(pos.y()) - pitch_of(drag['y'])))
+                if drag['pitch'] + steps != note.pitch:
+                    ed.move_selected_note(drag['pitch'] + steps - note.pitch)
 
     def mouseReleaseEvent(self, event):
         self._drag = None
@@ -188,6 +229,7 @@ class NoteLane(QWidget):
                     p.drawEllipse(QPointF(x_of(i * frame), y_of(shown)), 1.6, 1.6)
 
         current = None
+        syllable_font = QFont(self.font().family(), 8)
         for note in ed.notes_between(t0, t0 + LANE_SECONDS):
             t = ed.note_time(note)
             active = t <= now < t + note.d
@@ -203,6 +245,12 @@ class NoteLane(QWidget):
             p.setPen(QPen(QColor('#ffffff'), 2) if note is ed.selected_note else Qt.NoPen)
             p.setBrush(color)
             p.drawRoundedRect(rect, 3, 3)
+            text = ed.note_text(note)
+            if text:  # the syllable under its note (above it for rap notes, at the bottom)
+                p.setPen(QColor('#ffffff' if note is ed.selected_note else '#aab4be'))
+                p.setFont(syllable_font)
+                y = rect.bottom() + 12 if note.sung else rect.top() - 3
+                p.drawText(QPointF(rect.left() + 1, y), text)
 
         # sung pitch (microphone): green right, red wrong, grey between notes
         for t, midi, state in ed.sung_window(t0, t0 + LANE_SECONDS):
@@ -382,6 +430,7 @@ class SyncEditorDialog(QDialog):
         self.text_edits = {}      # note index -> new text (fixed lyrics)
         self.deleted = set()      # note indices taken out (lyrics that are not sung there)
         self.original_pitches = [n.pitch for n in self.all_notes]
+        self.original_times = [(n.t, n.d) for n in self.all_notes]
         self.selected_note = None  # note whose pitch is being edited (click it in the lane)
         self.splits = {}          # first line of a part -> extra seconds of that part (up to the next cut)
         self.selected = 0         # part moved by the arrows: 0 = all the lyrics (#GAP)
@@ -394,12 +443,13 @@ class SyncEditorDialog(QDialog):
         converted_ogg = os.path.join(self.song_dir, name_id + naming.AUDIO_SUFFIX)
         self.audio_is_converted = os.path.isfile(converted_ogg)
         # #START handling of the converter: how much the lyrics were moved, and the audio cut
-        self.start_offset_s, self.trim_start_s = 0.0, 0.0
+        self.start_offset_s, self.trim_start_s, self.video_gap_s = 0.0, 0.0, 0.0
         try:
             with open(os.path.join(self.song_dir, name_id + naming.AUDIO_META_SUFFIX), 'r', encoding='utf-8') as f:
                 meta = json.load(f)
             self.start_offset_s = float(meta.get('lyrics_offset') or 0)
             self.trim_start_s = float(meta.get('trim_start') or 0)
+            self.video_gap_s = float(meta.get('video_gap') or 0)
         except (OSError, ValueError):
             pass
         self.audio_file = converted_ogg if self.audio_is_converted else None
@@ -421,6 +471,8 @@ class SyncEditorDialog(QDialog):
         # voice analysis (cached next to the song) and the line report made from it
         self.voice_path = SyncModel.voice_cache_path(self.song_dir)
         self.voice = SyncModel.load_voice(self.voice_path, self.audio_file) if self.audio_file else None
+        if self.voice is None and self.audio_is_converted:
+            self.voice = self.voice_of_source()
         self.report = []
         self.analysis = None      # running analysis: {'thread', 'error'}
 
@@ -461,8 +513,10 @@ class SyncEditorDialog(QDialog):
 
         self.lane = NoteLane(self)
         if not self.official:
-            self.lane.setToolTip(tr("Click a note to select it and drag it up or down (or Shift+Up/Down) to change its "
-                                    "pitch by semitones. Save to keep it."))
+            self.lane.setToolTip(tr("Click a note to select it. Drag it up/down to change its pitch (Shift+Up/Down), "
+                                    "sideways to move it in time (Alt+Left/Right), its right edge to make it longer "
+                                    "or shorter (Ctrl+Shift+Left/Right). Double click: fix its syllable. Save to "
+                                    "keep it."))
         layout.addWidget(self.lane, stretch=2)
 
         self.lyrics_display = QLabel()
@@ -579,6 +633,10 @@ class SyncEditorDialog(QDialog):
         QShortcut(QKeySequence("Ctrl+S"), self, activated=self.save)
         QShortcut(QKeySequence("Shift+Up"), self, activated=lambda: self.move_selected_note(1))
         QShortcut(QKeySequence("Shift+Down"), self, activated=lambda: self.move_selected_note(-1))
+        QShortcut(QKeySequence("Alt+Left"), self, activated=lambda: self.nudge_selected(beats=-1))
+        QShortcut(QKeySequence("Alt+Right"), self, activated=lambda: self.nudge_selected(beats=1))
+        QShortcut(QKeySequence("Ctrl+Shift+Left"), self, activated=lambda: self.nudge_selected(longer=-1))
+        QShortcut(QKeySequence("Ctrl+Shift+Right"), self, activated=lambda: self.nudge_selected(longer=1))
         sync.addWidget(self.btn_save)
         layout.addLayout(sync)
 
@@ -657,6 +715,27 @@ class SyncEditorDialog(QDialog):
         self.audio_player.positionChanged.connect(self.on_position)
         self.audio_player.durationChanged.connect(self.on_duration)
         self.audio_player.playbackStateChanged.connect(self.on_state)
+
+    def voice_of_source(self):
+        """The voice analysis made from the song's original audio (SongMaker, sync_scan) moved to the time of the
+        converted .ogg the editor plays (it gets the silence of a positive VIDEOGAP and loses the #START cut)."""
+        try:
+            source = os.path.join(self.song_dir, str(np.load(self.voice_path)['audio']))
+        except (OSError, KeyError, ValueError):
+            return None
+        if not os.path.isfile(source) or os.path.abspath(source) == os.path.abspath(self.audio_file):
+            return None
+        voice = SyncModel.load_voice(self.voice_path, source)
+        if voice is None:
+            return None
+        frames = int(round((self.video_gap_s - self.trim_start_s) / SyncModel.FRAME))
+        for key, empty in (('energy', 0.0), ('pitch', np.nan), ('active', False)):
+            values = voice[key]
+            if frames > 0:
+                voice[key] = np.concatenate([np.full(frames, empty, dtype=values.dtype), values])
+            elif frames < 0:
+                voice[key] = values[-frames:]
+        return voice
 
     def still_video_note(self):
         """A warning when the video shown here is a still image but the game's .bk2 is a real video (it can't be
@@ -768,12 +847,74 @@ class SyncEditorDialog(QDialog):
     # ------------------------------------------------------------------ editing
     def changed(self):
         return self.gap_ms != self.original_gap_ms or any(abs(d) > 1e-9 for d in self.splits.values()) \
-            or bool(self.pitch_edits()) or bool(self.text_edits) or bool(self.deleted)
+            or bool(self.pitch_edits()) or bool(self.text_edits) or bool(self.deleted) or bool(self.time_edits())
 
     def pitch_edits(self):
         """{note index: new UltraStar pitch} of the notes moved up or down."""
         return {i: int(round(n.pitch)) - 60 for i, n in enumerate(self.all_notes)
                 if n.sung and n.pitch != self.original_pitches[i] and i not in self.deleted}
+
+    def time_edits(self):
+        """{note index: (start beat, length in beats)} of the notes moved in time or made longer/shorter."""
+        beat = self.beat_s()
+        if not beat or self.official:
+            return {}
+        return {i: (int(round(n.t / beat)), max(1, int(round(n.d / beat)))) for i, n in enumerate(self.all_notes)
+                if i not in self.deleted and (abs(n.t - self.original_times[i][0]) > 1e-6
+                                              or abs(n.d - self.original_times[i][1]) > 1e-6)}
+
+    def note_limits(self, note):
+        """(first beat, last beat) a note can take without going over the notes before and after it."""
+        beat = self.beat_s()
+        i = self.note_index[id(note)]
+        before = next((self.all_notes[j] for j in range(i - 1, -1, -1) if j not in self.deleted), None)
+        after = next((self.all_notes[j] for j in range(i + 1, len(self.all_notes)) if j not in self.deleted), None)
+        lo = int(round((before.t + before.d) / beat)) if before else -10 ** 9
+        hi = int(round(after.t / beat)) if after else 10 ** 9
+        return lo, hi
+
+    def set_note_time(self, note, start, end, keep_length=False):
+        """Puts a note between start and end (seconds without the line shift), in whole beats of the song and
+        never over its neighbours; keep_length: it is moved, not resized."""
+        beat = self.beat_s()
+        if self.official or not beat or note is None:
+            return
+        lo, hi = self.note_limits(note)
+        if hi - lo < 1:
+            return
+        a, b = int(round(start / beat)), int(round(end / beat))
+        if keep_length:
+            length = min(max(1, int(round(note.d / beat))), hi - lo)
+            a = max(lo, min(a, hi - length))
+            b = a + length
+        else:
+            a, b = max(lo, a), min(hi, b)
+            if b - a < 1:  # the edge being dragged stops one beat before the other
+                if start != note.t:
+                    a = b - 1
+                else:
+                    b = a + 1
+        if (a * beat, (b - a) * beat) != (note.t, note.d):
+            note.t, note.d = a * beat, (b - a) * beat
+            self.rebuild_song()
+
+    def nudge_selected(self, beats=0, longer=0):
+        """Keyboard: moves the selected note by beats, or makes it longer/shorter."""
+        note, beat = self.selected_note, self.beat_s()
+        if note is None or not beat:
+            return
+        if beats:
+            self.set_note_time(note, note.t + beats * beat, note.t + note.d + beats * beat, keep_length=True)
+        elif longer:
+            self.set_note_time(note, note.t, note.t + note.d + longer * beat)
+
+    def note_text(self, note):
+        """The syllable drawn under a note ('' for held notes and official files)."""
+        if self.official:
+            return ''
+        index = self.note_index.get(id(note))
+        text = self.text_of(index) if index is not None else ''
+        return '' if text.strip() in ('', '~') else text.strip()
 
     # ------------------------------------------------------------------ lyrics editing (not for official files)
     def text_of(self, index):
@@ -959,12 +1100,12 @@ class SyncEditorDialog(QDialog):
             self.schedule_report()
 
     def undo_all(self):
-        for note, pitch in zip(self.all_notes, self.original_pitches):
-            note.pitch = pitch
+        for note, pitch, (t, d) in zip(self.all_notes, self.original_pitches, self.original_times):
+            note.pitch, note.t, note.d = pitch, t, d
         self.selected_note = None
-        if self.text_edits or self.deleted:
-            self.text_edits.clear()
-            self.deleted.clear()
+        self.text_edits.clear()
+        self.deleted.clear()
+        if not self.official:
             self.rebuild_song()
         self.gap_ms = self.original_gap_ms
         self.splits.clear()
@@ -1040,7 +1181,10 @@ class SyncEditorDialog(QDialog):
                 parts.append(tr("{n} notes deleted").format(n=len(self.deleted)))
             if self.text_edits:
                 parts.append(tr("{n} texts fixed").format(n=len(self.text_edits)))
-            if self.deleted or self.text_edits:
+            timed = self.time_edits()
+            if timed:
+                parts.append(tr("{n} notes moved or resized").format(n=len(timed)))
+            if self.deleted or self.text_edits or timed:
                 parts.append(tr("save to keep it"))
             self.lbl_edits.setText(" · ".join(parts))
         self.btn_uncut.setEnabled(part != 0 and not self.official)
@@ -1332,7 +1476,8 @@ class SyncEditorDialog(QDialog):
             newline = '\r\n' if '\r\n' in text else '\n'
             lines = SyncModel.rewrite_txt(text.splitlines(), self.gap_ms, self.line_beats(),
                                           expected_notes=len(self.all_notes), note_pitches=self.pitch_edits(),
-                                          note_texts=self.text_edits, deleted_notes=self.deleted)
+                                          note_texts=self.text_edits, deleted_notes=self.deleted,
+                                          note_times=self.time_edits())
             if not os.path.exists(self.txt_path + '.bak'):
                 # the first time a song is re-synced its original txt is kept, it can always be restored
                 with open(self.txt_path + '.bak', 'wb') as f:
@@ -1344,6 +1489,7 @@ class SyncEditorDialog(QDialog):
 
             self.original_gap_ms = self.gap_ms  # Prevent unsaved changes prompt on app exit
             self.original_pitches = [n.pitch for n in self.all_notes]
+            self.original_times = [(n.t, n.d) for n in self.all_notes]
             self.text_edits.clear()
             self.deleted.clear()
             self.splits.clear()

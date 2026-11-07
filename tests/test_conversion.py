@@ -487,6 +487,17 @@ class LyricsEditTest(unittest.TestCase):
         self.assertEqual(SyncModel.rewrite_txt(self.TXT, 1000, deleted_notes={4})[-3:], [": 12 4 2 tú", ": 16 4 2 ~", "E"])
         self.assertEqual(SyncModel.rewrite_txt(self.TXT, 1000, deleted_notes={0, 1})[3], ": 12 4 2 tú")
 
+    def test_move_and_resize_notes(self):
+        import SyncModel
+        out = SyncModel.rewrite_txt(self.TXT, 1000, note_times={1: (5, 3), 4: (25, 6)}, expected_notes=5)
+        self.assertEqual(out[3:5], [": 0 4 0 Ho", ": 5 3 0 la "])
+        self.assertEqual(out[-2], "R 25 6 0 yo")
+        moved = SyncModel.rewrite_txt(self.TXT, 1000, line_beats=[0, 2, 0], note_times={2: (13, 3)},
+                                      note_pitches={2: 5}, expected_notes=5)
+        self.assertEqual(moved[6:8], [": 15 3 5 tú", ": 18 4 2 ~"])   # its own change, then the line's move
+        with self.assertRaises(ValueError):                             # over the next line
+            SyncModel.rewrite_txt(self.TXT, 1000, note_times={1: (4, 9)}, expected_notes=5)
+
     def test_song_without_deleted_notes_keeps_line_numbers(self):
         import SyncModel
         data = UltrastarToSingit.parse_file(write(Path(tempfile.mkdtemp()) / 's.txt', '\n'.join(self.TXT) + '\n'))
