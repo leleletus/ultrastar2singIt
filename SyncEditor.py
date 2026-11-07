@@ -198,6 +198,7 @@ class NoteLane(QWidget):
         if self._drag is not None and self._drag['zone'] == 'pan':
             self.setCursor(Qt.ArrowCursor)
         self._drag = None
+        self.editor.record_state()
         super().mouseReleaseEvent(event)
 
     def paintEvent(self, _event):
@@ -521,10 +522,17 @@ class SyncEditorDialog(QDialog):
         self.report_timer.setSingleShot(True)
         self.report_timer.timeout.connect(self.update_report)
 
+        # undo history: every state of the edits (one per action; a drag is one step when the mouse is let go)
+        self.history, self.future = [], []
+        self.history_timer = QTimer(self)
+        self.history_timer.setSingleShot(True)
+        self.history_timer.timeout.connect(self.record_state)
+
         self.build_ui()
         self.load_media()
         self.refresh_labels()
         self.schedule_report()
+        self.record_state()
 
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.tick)
@@ -636,7 +644,7 @@ class SyncEditorDialog(QDialog):
         self.btn_cut_end = tool_button('separator-vertical', tr("Cut end: the selected part ends just before the "
                                                                 "line being played, what comes after does not move"),
                                        self.cut_end, self, ("V",), text=tr("End"), color=ORANGE)
-        self.btn_uncut = tool_button('arrow-back-up', tr("Join the selected part to the one before it"),
+        self.btn_uncut = tool_button('arrow-merge-left', tr("Join the selected part to the one before it"),
                                      self.remove_cut, self, text=tr("Join"), color=GREY)
         self.btn_all = tool_button('arrows-horizontal', tr("Select all the lyrics (#GAP): moves every part"),
                                    lambda: self.select_part(0), self, ("G",), text=tr("All the lyrics"), color=BLUE)
@@ -653,8 +661,14 @@ class SyncEditorDialog(QDialog):
             self.edit_buttons.append(b)
         sync.addWidget(self.btn_voice)
         sync.addStretch(1)
-        self.btn_reset = tool_button('arrow-back-up', tr("Undo changes"), self.undo_all, self, color=GREY)
-        sync.addWidget(self.btn_reset)
+        self.btn_undo = tool_button('arrow-back-up', tr("Undo the last change"), self.undo, self, ("Ctrl+Z",),
+                                    text=tr("Undo"), color=GREY)
+        self.btn_redo = tool_button('arrow-forward-up', tr("Redo the change undone"), self.redo, self,
+                                    ("Ctrl+Y", "Ctrl+Shift+Z"), color=GREY)
+        self.btn_reset = tool_button('arrow-back-up-double', tr("Undo all the changes (Ctrl+Z brings them back)"),
+                                     self.ask_undo_all, self, color=GREY)
+        for b in (self.btn_undo, self.btn_redo, self.btn_reset):
+            sync.addWidget(b)
         self.btn_save = QPushButton(make_icon('device-floppy', '#ffffff', 20), " " + tr("Save"))
         self.btn_save.setFocusPolicy(Qt.NoFocus)
         self.btn_save.setToolTip(tr("Save sync changes") + "  [Ctrl+S]")
@@ -1216,6 +1230,98 @@ class SyncEditorDialog(QDialog):
             self.select_part(self.part_of(part))
             self.schedule_report()
 
+    # ------------------------------------------------------------------ undo / redo
+    def state(self):
+        """Everything the edits change: (key to compare, data to restore)."""
+        added = tuple(self.all_notes[self.file_notes:])
+        values = tuple((n.t, n.d, n.pitch) for n in self.all_notes)
+        key = (self.gap_ms, tuple(sorted(self.splits.items())), values, tuple(id(n) for n in added),
+               tuple(sorted(self.text_edits.items())), frozenset(self.deleted), tuple(self.order))
+        data = {'gap': self.gap_ms, 'splits': dict(self.splits), 'values': values, 'added': added,
+                'added_info': (list(self.raw_texts[self.file_notes:]), list(self.original_pitches[self.file_notes:]),
+                               list(self.original_times[self.file_notes:])),
+                'texts': dict(self.text_edits), 'deleted': set(self.deleted), 'order': list(self.order),
+                'selected': self.selected}
+        return key, data
+
+    def dragging(self):
+        lane = getattr(self, 'lane', None)
+        return lane is not None and getattr(lane, '_drag', None) is not None and lane._drag['zone'] != 'pan'
+
+    def record_state(self):
+        """Adds the current edits to the undo history when they changed (not in the middle of a drag)."""
+        if self.dragging():
+            return
+        key, data = self.state()
+        if self.history and self.history[-1][0] == key:
+            return
+        self.history.append((key, data))
+        del self.history[:-500]
+        self.future.clear()
+        self.update_undo_buttons()
+
+    def restore_state(self, data):
+        self.gap_ms = data['gap']
+        self.splits = dict(data['splits'])
+        del self.all_notes[self.file_notes:]
+        self.all_notes.extend(data['added'])
+        raw, pitches, times = data['added_info']
+        for target, extra in ((self.raw_texts, raw), (self.original_pitches, pitches), (self.original_times, times)):
+            del target[self.file_notes:]
+            target.extend(extra)
+        for note, (t, d, pitch) in zip(self.all_notes, data['values']):
+            note.t, note.d, note.pitch = t, d, pitch
+        self.note_index = {id(n): i for i, n in enumerate(self.all_notes)}
+        self.text_edits = dict(data['texts'])
+        self.deleted = set(data['deleted'])
+        self.order = list(data['order'])
+        if self.selected_note is not None and id(self.selected_note) not in self.note_index:
+            self.selected_note = None
+        self.recompute_extra()
+        self.selected = data['selected'] if data['selected'] == 0 or data['selected'] in self.splits else 0
+        if not self.official:
+            self.rebuild_song()
+        self.lane.update()
+        self.sync_map.update()
+        self.refresh_labels()
+        self.schedule_report()
+
+    def undo(self):
+        """Ctrl+Z: back to the state before the last change."""
+        if self.dragging():
+            return
+        self.history_timer.stop()
+        self.record_state()  # a change not recorded yet
+        if len(self.history) < 2:
+            self.lbl_part.setText(tr("Nothing to undo."))
+            return
+        self.future.append(self.history.pop())
+        self.restore_state(self.history[-1][1])
+        self.update_undo_buttons()
+
+    def redo(self):
+        if self.dragging() or not self.future:
+            return
+        self.history_timer.stop()
+        self.history.append(self.future.pop())
+        future = self.future
+        self.restore_state(self.history[-1][1])
+        self.future = future
+        self.update_undo_buttons()
+
+    def update_undo_buttons(self):
+        if hasattr(self, 'btn_undo'):
+            self.btn_undo.setEnabled(len(self.history) > 1)
+            self.btn_redo.setEnabled(bool(self.future))
+
+    def ask_undo_all(self):
+        if not self.changed():
+            return
+        if QMessageBox.question(self, tr("Undo all the changes"),
+                                tr("Undo every change made since the editor was opened? (Ctrl+Z brings them back)"),
+                                QMessageBox.Yes | QMessageBox.No, QMessageBox.No) == QMessageBox.Yes:
+            self.undo_all()
+
     def undo_all(self):
         for note, pitch, (t, d) in zip(self.all_notes, self.original_pitches, self.original_times):
             note.pitch, note.t, note.d = pitch, t, d
@@ -1315,6 +1421,8 @@ class SyncEditorDialog(QDialog):
         self.btn_uncut.setEnabled(part != 0 and not self.official)
         self.btn_all.setChecked(part == 0)
         self.update_info()
+        if hasattr(self, 'history_timer'):
+            self.history_timer.start(0)
 
     # ------------------------------------------------------------------ voice analysis
     def analyze_voice(self):

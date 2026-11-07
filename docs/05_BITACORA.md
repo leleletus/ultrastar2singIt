@@ -372,3 +372,12 @@
 - Moverse por la canción: rueda del ratón sobre el carril o el mapa (0,5 s; 2 s con Ctrl) y arrastrar un sitio vacío
   del carril.
 
+### 2026-11-07 · Editor: guardar con notas borradas, deshacer paso a paso
+- Goma de Mascar no se podía guardar («line 18 would start before the end of line 17»): `rewrite_txt` contaba las
+  notas borradas al comprobar si las líneas se pisan (B-76). Arreglado; la edición abierta se rescató inyectando el
+  arreglo en el programa en marcha (`sys.remote_exec`, con sudo por `ptrace_scope=1`) y se guardó bien.
+- Deshacer: historial de estados (`state`/`restore_state`) grabado una vez por acción (QTimer a 0 tras
+  `refresh_labels`; un arrastre se graba al soltar). Ctrl+Z, Ctrl+Y / Ctrl+Shift+Z, hasta 500 pasos. «Deshacer todos
+  los cambios» pregunta antes y también se puede deshacer.
+- `Gui.open_sync_editor` hace `gc.collect()` al cerrar el editor: los cerrados quedaban vivos en ciclos de referencias.
+

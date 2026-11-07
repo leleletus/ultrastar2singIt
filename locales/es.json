@@ -372,5 +372,12 @@
   "{n} notes added": "{n} notas añadidas",
   "Click a note to select it. Drag it up/down to change its pitch (Shift+Up/Down), sideways to move it in time (Alt+Left/Right), its right edge to make it longer or shorter (Ctrl+Shift+Left/Right). Double click: fix its syllable. Drag an empty place or use the mouse wheel to move through the song. Save to keep it.": "Clic en una nota para seleccionarla. Arrástrala arriba/abajo para cambiar el tono (Mayús+↑/↓), a los lados para moverla en el tiempo (Alt+←/→), y su borde derecho para alargarla o acortarla (Ctrl+Mayús+←/→). Doble clic: corregir su sílaba. Arrastra un sitio vacío o usa la rueda del ratón para moverte por la canción. Guarda para conservarlo.",
   "There is no room for the syllables added after \"{text}\": its note is too short to split. Make it longer first (drag its right edge).": "No caben las sílabas añadidas después de «{text}»: su nota es demasiado corta para dividirla. Alárgala primero (arrastra su borde derecho).",
-  "One piece per note, separated by |. A space at the end of a piece ends the word; ~ holds the syllable before. This line has {n} notes; write more pieces to add syllables (the note before them is split).": "Un trozo por nota, separados por |. Un espacio al final de un trozo termina la palabra; ~ alarga la sílaba anterior. Esta línea tiene {n} notas; escribe más trozos para añadir sílabas (se divide la nota de antes)."
+  "One piece per note, separated by |. A space at the end of a piece ends the word; ~ holds the syllable before. This line has {n} notes; write more pieces to add syllables (the note before them is split).": "Un trozo por nota, separados por |. Un espacio al final de un trozo termina la palabra; ~ alarga la sílaba anterior. Esta línea tiene {n} notas; escribe más trozos para añadir sílabas (se divide la nota de antes).",
+  "Undo the last change": "Deshacer el último cambio",
+  "Undo": "Deshacer",
+  "Redo the change undone": "Rehacer el cambio deshecho",
+  "Undo all the changes (Ctrl+Z brings them back)": "Deshacer todos los cambios (Ctrl+Z los recupera)",
+  "Undo all the changes": "Deshacer todos los cambios",
+  "Undo every change made since the editor was opened? (Ctrl+Z brings them back)": "¿Deshacer todos los cambios hechos desde que se abrió el editor? (Ctrl+Z los recupera)",
+  "Nothing to undo.": "No hay nada que deshacer."
 }

@@ -1,6 +1,7 @@
 import ctypes
 import logging
 import json
+import gc
 import os
 import re
 import shutil
@@ -1595,7 +1596,10 @@ class MainWindow(QMainWindow):
             self.song_model.set_playing(None)
             dialog = SyncEditorDialog(str(txt_path), self)
             dialog.exec()
-            if dialog.saved:
+            saved = dialog.saved
+            del dialog
+            gc.collect()  # the closed editor (audio, voice analysis, notes) is freed now, not whenever Python gets to it
+            if saved:
                 self.log(tr("Sync saved for {song} (its lyrics will be regenerated on the next conversion)")
                          .format(song=os.path.basename(directory_path)))
                 self._sync_cache.pop(str(txt_path), None)

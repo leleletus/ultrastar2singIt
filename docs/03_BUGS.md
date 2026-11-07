@@ -543,3 +543,14 @@ estado de cada bug está en la tabla). "Evidencia" = verificado con prueba, con 
   reconvertidas. Lo que queda por revisar a mano está en `~/LetsSing/INFORME_SONGMAKER.md`
   (`tools/songmaker_report.py`).
 
+### B-76 · ALTO · Editor: no se podía guardar tras borrar una nota y mover la línea siguiente a su hueco
+- **Dónde**: `SyncModel.rewrite_txt` (guardar del editor de sincronía). Reportado por el usuario con Goma de Mascar
+  (2026-11-07): «line 18 would start before the end of line 17» y temió perder la edición.
+- **Causa**: la comprobación de líneas que se pisan contaba las notas borradas (siguen en el archivo hasta el final
+  del guardado), mientras que el editor deja mover una nota sobre el sitio de una borrada.
+- **Arreglo (RESUELTO)**: las notas borradas no ocupan tiempo; una línea entera borrada deja su salto de página
+  pendiente al anterior. La edición abierta se rescató sin cerrar el programa con `sys.remote_exec` (Python 3.14):
+  `~/LetsSing/_respaldo_editor/rescate.py` guarda el estado del editor en JSON y carga el `rewrite_txt` corregido.
+- **De paso**: deshacer paso a paso (Ctrl+Z / Ctrl+Y; antes solo «deshacer todo», ahora con confirmación y
+  recuperable) y los editores cerrados se liberan al cerrarlos (quedaban 5 en memoria).
+

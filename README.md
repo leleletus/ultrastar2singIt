@@ -138,12 +138,14 @@ before and after it (shorten or move the neighbour first).
 | +250 » | Lyrics later | `Ctrl+Right` | 250 ms later |
 | ✂ Start | Cut start (*Inicio*) | `C` | a new part starts at the line being sung and gets selected: from now on the arrows move only that part (from there to the next cut or to the end) |
 | ⏐ End | Cut end (*Fin*) | `V` | the selected part ends just before the line being sung: what comes after does not move |
-| ↶ Join | Join (*Unir*) | | removes the selected cut: the part joins the one before it and takes its shift |
+| ⤙ Join | Join (*Unir*) | | removes the selected cut: the part joins the one before it and takes its shift |
 | ↔ All the lyrics | All the lyrics (*Toda la letra*) | `G` | selects the whole song (`#GAP`): the arrows move every part together |
 | | previous / next part | `[` / `]` | selects the part before / after (or click it on the line map) |
 | ✨ Fit to voice | Fit to voice (*Ajustar a la voz*) | `A` | moves the line being sung, and its part up to the next cut, to where the voice analysis found the singer. Needs *Analyze voice* first |
 | 〜 Analyze voice | Analyze voice (*Analizar voz*) | | isolates the voice with Demucs (about 2–3 minutes, once per song; then it is kept next to the song): draws the singer over the notes and colours the line map. SongMaker songs are already analysed (from their original audio; the editor moves it to the converted audio) |
-| ↶ | Undo changes (*Deshacer cambios*) | | back to how the song was when the editor opened: timing, cuts, pitches, moved/resized notes, deleted and fixed lyrics |
+| ↶ Undo | Undo (*Deshacer*) | `Ctrl+Z` | undoes the last change, one step at a time (a whole drag of a note is one step; up to 500 steps) |
+| ↷ | Redo (*Rehacer*) | `Ctrl+Y` / `Ctrl+Shift+Z` | does again the change just undone (a new change forgets what was undone) |
+| ⤺⤺ | Undo all the changes (*Deshacer todos los cambios*) | | asks first, then goes back to how the song was when the editor opened: timing, cuts, pitches, moved/resized notes, added, deleted and fixed lyrics. `Ctrl+Z` brings everything back |
 | 💾 Save | Save (*Guardar*) | `Ctrl+S` | writes the txt (a `.bak` copy of the original txt is kept the first time). Convert the song afterwards so the game gets it |
 
 The label under the buttons shows what the arrows move (all the lyrics, or lines *a–b* and their shift), how many
