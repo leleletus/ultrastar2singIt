@@ -869,6 +869,14 @@ class SongMakerTest(unittest.TestCase):
         self.assertEqual([round(a / SongMaker.FRAME) for a, *_ in notes], [10, 40, 70])
         self.assertEqual([m for _, _, m, _ in notes], [60, 64, 67])
 
+    def test_long_lines_are_split(self):
+        import SongMaker
+        self.assertEqual(SongMaker.split_long_line("Me llamó Cristina, Cristina, Cristina, Cristina, Cristina, Cristina, Cristina"),
+                         ["Me llamó Cristina, Cristina, Cristina", "Cristina, Cristina, Cristina, Cristina"])
+        self.assertEqual(SongMaker.split_long_line("Hay un party después del party"), ["Hay un party después del party"])
+        pieces = SongMaker.split_long_line("Que llegamo' a la cama con la mente pasada de nota y otra cosa")
+        self.assertTrue(all(len(x) <= SongMaker.LINE_MAX_CHARS for x in pieces) and len(pieces) == 2)
+
     def test_backing_vocals_are_left_out(self):
         import SongMaker
         self.assertEqual(SongMaker.lead_vocal("Check that money (yikes)"), "Check that money")

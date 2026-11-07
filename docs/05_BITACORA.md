@@ -385,3 +385,16 @@
   (`group_range`: hasta la primera nota no seleccionada), Shift+arriba/abajo cambia el tono de todas y Supr las borra.
 - Esc cerraba el editor **sin preguntar** (`reject` no pasaba por `closeEvent`): ahora pregunta si hay cambios.
 
+### 2026-11-07 · Cristina: letra completa de Genius colocada por el modelo de habla
+- El usuario: Cristina «muy mal», le falta letra («Hay mucha demencia…» al empezar). LRCLIB solo tenía la versión
+  del disco TumbaGobierno (3:07, letra hasta 1:38, sin los versos de Justin Quiles y Nacho); el video dura 3:19.
+- `SongMaker.lyrics_from_genius`: la letra de `<name>_genius_sections.json` (sin coletillas, `lead_vocal`; líneas de
+  más de 40 caracteres partidas por la coma del medio) se busca entera sobre toda la canción con el modelo de habla
+  (un Viterbi CTC de 10 000 cuadros, 0,6 s) y cada línea se mide otra vez en su sitio. `songmaker.json` lleva
+  `"lyrics": "genius"` y las líneas con tiempo van en `lyrics_aligned.json` (`remake_notes` las usa).
+- Cristina: 82 líneas (antes 42), la primera nota a 9,0 s (voz a 9,3 s; antes 14,8 s), letra hasta 3:03 (antes
+  1:58), sílabas colocadas por el modelo en el 84 % de las líneas (antes 45 %). 12 líneas dudosas (estribillo con
+  coletillas encima).
+- Spotify/Shazam: Shazam no da tiempos; la letra con tiempos de Spotify es de Musixmatch y pide sesión. No hace
+  falta: con la letra completa el modelo encuentra los tiempos.
+

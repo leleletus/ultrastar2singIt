@@ -617,6 +617,67 @@ def lead_vocal(text):
     return out.strip(' ,;')
 
 
+# ---------------------------------------------------------------------------
+# Whole lyrics (Genius) placed on the song by the speech model: for songs whose LRCLIB lyrics are of another version
+# or miss verses (Maffio - Cristina: LRCLIB had the album cut and stopped at 1:38 of 3:19)
+# ---------------------------------------------------------------------------
+LYRICS_FILE = 'lyrics_aligned.json'
+LINE_MAX_CHARS = 40             # longer lines are split in two (at the comma nearest the middle), like LRCLIB does
+LINE_PAD_FRAMES = 15            # each line is measured again from 0.3 s around where the whole song put it
+
+
+def split_long_line(text, limit=LINE_MAX_CHARS):
+    """A line too long for the screen in pieces of at most about limit characters: at the comma nearest the
+    middle, else at the space nearest it."""
+    text = text.strip()
+    if len(text) <= limit:
+        return [text]
+    middle = len(text) / 2
+    commas = [m.end() for m in re.finditer(r'[,;]\s', text)]
+    spaces = [m.start() for m in re.finditer(r'\s', text)]
+    near = [c for c in commas if abs(c - middle) <= len(text) / 4]
+    cut = min(near or spaces or [len(text)], key=lambda c: abs(c - middle))
+    if cut <= 0 or cut >= len(text):
+        return [text]
+    first, second = text[:cut].strip().rstrip(','), text[cut:].strip()
+    return split_long_line(first, limit) + split_long_line(second, limit)
+
+
+def genius_lyrics(folder):
+    """The lines of the song's Genius lyrics (<name>_genius_sections.json made by the converter), as the lead
+    voice sings them (lead_vocal) and split when too long; [] when there is none."""
+    for path in sorted(Path(folder).glob('*_genius_sections.json')):
+        data = json.loads(path.read_text(encoding='utf-8'))
+        out = []
+        for section in data.get('sections', []):
+            for text, _style in section.get('lines', []):
+                line = lead_vocal(text)
+                if re.search(r'\w', line):
+                    out += split_long_line(line)
+        if out:
+            return out
+    return []
+
+
+def align_lyrics(ctc, texts):
+    """[(start s, line, confidence)] of whole lyrics on the whole song: the speech model looks for every line in
+    order over all of it (no times needed), then measures each line again around where it fell (its confidence:
+    mean log-probability of its letters, below ALIGN_MIN_LOGP the model is not sure)."""
+    import VoiceAlign
+    logp, vocab = ctc
+    found = VoiceAlign.align_line(logp, vocab, 0, len(logp), texts)
+    if found is None:
+        raise RuntimeError("the lyrics do not fit in the song (more letters than the audio can hold)")
+    out = []
+    for text, span in zip(texts, found[0]):
+        if span is None:
+            continue
+        a, b = span
+        again = VoiceAlign.align_line(logp, vocab, a - LINE_PAD_FRAMES, b + LINE_PAD_FRAMES, [text])
+        out.append((a * FRAME, text, round(again[1], 2) if again else None))
+    return out
+
+
 def _aligned_onsets(ctc, syllables, a, b, after=0, info=None):
     """Start frame of each syllable from the speech model (VoiceAlign), looked for from ALIGN_BEFORE_S before the
     line's window (but after the line before has ended: frame `after`) to its end; None when the model is not sure
@@ -1054,15 +1115,19 @@ def remake_notes(folder, keep_dir=None, log=print, force=False):
                                 headers={'User-Agent': USER_AGENT})
         response.raise_for_status()
         cache.write_text(json.dumps([response.json()], ensure_ascii=False), encoding='utf-8')
-    versions = {v[0]: v for v in lrclib_versions(None, None, folder)}
-    if meta['lrclib_id'] not in versions:
-        raise RuntimeError(f"{folder.name}: LRCLIB version {meta['lrclib_id']} is not in lrclib.json")
+    if meta.get('lyrics') == 'genius':  # whole lyrics placed by the speech model (lyrics_from_genius)
+        timed = json.loads((folder / LYRICS_FILE).read_text(encoding='utf-8'))['lines']
+        lines, offset = [(t, text) for t, text, _ in timed], 0.0
+    else:
+        versions = {v[0]: v for v in lrclib_versions(None, None, folder)}
+        if meta['lrclib_id'] not in versions:
+            raise RuntimeError(f"{folder.name}: LRCLIB version {meta['lrclib_id']} is not in lrclib.json")
+        lines, offset = versions[meta['lrclib_id']][2], meta['offset']
     voice = np.load(SyncModel.voice_cache_path(str(folder)))
     energy, pitch = voice['energy'].astype(np.float32), voice['pitch'].astype(np.float32)
     language = tags.get('LANGUAGE', 'Spanish').strip()
     ctc = speech_model(folder, None, log, make=False)
-    lines_notes = [n for n in make_notes(versions[meta['lrclib_id']][2], meta['offset'], energy, pitch, language,
-                                         ctc=ctc) if n]
+    lines_notes = [n for n in make_notes(lines, offset, energy, pitch, language, ctc=ctc) if n]
     if keep_dir:
         keep = Path(keep_dir) / folder.name
         keep.mkdir(parents=True, exist_ok=True)
@@ -1074,3 +1139,29 @@ def remake_notes(folder, keep_dir=None, log=print, force=False):
     rap = sum(1 for line in lines_notes if line and line[0][2] is None)
     log(f"{folder.name}: {meta['notes']} notes in {meta['lines']} lines" + (f", {rap} rapped" if rap else ''))
     return txt
+
+
+def lyrics_from_genius(folder, keep_dir=None, log=print, dry_run=False):
+    """Gives a SongMaker song the whole Genius lyrics, placed on the song by the speech model, instead of its LRCLIB
+    lyrics (another version, missing verses). Needs the song's Genius sections (made by the converter) and its
+    speech model output. The old txt is copied to keep_dir first; the header tags are kept. Returns
+    [(start s, line, confidence)]."""
+    folder = Path(folder)
+    texts = genius_lyrics(folder)
+    if not texts:
+        raise RuntimeError(f"{folder.name}: no Genius lyrics (convert the song once so they are looked up)")
+    ctc = speech_model(folder, None, log, make=False)
+    if ctc is None:
+        raise RuntimeError(f"{folder.name}: no speech model output (tools/align_voices.py)")
+    timed = align_lyrics(ctc, texts)
+    if dry_run:
+        return timed
+    meta_path = folder / 'songmaker.json'
+    meta = json.loads(meta_path.read_text(encoding='utf-8'))
+    (folder / LYRICS_FILE).write_text(json.dumps({'source': 'genius', 'lines': timed}, ensure_ascii=False, indent=1),
+                                      encoding='utf-8')
+    meta['lyrics'] = 'genius'
+    meta_path.write_text(json.dumps(meta, indent=1), encoding='utf-8')
+    remake_notes(folder, keep_dir=keep_dir, log=log, force=True)
+    return timed
+
