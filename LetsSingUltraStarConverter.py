@@ -1,7 +1,21 @@
+import os
 import sys
 
 
+def _clean_child_environment():
+    """In the Linux build (PyInstaller, AppImage) LD_LIBRARY_PATH points to the bundled libraries; ffmpeg, ffprobe,
+    wine and every other program the converter starts would inherit it and load those instead of their own (ffprobe
+    then fails). This process already has its libraries loaded, so the original value is put back for the children."""
+    if getattr(sys, 'frozen', False) and sys.platform.startswith('linux'):
+        original = os.environ.pop('LD_LIBRARY_PATH_ORIG', None)
+        if original is not None:
+            os.environ['LD_LIBRARY_PATH'] = original
+        else:
+            os.environ.pop('LD_LIBRARY_PATH', None)
+
+
 def main():
+    _clean_child_environment()
     if len(sys.argv) > 2 and sys.argv[1] == "--tool":
         _run_tool(sys.argv[2], sys.argv[3:])
     elif "--cli" in sys.argv or "-c" in sys.argv:
