@@ -126,16 +126,26 @@ class NoteLane(QWidget):
             return 'start'
         return 'body'
 
+    def wheelEvent(self, event):
+        """The mouse wheel (or a touchpad) moves through the song: half a second a step, 2 s with Ctrl."""
+        wheel_seek(self.editor, event)
+
     def mousePressEvent(self, event):
-        """Click a note to select it. Drag its middle up/down to change its pitch or sideways to move it in time,
+        """Click a note to select it (an empty place: drag it to move through the song). Drag its middle up/down to change its pitch or sideways to move it in time,
         drag its right edge to make it longer or shorter (its left edge moves its start)."""
         ed = self.editor
-        if ed.official or event.button() != Qt.LeftButton:
+        if event.button() != Qt.LeftButton:
             return super().mousePressEvent(event)
+        if ed.official:  # read-only: the lane only scrolls
+            self._drag = {'zone': 'pan', 'x': event.position().x(), 'time': ed.position_s()}
+            return
         ed.selected_note = self.note_at(event.position())
         note = ed.selected_note
         self._drag = None
-        if note is not None:
+        if note is None:  # dragging the empty lane scrolls through the song
+            self._drag = {'zone': 'pan', 'x': event.position().x(), 'time': ed.position_s()}
+            self.setCursor(Qt.ClosedHandCursor)
+        else:
             pos = event.position()
             self._drag = {'zone': self.zone_at(note, pos), 'x': pos.x(), 'y': pos.y(), 'pitch': note.pitch,
                           't': note.t, 'd': note.d, 'axis': None}
@@ -155,6 +165,10 @@ class NoteLane(QWidget):
     def mouseMoveEvent(self, event):
         ed = self.editor
         pos = event.position()
+        if self._drag is not None and self._drag['zone'] == 'pan':
+            dx = pos.x() - self._drag['x']
+            ed.seek_s(max(0.0, self._drag['time'] - dx / max(1, self.width()) * LANE_SECONDS))
+            return
         if self._drag is None or ed.selected_note is None:
             if not ed.official and not event.buttons():  # hover: the cursor tells what a drag would do
                 note = self.note_at(pos)
@@ -181,6 +195,8 @@ class NoteLane(QWidget):
                     ed.move_selected_note(drag['pitch'] + steps - note.pitch)
 
     def mouseReleaseEvent(self, event):
+        if self._drag is not None and self._drag['zone'] == 'pan':
+            self.setCursor(Qt.ArrowCursor)
         self._drag = None
         super().mouseReleaseEvent(event)
 
@@ -267,6 +283,16 @@ class NoteLane(QWidget):
         p.end()
 
 
+def wheel_seek(editor, event):
+    """Moves through the song with the mouse wheel: down/right = forward, half a second a step (2 s with Ctrl)."""
+    delta = event.angleDelta()
+    steps = (delta.y() or -delta.x()) / 120.0
+    if steps:
+        step = 2.0 if event.modifiers() & Qt.ControlModifier else 0.5
+        editor.seek_s(max(0.0, editor.position_s() - steps * step))
+    event.accept()
+
+
 class SyncMap(QWidget):
     """The whole song in one strip: every lyrics line coloured by how well it matches the voice, cuts and playhead."""
 
@@ -277,6 +303,9 @@ class SyncMap(QWidget):
         self.setCursor(Qt.PointingHandCursor)
         self.setToolTip(tr("Lyrics lines: green = on the voice, orange/red = out of time, grey = voice not "
                            "analyzed. Orange marks are cuts. Click to jump there."))
+
+    def wheelEvent(self, event):
+        wheel_seek(self.editor, event)
 
     def mousePressEvent(self, event):
         total = self.editor.total_s()
@@ -427,6 +456,9 @@ class SyncEditorDialog(QDialog):
             self.all_notes, self.raw_texts, self.line_count, bpm = SyncModel.txt_notes(self.us_data)
             self.song = SyncModel.song_from_notes(self.all_notes, self.raw_texts, self.line_count, bpm)
         self.note_index = {id(n): i for i, n in enumerate(self.all_notes)}
+        # notes added in the editor (a note split in two) go at the end of all_notes; order is the time order
+        self.file_notes = len(self.all_notes)
+        self.order = list(range(self.file_notes))
         self.text_edits = {}      # note index -> new text (fixed lyrics)
         self.deleted = set()      # note indices taken out (lyrics that are not sung there)
         self.original_pitches = [n.pitch for n in self.all_notes]
@@ -515,8 +547,8 @@ class SyncEditorDialog(QDialog):
         if not self.official:
             self.lane.setToolTip(tr("Click a note to select it. Drag it up/down to change its pitch (Shift+Up/Down), "
                                     "sideways to move it in time (Alt+Left/Right), its right edge to make it longer "
-                                    "or shorter (Ctrl+Shift+Left/Right). Double click: fix its syllable. Save to "
-                                    "keep it."))
+                                    "or shorter (Ctrl+Shift+Left/Right). Double click: fix its syllable. Drag an "
+                                    "empty place or use the mouse wheel to move through the song. Save to keep it."))
         layout.addWidget(self.lane, stretch=2)
 
         self.lyrics_display = QLabel()
@@ -651,7 +683,11 @@ class SyncEditorDialog(QDialog):
         self.btn_text = tool_button('cursor-text', tr("Fix the lyrics of the line being played (or the selected "
                                                       "note's line). Double click a note to fix only its syllable."),
                                     self.edit_line_text, self, ("T",), text=tr("Fix text"), color=BLUE)
-        for b in (self.btn_del_syllable, self.btn_del_line, self.btn_text):
+        self.btn_split = tool_button('arrows-split', tr("Split the selected note in two, to add a syllable that is "
+                                                        "missing (then write it). Fix text (T) also splits notes "
+                                                        "when you write more pieces than notes."),
+                                     self.split_selected, self, ("S",), text=tr("Split note"), color=BLUE)
+        for b in (self.btn_del_syllable, self.btn_del_line, self.btn_text, self.btn_split):
             words.addWidget(b)
             self.edit_buttons.append(b)
         self.lbl_edits = QLabel()
@@ -847,11 +883,12 @@ class SyncEditorDialog(QDialog):
     # ------------------------------------------------------------------ editing
     def changed(self):
         return self.gap_ms != self.original_gap_ms or any(abs(d) > 1e-9 for d in self.splits.values()) \
-            or bool(self.pitch_edits()) or bool(self.text_edits) or bool(self.deleted) or bool(self.time_edits())
+            or bool(self.pitch_edits()) or bool(self.text_edits) or bool(self.deleted) or bool(self.time_edits()) \
+            or (not self.official and bool(self.inserted_notes()))
 
     def pitch_edits(self):
         """{note index: new UltraStar pitch} of the notes moved up or down."""
-        return {i: int(round(n.pitch)) - 60 for i, n in enumerate(self.all_notes)
+        return {i: int(round(n.pitch)) - 60 for i, n in enumerate(self.all_notes[:self.file_notes])
                 if n.sung and n.pitch != self.original_pitches[i] and i not in self.deleted}
 
     def time_edits(self):
@@ -859,16 +896,16 @@ class SyncEditorDialog(QDialog):
         beat = self.beat_s()
         if not beat or self.official:
             return {}
-        return {i: (int(round(n.t / beat)), max(1, int(round(n.d / beat)))) for i, n in enumerate(self.all_notes)
-                if i not in self.deleted and (abs(n.t - self.original_times[i][0]) > 1e-6
+        return {i: (int(round(n.t / beat)), max(1, int(round(n.d / beat))))
+                for i, n in enumerate(self.all_notes[:self.file_notes]) if i not in self.deleted and (abs(n.t - self.original_times[i][0]) > 1e-6
                                               or abs(n.d - self.original_times[i][1]) > 1e-6)}
 
     def note_limits(self, note):
         """(first beat, last beat) a note can take without going over the notes before and after it."""
         beat = self.beat_s()
-        i = self.note_index[id(note)]
-        before = next((self.all_notes[j] for j in range(i - 1, -1, -1) if j not in self.deleted), None)
-        after = next((self.all_notes[j] for j in range(i + 1, len(self.all_notes)) if j not in self.deleted), None)
+        pos = self.order.index(self.note_index[id(note)])
+        before = next((self.all_notes[j] for j in reversed(self.order[:pos]) if j not in self.deleted), None)
+        after = next((self.all_notes[j] for j in self.order[pos + 1:] if j not in self.deleted), None)
         lo = int(round((before.t + before.d) / beat)) if before else -10 ** 9
         hi = int(round(after.t / beat)) if after else 10 ** 9
         return lo, hi
@@ -922,8 +959,10 @@ class SyncEditorDialog(QDialog):
 
     def rebuild_song(self):
         """self.song again from every note, without the deleted ones and with the fixed texts."""
-        texts = [self.text_of(i) for i in range(len(self.all_notes))]
-        self.song = SyncModel.song_from_notes(self.all_notes, texts, self.line_count, self.song.bpm, self.deleted)
+        notes = [self.all_notes[i] for i in self.order]
+        texts = [self.text_of(i) for i in self.order]
+        deleted = {k for k, i in enumerate(self.order) if i in self.deleted}
+        self.song = SyncModel.song_from_notes(notes, texts, self.line_count, self.song.bpm, deleted)
         if self.selected_note is not None and self.note_index[id(self.selected_note)] in self.deleted:
             self.selected_note = None
         self.lane.update()
@@ -939,7 +978,55 @@ class SyncEditorDialog(QDialog):
             self.text_edits[index] = text
 
     def line_notes(self, line):
-        return [i for i, n in enumerate(self.all_notes) if n.line == line and i not in self.deleted]
+        return [i for i in self.order if self.all_notes[i].line == line and i not in self.deleted]
+
+    def split_note(self, note):
+        """Splits a note in two (first half: the note, second half: a new held note "~" with the same pitch).
+        Returns the new note, or None when it lasts less than 2 beats."""
+        beat = self.beat_s()
+        if self.official or not beat or note is None:
+            return None
+        length = int(round(note.d / beat))
+        if length < 2:
+            return None
+        first = (length + 1) // 2
+        new = SyncModel.Note(note.t + first * beat, (length - first) * beat, note.pitch, note.kind, note.line)
+        note.d = first * beat
+        k = len(self.all_notes)
+        self.all_notes.append(new)
+        self.raw_texts.append('~')
+        self.original_pitches.append(new.pitch)
+        self.original_times.append((new.t, new.d))
+        self.note_index[id(new)] = k
+        self.order.insert(self.order.index(self.note_index[id(note)]) + 1, k)
+        return new
+
+    def split_selected(self):
+        """Button: splits the selected note in two, to give a missing syllable its own note."""
+        note = self.selected_note
+        if self.official or note is None:
+            return
+        new = self.split_note(note)
+        if new is None:
+            self.lbl_part.setText(tr("This note is too short to split (it needs 2 beats or more): make it longer "
+                                     "first."))
+            return
+        self.selected_note = new
+        self.rebuild_song()
+        self.edit_note_text(new)
+
+    def inserted_notes(self):
+        """{index of the file note they follow: [(kind, start beat, length, UltraStar pitch, text)]} of the notes
+        added in the editor."""
+        beat, out, anchor = self.beat_s(), {}, None
+        for i in self.order:
+            if i < self.file_notes:
+                anchor = i
+            elif i not in self.deleted and anchor is not None:
+                n = self.all_notes[i]
+                out.setdefault(anchor, []).append((n.kind, int(round(n.t / beat)), max(1, int(round(n.d / beat))),
+                                                   int(round(n.pitch)) - 60, self.text_of(i)))
+        return out
 
     def edit_note_text(self, note):
         """Fixes the text of one note (a misspelt syllable)."""
@@ -966,20 +1053,49 @@ class SyncEditorDialog(QDialog):
         text, ok = QInputDialog.getText(
             self, tr("Fix the lyrics of line {n}").format(n=line + 1),
             tr("One piece per note, separated by |. A space at the end of a piece ends the word; ~ holds the "
-               "syllable before. This line has {n} notes.").format(n=len(indices)),
+               "syllable before. This line has {n} notes; write more pieces to add syllables (the note before "
+               "them is split).").format(n=len(indices)),
             text=current)
         if not ok or text == current:
             return
         pieces = text.split('|')
-        if len(pieces) != len(indices):
+        plan = self.pieces_per_note(indices, pieces)
+        short = [i for i, got in plan.items() if len(got) > max(1, int(round(self.all_notes[i].d / self.beat_s())))]
+        if short:
             QMessageBox.warning(self, tr("Fix the lyrics of line {n}").format(n=line + 1),
-                                tr("The line has {n} notes: write {n} pieces separated by | (there are {m}). To take "
-                                   "out a syllable, select its note and delete it.").format(n=len(indices),
-                                                                                           m=len(pieces)))
+                                tr("There is no room for the syllables added after \"{text}\": its note is too short "
+                                   "to split. Make it longer first (drag its right edge).").format(
+                                    text=self.text_of(short[0]).strip()))
             return
-        for i, piece in zip(indices, pieces):
-            self.set_text(i, piece)
+        for i in indices:
+            got = plan[i]
+            group = [self.all_notes[i]]
+            while len(group) < len(got):  # syllables added here: the note is split, the longest part each time
+                longest = max(group, key=lambda n: n.d)
+                group.insert(group.index(longest) + 1, self.split_note(longest))
+            for note, piece in zip(group, got or ['~']):  # a syllable taken out: its note holds the one before
+                self.set_text(self.note_index[id(note)], piece)
         self.rebuild_song()
+
+    def pieces_per_note(self, indices, pieces):
+        """{note index: [pieces]} for the fixed text of a line: the pieces are matched with the notes' texts as they
+        were, so a syllable added between two others goes to the note before it (split later), a changed one to its
+        own note and one taken out leaves its note empty."""
+        import difflib
+        old = [self.text_of(i).strip().lower() for i in indices]
+        new = [p.strip().lower() for p in pieces]
+        plan = {i: [] for i in indices}
+        for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(a=old, b=new, autojunk=False).get_opcodes():
+            notes, got = indices[i1:i2], pieces[j1:j2]
+            if tag == 'insert':
+                if i1 > 0:
+                    plan[indices[i1 - 1]] += got
+                else:
+                    plan[indices[0]] = got + plan[indices[0]]
+                continue
+            for k, i in enumerate(notes):  # one piece per note, what is left goes to the last one
+                plan[i] += got[k:k + 1] if k < len(notes) - 1 else got[k:]
+        return plan
 
     def delete_selected(self):
         """Takes out the selected syllable with its notes (its held "~" notes too): lyrics where nothing is sung."""
@@ -987,16 +1103,17 @@ class SyncEditorDialog(QDialog):
         if self.official or note is None:
             return
         first = self.note_index[id(note)]
+        pos = self.order.index(first)
         indices = [first]
         if self.text_of(first).strip() not in ('~', ''):
-            j = first + 1
-            while j < len(self.all_notes) and self.all_notes[j].line == note.line and \
-                    (j in self.deleted or self.text_of(j).strip() in ('~', '')):
+            for j in self.order[pos + 1:]:
+                if self.all_notes[j].line != note.line or \
+                        (j not in self.deleted and self.text_of(j).strip() not in ('~', '')):
+                    break
                 if j not in self.deleted:
                     indices.append(j)
-                j += 1
         ended_word = self.text_of(first).endswith(' ') or self.text_of(indices[-1]).endswith(' ')
-        before = [i for i in self.line_notes(note.line) if i < first]
+        before = [i for i in self.line_notes(note.line) if self.order.index(i) < pos]
         if ended_word and before and not self.text_of(before[-1]).endswith(' '):
             self.set_text(before[-1], self.text_of(before[-1]) + ' ')  # the word before still ends there
         self.deleted.update(indices)
@@ -1102,6 +1219,11 @@ class SyncEditorDialog(QDialog):
     def undo_all(self):
         for note, pitch, (t, d) in zip(self.all_notes, self.original_pitches, self.original_times):
             note.pitch, note.t, note.d = pitch, t, d
+        if not self.official:  # notes added in the editor go
+            for added in (self.all_notes, self.raw_texts, self.original_pitches, self.original_times):
+                del added[self.file_notes:]
+            self.order = list(range(self.file_notes))
+            self.note_index = {id(n): i for i, n in enumerate(self.all_notes)}
         self.selected_note = None
         self.text_edits.clear()
         self.deleted.clear()
@@ -1184,7 +1306,10 @@ class SyncEditorDialog(QDialog):
             timed = self.time_edits()
             if timed:
                 parts.append(tr("{n} notes moved or resized").format(n=len(timed)))
-            if self.deleted or self.text_edits or timed:
+            added = sum(len(v) for v in self.inserted_notes().values()) if not self.official else 0
+            if added:
+                parts.append(tr("{n} notes added").format(n=added))
+            if self.deleted or self.text_edits or timed or added:
                 parts.append(tr("save to keep it"))
             self.lbl_edits.setText(" · ".join(parts))
         self.btn_uncut.setEnabled(part != 0 and not self.official)
@@ -1475,9 +1600,10 @@ class SyncEditorDialog(QDialog):
             text = raw.decode(encoding)
             newline = '\r\n' if '\r\n' in text else '\n'
             lines = SyncModel.rewrite_txt(text.splitlines(), self.gap_ms, self.line_beats(),
-                                          expected_notes=len(self.all_notes), note_pitches=self.pitch_edits(),
-                                          note_texts=self.text_edits, deleted_notes=self.deleted,
-                                          note_times=self.time_edits())
+                                          expected_notes=self.file_notes, note_pitches=self.pitch_edits(),
+                                          note_texts={i: t for i, t in self.text_edits.items() if i < self.file_notes},
+                                          deleted_notes={i for i in self.deleted if i < self.file_notes},
+                                          note_times=self.time_edits(), inserted_notes=self.inserted_notes())
             if not os.path.exists(self.txt_path + '.bak'):
                 # the first time a song is re-synced its original txt is kept, it can always be restored
                 with open(self.txt_path + '.bak', 'wb') as f:

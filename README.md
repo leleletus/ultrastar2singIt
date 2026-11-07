@@ -95,6 +95,7 @@ their timing as it is, so only playback, voice analysis and sing mode work; the 
 | Note lane | the notes as bars like the game, **with their syllable written under them**: **blue** = normal note, **yellow** = golden note, **grey bar at the bottom** = rap note (only the timing counts, not the pitch). The white vertical line is "now"; the name of the note being sung is shown next to it. Horizontal guides = one per semitone (labelled on every C). After *Analyze voice*, **light-blue dots** = the singer's real voice. In sing mode, **green / red dots** = your voice on / off the note. A **white outline** = the selected note. The **orange tint** = the part the arrows move; **orange lines** = cuts |
 | Karaoke lyrics | the line being sung, coloured as it goes, and the next one |
 | Timeline | click anywhere to jump there |
+| Moving through the song | **mouse wheel** over the note lane or the line map: half a second a step (2 s with `Ctrl`); **drag an empty place of the note lane** sideways to scroll like a map |
 | Line map | one block per lyrics line: **green** = on the voice, **orange** = a bit off, **red** = out of time, **grey** = voice not analysed yet (or the line is barely sung). Orange triangles = cuts, white box = selected part, red line = end of the audio. Click to jump there (and select that part) |
 
 ### Mouse on the note lane
@@ -165,12 +166,15 @@ how many notes were deleted / texts fixed.
 |---|---|---|---|
 | 🗑 Delete syllable | Delete syllable (*Borrar sílaba*) | `Delete` | deletes the selected note's syllable with its notes (also the `~` notes that hold it). Click the note first |
 | row minus | Delete line (*Borrar línea*) | `Ctrl+Delete` | deletes the line being sung (or the selected note's line) with all its notes, after asking |
-| I-beam Fix text | Fix text (*Corregir texto*) | `T` | fixes the text of the line being sung (or of the selected note's line) |
+| I-beam Fix text | Fix text (*Corregir texto*) | `T` | fixes the text of the line being sung (or of the selected note's line); you can also **add** missing syllables (see below) |
+| ⑂ Split note | Split note (*Dividir nota*) | `S` | splits the selected note in two (same pitch) and asks for the text of the new half: a syllable that was missing. The note needs 2 beats or more |
 | | Fix syllable | double click a note | fixes the text of only that note |
 
 How to write the text:
-- *Fix text* shows the line **one piece per note, separated by `|`**, for example `Ca|mi|nan|do ` . Keep the same
-  number of pieces (the window says how many notes the line has); to take out a syllable, delete its note instead.
+- *Fix text* shows the line **one piece per note, separated by `|`**, for example `Ca|mi|nan|do `. What you write is
+  compared with what was there: a changed piece changes its note; **an added piece splits the note before it** (in
+  `Neo|do |kiss` → `Neo|do |ya|kiss` the note of "do" is split in two); a removed piece leaves its note as `~` (or
+  delete the note). If the note is too short to split, make it longer first (drag its right edge).
 - A **space at the end** of a piece ends the word: `Ca|mi|nan|do ` is one word, `Ca |mi ` are two.
 - `~` holds the syllable before (a long note sung over several pitches). An empty piece becomes `~`.
 

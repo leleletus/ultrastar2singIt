@@ -364,4 +364,11 @@
   `.ogg` convertido, así que `load_voice` lo descartaba por tamaño. Ahora `voice_of_source` lo usa movido al tiempo del
   `.ogg` (VIDEOGAP − recorte de #START; 0 en SongMaker).
 - GUI: casilla «Solo hechas con SongMaker».
+- Añadir sílabas que faltan: botón «Dividir nota» (S) y «Corregir texto» con más trozos que notas. Lo escrito se compara
+  con lo que había (difflib): un trozo añadido divide la nota de antes (la primera versión dividía la nota más larga de
+  la línea y corría todas las sílabas; visto al probarlo), uno cambiado cambia su nota y uno quitado deja `~`. Las notas
+  nuevas van al final de `all_notes` con `order` (orden en el tiempo); `rewrite_txt(inserted_notes=…)` las escribe
+  tras la nota del archivo que siguen.
+- Moverse por la canción: rueda del ratón sobre el carril o el mapa (0,5 s; 2 s con Ctrl) y arrastrar un sitio vacío
+  del carril.
 

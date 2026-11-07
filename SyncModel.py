@@ -335,13 +335,14 @@ _BREAK_LINE = re.compile(r'^(\s*-\s*)(-?\d+)(\s+(-?\d+))?(.*)$')
 
 
 def rewrite_txt(lines, gap_ms, line_beats=None, expected_notes=None, note_pitches=None, note_texts=None,
-                deleted_notes=None, note_times=None):
+                deleted_notes=None, note_times=None, inserted_notes=None):
     """The txt lines with #GAP set and, when line_beats is given, the notes of every lyrics line i moved by
     line_beats[i] beats (page breaks follow the line after them). Same line numbering as load_txt.
     note_pitches: {note index (order of load_txt): new UltraStar pitch} changes only those pitches.
     note_texts: {note index: new syllable text}; deleted_notes: note indices taken out (a line left without notes
     loses its page break too); note_times: {note index: (start beat, length in beats)} as in the file before the
-    line moves (a note moved or made longer/shorter).
+    line moves (a note moved or made longer/shorter); inserted_notes: {note index: [(kind, start beat, length,
+    pitch, text)]} new notes written right after that note, in its line (a note split in two, a missing syllable).
     Raises ValueError when the file cannot be changed safely."""
     out = list(lines)
     gap_line = f"#GAP:{int(round(gap_ms))}"
@@ -360,9 +361,11 @@ def rewrite_txt(lines, gap_ms, line_beats=None, expected_notes=None, note_pitche
         out.insert(insert_at, gap_line)
 
     if (not line_beats or not any(line_beats)) and not note_pitches and not note_texts and not deleted_notes \
-            and not note_times:
+            and not note_times and not inserted_notes:
         return out
     note_times = note_times or {}
+    inserted_notes = inserted_notes or {}
+    ready = {}  # note index -> its new notes as txt lines
     line_beats = line_beats or [0]
     note_pitches = note_pitches or {}
     headers = {l.split(':', 1)[0].strip().upper(): l.split(':', 1)[-1].strip().upper() for l in out if l.startswith('#')}
@@ -400,6 +403,12 @@ def rewrite_txt(lines, gap_ms, line_beats=None, expected_notes=None, note_pitche
                 rest = f"{p.group(1)}{int(note_pitches[count])}{p.group(3)}"
             out[i] = f"{m.group(1)}{start}{rest}"
             last_end = start + length if last_end is None or not has_notes else max(last_end, start + length)
+            if count in inserted_notes:
+                ready[count] = []
+                for kind, new_start, new_length, pitch, text in inserted_notes[count]:
+                    beat, beats = int(new_start) + delta, max(1, int(new_length))
+                    ready[count].append(f"{kind} {beat} {beats} {int(pitch)} {text}")
+                    last_end = max(last_end, beat + beats)
             count += 1
             has_notes = True
             continue
@@ -415,28 +424,32 @@ def rewrite_txt(lines, gap_ms, line_beats=None, expected_notes=None, note_pitche
             open_break = (i, m.group(1), beat, rest)
     if expected_notes is not None and count != expected_notes:
         raise ValueError(f"found {count} notes in the file but {expected_notes} were loaded")
-    if note_texts or deleted_notes:
-        out = _edit_notes(out, note_texts or {}, set(deleted_notes or ()))
+    if note_texts or deleted_notes or ready:
+        out = _edit_notes(out, note_texts or {}, set(deleted_notes or ()), ready)
     return out
 
 
 _NOTE_TEXT = re.compile(r'^(\s*[:*FRG]\s+-?\d+\s+-?\d+\s+-?\d+)(?: (.*))?$')
 
 
-def _edit_notes(lines, texts, deleted):
-    """Changes the text of some notes and takes others out (note indices in file order); page breaks left with no
-    line before them go too (a break keeps the beat of the first one, which stays between the lines around it)."""
+def _edit_notes(lines, texts, deleted, inserted=None):
+    """Changes the text of some notes, takes others out and writes new ones after some (note indices in file
+    order); page breaks left with no line before them go too (a break keeps the beat of the first one, which stays
+    between the lines around it)."""
     out, count = [], 0
+    inserted = inserted or {}
     for line in lines:
         if not line.startswith('#') and _NOTE_LINE.match(line):
             index, count = count, count + 1
-            if index in deleted:
-                continue
-            if index in texts:
-                m = _NOTE_TEXT.match(line)
-                if not m:
-                    raise ValueError(f"note {index + 1} has no text to change")
-                line = f"{m.group(1)} {texts[index]}"
+            if index not in deleted:
+                if index in texts:
+                    m = _NOTE_TEXT.match(line)
+                    if not m:
+                        raise ValueError(f"note {index + 1} has no text to change")
+                    line = f"{m.group(1)} {texts[index]}"
+                out.append(line)
+            out += inserted.get(index, [])
+            continue
         out.append(line)
     result, notes_since_break = [], False
     for line in out:
