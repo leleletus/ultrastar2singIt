@@ -410,3 +410,19 @@
   93 %), se quedan. Queencard: la del usuario está completa salvo la repetición final «You wanna be the kwinka?» a
   3:10 (el modelo la oye ahí, -1,9), añadida sin tocar lo demás. Copias en `~/LetsSing/_respaldo_editor/`.
 
+### 2026-11-07 · Windows sigue funcionando; release v1.2.0 (exe + AppImage)
+- GitHub Actions no corre: la cuenta está bloqueada por un problema de facturación (los releases automáticos de
+  septiembre y octubre fallaron por eso en 4 s). Las comprobaciones se hicieron en local.
+- Windows probado con un Python de Windows real bajo Wine, en un prefijo aparte (`~/.cache/letssing_wintest`, sin
+  tocar `~/.wine`): Python 3.14 no sirve en Windows porque `pytablericons` pide `pygame` y no tiene rueda para 3.14;
+  con 3.13 pasan los 78 tests, el programa abre y convierte. Archivos abiertos sin `utf-8` buscados con `ast`: solo
+  `tools/song_status.py` importaba (arreglado).
+- La misma canción (Paty Cantú - Suerte, ruta con tilde) convertida en Windows (código y .exe) y en Linux (código y
+  AppImage) da archivos idénticos byte a byte, también el .bk2 recodificado con RAD Video Tools (directo en el .exe,
+  por Wine en el AppImage).
+- AppImage: `packaging/build_appimage.sh` lo compila en Debian 12 con podman (glibc 2.36: vale para Linux de los
+  últimos años, no solo para CachyOS). Fallo encontrado al probarlo: ffprobe heredaba el `LD_LIBRARY_PATH` del
+  empaquetado y no arrancaba; `LetsSingUltraStarConverter._clean_child_environment` lo devuelve a su valor.
+- Release v1.2.0 en el fork (leleletus) con `LetsSingConverter-1.2.0-windows.exe` y
+  `LetsSingConverter-1.2.0-x86_64.AppImage`. Los ejecutables no llevan Demucs ni el modelo de habla.
+
