@@ -497,6 +497,14 @@ class LyricsEditTest(unittest.TestCase):
         self.assertEqual(moved[6:8], [": 15 3 5 tú", ": 18 4 2 ~"])   # its own change, then the line's move
         with self.assertRaises(ValueError):                             # over the next line
             SyncModel.rewrite_txt(self.TXT, 1000, note_times={1: (4, 9)}, expected_notes=5)
+        # a deleted note takes no time: the next line can be moved into its place
+        out = SyncModel.rewrite_txt(self.TXT, 1000, deleted_notes={1}, note_times={2: (5, 7)}, expected_notes=5)
+        self.assertEqual(out[3:6], [": 0 4 0 Ho", "- 5", ": 5 7 2 tú"])
+        # a whole line deleted, the line after it moved into its place: the break before it follows
+        out = SyncModel.rewrite_txt(self.TXT, 1000, deleted_notes={2, 3}, note_times={4: (9, 4)}, expected_notes=5)
+        self.assertEqual(out[3:], [": 0 4 0 Ho", ": 4 4 0 la ", "- 9", "R 9 4 0 yo", "E"])
+        with self.assertRaises(ValueError):  # over a note that stays
+            SyncModel.rewrite_txt(self.TXT, 1000, deleted_notes={0}, note_times={2: (6, 4)}, expected_notes=5)
 
     def test_insert_notes(self):
         import SyncModel

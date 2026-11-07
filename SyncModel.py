@@ -371,8 +371,20 @@ def rewrite_txt(lines, gap_ms, line_beats=None, expected_notes=None, note_pitche
     headers = {l.split(':', 1)[0].strip().upper(): l.split(':', 1)[-1].strip().upper() for l in out if l.startswith('#')}
     if headers.get('#RELATIVE') == 'YES' or any(l.strip()[:2] in ('P1', 'P2') for l in out if not l.startswith('#')):
         raise ValueError("relative or duet files: only #GAP can be changed")
+    deleted = set(deleted_notes or ())
     count, line_no, has_notes, last_end = 0, 0, False, None
     previous_end, open_break = None, None   # end of the line before; page break waiting for its next line
+    started = False  # a note of this line that stays (not deleted) was seen; deleted notes take no time
+
+    def first_of_line(start):
+        nonlocal open_break, started
+        if previous_end is not None and start < previous_end:
+            raise ValueError(f"line {line_no + 1} would start before the end of line {line_no}")
+        if open_break is not None:
+            j, prefix, beat, after = open_break
+            out[j] = f"{prefix}{min(beat, start)}{after}"  # the break stays between the two lines
+            open_break = None
+        started = True
     for i, line in enumerate(out):
         if line.startswith('#'):
             continue
@@ -390,25 +402,25 @@ def rewrite_txt(lines, gap_ms, line_beats=None, expected_notes=None, note_pitche
             else:
                 start = int(m.group(2)) + delta
             length = int(rest.split()[0]) if rest.split() else 0
-            if not has_notes and previous_end is not None and start < previous_end:
-                raise ValueError(f"line {line_no + 1} would start before the end of line {line_no}")
-            if open_break is not None:
-                j, prefix, beat, after = open_break
-                out[j] = f"{prefix}{min(beat, start)}{after}"  # the break stays between the two lines
-                open_break = None
+            kept = count not in deleted
+            if kept and not started:
+                first_of_line(start)
             if count in note_pitches:  # " <length> <pitch> <text>": only the pitch changes
                 p = _NOTE_REST.match(rest)
                 if not p:
                     raise ValueError(f"note {count + 1} has no pitch to change")
                 rest = f"{p.group(1)}{int(note_pitches[count])}{p.group(3)}"
             out[i] = f"{m.group(1)}{start}{rest}"
-            last_end = start + length if last_end is None or not has_notes else max(last_end, start + length)
+            if kept:
+                last_end = start + length if last_end is None else max(last_end, start + length)
             if count in inserted_notes:
                 ready[count] = []
                 for kind, new_start, new_length, pitch, text in inserted_notes[count]:
                     beat, beats = int(new_start) + delta, max(1, int(new_length))
+                    if not started:
+                        first_of_line(beat)
                     ready[count].append(f"{kind} {beat} {beats} {int(pitch)} {text}")
-                    last_end = max(last_end, beat + beats)
+                    last_end = beat + beats if last_end is None else max(last_end, beat + beats)
             count += 1
             has_notes = True
             continue
@@ -416,12 +428,16 @@ def rewrite_txt(lines, gap_ms, line_beats=None, expected_notes=None, note_pitche
         if m and has_notes:
             line_no += 1
             has_notes = False
-            previous_end = last_end
             delta = line_beats[min(line_no, len(line_beats) - 1)]
-            beat = max(int(m.group(2)) + delta, last_end)  # never before the end of the line it closes
+            beat = int(m.group(2)) + delta
+            if last_end is not None:
+                beat = max(beat, last_end)  # never before the end of the line it closes
             rest = m.group(5) if not m.group(3) else f" {int(m.group(4)) + delta}{m.group(5)}"
             out[i] = f"{m.group(1)}{beat}{rest}"
-            open_break = (i, m.group(1), beat, rest)
+            if started:  # a line left with no notes loses its break: the one before it stays waiting
+                previous_end = last_end
+                open_break = (i, m.group(1), beat, rest)
+            started, last_end = False, None
     if expected_notes is not None and count != expected_notes:
         raise ValueError(f"found {count} notes in the file but {expected_notes} were loaded")
     if note_texts or deleted_notes or ready:
