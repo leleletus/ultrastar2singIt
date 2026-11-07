@@ -118,6 +118,7 @@ class SongRow:
     doubtful_sync: bool = False
     sync_note: str = ''  # result of the voice check (tools/sync_scan.py), when the song was checked
     official_vxla: bool = False
+    songmaker: bool = False  # made by SongMaker (no USDB lyrics): its notes come from the voice, check them by ear
     still_video: bool = False  # the converted .bk2 is the still cover, not a video
     order: int = 0
     checked: bool = False
@@ -195,6 +196,7 @@ def scan_song_folders(input_path: str, video_suffix: str, sync_cache: dict, only
         row.cached_image = (name_id + naming.COVER_SUFFIX) in all_files
         row.cached_txt = (name_id + naming.VXLA_SUFFIX) in all_files
         row.official_vxla = naming.OFFICIAL_VXLA_NAME in all_files
+        row.songmaker = 'songmaker.json' in all_files
         if row.cached_video and video_suffix == naming.VIDEO_BK2_SUFFIX:
             try:
                 with open(os.path.join(directory_path, name_id + naming.VXLA_META_SUFFIX), encoding='utf-8') as f:
@@ -426,9 +428,12 @@ class SongFilterModel(QSortFilterProxyModel):
         self.setFilterKeyColumn(COL_NAME)
         self.only_problems = False
         self.only_pending = False
+        self.only_songmaker = False
 
     def filterAcceptsRow(self, source_row, source_parent):
         if self.only_pending and self.sourceModel().rows[source_row].fully_cached:
+            return False
+        if self.only_songmaker and not self.sourceModel().rows[source_row].songmaker:
             return False
         if self.only_problems:
             r = self.sourceModel().rows[source_row]
@@ -983,6 +988,15 @@ class MainWindow(QMainWindow):
                                                        "with usdb_syncer): then 'Check all visible' and 'Convert checked'.")
         self.only_pending_checkbox.toggled.connect(self.on_only_pending)
         top.addWidget(self.only_pending_checkbox)
+        self.only_songmaker_checkbox = QCheckBox()
+        self.t(self.only_songmaker_checkbox.setText, "Only SongMaker")
+        self.t(self.only_songmaker_checkbox.setToolTip, "Show only the songs made with SongMaker (no lyrics with notes "
+                                                         "on USDB): their notes come from the voice, so check them in "
+                                                         "the sync editor (right click → Fix sync...).")
+        self.only_songmaker_checkbox.toggled.connect(self.on_only_songmaker)
+        top.addWidget(self.only_songmaker_checkbox)
+        if str(self.settings.value("only_songmaker", "false")).lower() == "true":
+            self.only_songmaker_checkbox.setChecked(True)
         self.check_all_checkbox = QCheckBox()
         self.t(self.check_all_checkbox.setText, "Check all visible")
         self.check_all_checkbox.clicked.connect(self.on_check_all)
@@ -1407,6 +1421,11 @@ class MainWindow(QMainWindow):
     def on_only_pending(self, checked):
         self.song_proxy.only_pending = checked
         self.song_proxy.invalidateFilter()
+
+    def on_only_songmaker(self, checked):
+        self.song_proxy.only_songmaker = checked
+        self.song_proxy.invalidateFilter()
+        self.settings.setValue("only_songmaker", checked)
 
     def on_only_problems(self, checked):
         self.song_proxy.only_problems = checked

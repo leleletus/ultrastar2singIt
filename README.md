@@ -78,7 +78,9 @@ skip-intro mod works: [`docs/10_MOD_SALTAR_INTRO.md`](docs/10_MOD_SALTAR_INTRO.m
 settings remembered, full Spanish translation. Tests: `python -m unittest discover -s tests -t .`
 
 ## Sync editor: buttons and shortcuts
-Open it with a right click on a song → *Fix sync…* (*Arreglar sincronización...*). Button names are shown in English
+Open it with a right click on a song → *Fix sync…* (*Arreglar sincronización...*). Tick **Only SongMaker** (*Solo
+hechas con SongMaker*) above the song list to see only the songs SongMaker made (the ones to check by ear; what to
+look at in each one: `tools/songmaker_report.py`). Button names are shown in English
 and, in brackets, as they appear with the Spanish translation. Hovering over any button shows what it does and its
 shortcut. Shortcuts work while the editor window is active (not while typing in a text box).
 

@@ -364,5 +364,7 @@
   "Selected: \"{text}\"": "Seleccionada: «{text}»",
   "{n} notes deleted": "{n} notas borradas",
   "{n} texts fixed": "{n} textos corregidos",
-  "save to keep it": "guarda para conservarlo"
+  "save to keep it": "guarda para conservarlo",
+  "Only SongMaker": "Solo hechas con SongMaker",
+  "Show only the songs made with SongMaker (no lyrics with notes on USDB): their notes come from the voice, so check them in the sync editor (right click → Fix sync...).": "Muestra solo las canciones hechas con SongMaker (sin letra con notas en USDB): sus notas salen de la voz, así que revísalas en el editor de sincronía (clic derecho → Arreglar sincronización...)."
 }
