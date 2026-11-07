@@ -718,6 +718,54 @@ def _aligned_onsets(ctc, syllables, a, b, after=0, info=None):
     return starts
 
 
+def pitches_from_voice(lines, pitch):
+    """Pitch (midi) of every note measured again from the voice where the note is now, the way make_notes does it
+    (the steady part of the note, the line's octave, the song's scale): for notes moved in time in the sync editor,
+    whose pitch was taken from the voice where they were before. lines: [[(start s, end s, rap)]]; returns the same
+    shape with a midi value, or None for rap notes."""
+    smooth = _smooth_pitch(np.asarray(pitch, dtype=np.float32))
+    heard = smooth[~np.isnan(smooth)]
+    song_median = float(np.median(heard)) if len(heard) else 60.0
+    frames = len(smooth)
+    measured = []
+    for line in lines:
+        notes = []
+        for start, end, rap in line:
+            a = min(max(0, int(start / FRAME)), max(0, frames - 1))
+            b = min(frames, max(a + 1, int(end / FRAME)))
+            notes.append(None if rap else _steady_pitch(smooth, a, b)[0])
+        sung = [k for k, (_, _, rap) in enumerate(line) if not rap]
+        known = [notes[k] for k in sung if notes[k] is not None]
+        center = float(np.median(known)) if known else song_median
+        for k in sung:
+            m = center if notes[k] is None else notes[k]
+            while m - center > 7:
+                m -= 12
+            while center - m > 7:
+                m += 12
+            notes[k] = m
+        for k, m in zip(sung, smooth_octaves([notes[k] for k in sung], center) if sung else []):
+            notes[k] = m
+        measured.append(notes)
+    sung = [(m, end - start) for line, notes in zip(lines, measured) for (start, end, _), m in zip(line, notes)
+            if m is not None]
+    scale = song_scale(*zip(*sung)) if len(sung) >= 8 else set(range(12))
+    song_center = float(np.median([m for m, _ in sung])) if sung else song_median
+    out = []
+    for line, notes in zip(lines, measured):
+        levelled = level_pitches(notes, [end - start for start, end, _ in line], scale)
+        known = [m for m in levelled if m is not None]
+        shift = 0
+        if known:  # a whole line an octave away from the rest of the song: the tracker, not the singer
+            middle = float(np.median(known))
+            while middle + shift - song_center > 7:
+                shift -= 12
+            while song_center - (middle + shift) > 7:
+                shift += 12
+        out.append([None if m is None else int(round(m + shift)) for m in levelled])
+    return out
+
+
 def make_notes(lines, offset, energy, pitch, language, ctc=None, report=None):
     """[[(start s, end s, midi or None for rap, syllable)] per line]. ctc: (log-probabilities, vocabulary) of the
     speech model (VoiceAlign.load_emissions) to place the syllables, else they are placed from the voice alone.

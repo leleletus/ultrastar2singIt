@@ -177,6 +177,7 @@ how many notes were deleted / texts fixed.
 | row minus | Delete line (*Borrar línea*) | `Ctrl+Delete` | deletes the line being sung (or the selected note's line) with all its notes, after asking |
 | I-beam Fix text | Fix text (*Corregir texto*) | `T` | fixes the text of the line being sung (or of the selected note's line); you can also **add** missing syllables (see below) |
 | ⑂ Split note | Split note (*Dividir nota*) | `S` | splits the selected note in two (same pitch) and asks for the text of the new half: a syllable that was missing. The note needs 2 beats or more |
+| 〜 Pitch from voice | Pitch from voice (*Tono desde la voz*) | `P` | measures the pitch of the selected notes again from the voice where they are now (nothing selected: the whole song, it asks first). Use it after moving notes or the whole lyrics (#GAP, cuts) in time: SongMaker took each pitch from the voice where the note was before. `Ctrl+Z` undoes it |
 | | Fix syllable | double click a note | fixes the text of only that note |
 
 How to write the text:

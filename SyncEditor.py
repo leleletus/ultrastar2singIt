@@ -272,7 +272,9 @@ class NoteLane(QWidget):
                 pitch = ed.voice['pitch'][i]
                 if ed.voice['active'][i] and not np.isnan(pitch):
                     near = ed.note_near(i * frame)
-                    shown = fold_to(float(pitch), near.pitch if near is not None and near.sung
+                    # folded to the octave of the note as it was loaded: moving a note up/down does not move them
+                    shown = fold_to(float(pitch), ed.original_pitches[ed.note_index[id(near)]]
+                                    if near is not None and near.sung and id(near) in ed.note_index
                                     else (lo + hi) / 2)
                     p.drawEllipse(QPointF(x_of(i * frame), y_of(shown)), 1.6, 1.6)
 
@@ -739,7 +741,11 @@ class SyncEditorDialog(QDialog):
                                                         "missing (then write it). Fix text (T) also splits notes "
                                                         "when you write more pieces than notes."),
                                      self.split_selected, self, ("S",), text=tr("Split note"), color=BLUE)
-        for b in (self.btn_del_syllable, self.btn_del_line, self.btn_text, self.btn_split):
+        self.btn_repitch = tool_button('wave-sine', tr("Measure the pitch of the selected notes again from the voice "
+                                                       "where they are now (after moving them in time; with nothing "
+                                                       "selected: the whole song)"),
+                                       self.pitch_from_voice, self, ("P",), text=tr("Pitch from voice"), color=BLUE)
+        for b in (self.btn_del_syllable, self.btn_del_line, self.btn_text, self.btn_split, self.btn_repitch):
             words.addWidget(b)
             self.edit_buttons.append(b)
         self.lbl_edits = QLabel()
@@ -1169,6 +1175,42 @@ class SyncEditorDialog(QDialog):
         self.note_index[id(new)] = k
         self.order.insert(self.order.index(self.note_index[id(note)]) + 1, k)
         return new
+
+    def pitch_from_voice(self):
+        """P: the pitch of the selected notes (all the song when none is selected) measured again from the voice
+        where the notes are now, the way SongMaker does it: a note moved in time had the pitch of the voice where it
+        was before."""
+        if self.official:
+            return
+        if self.voice is None:
+            self.lbl_part.setText(tr("First press \"Analyze voice\"."))
+            return
+        targets = set(self.selected_indices())
+        if not targets:
+            reply = QMessageBox.question(self, tr("Pitch from voice"),
+                                         tr("No note is selected: measure the pitch of every note of the song again "
+                                            "from the voice? (Ctrl+Z undoes it)"))
+            if reply != QMessageBox.Yes:
+                return
+        import SongMaker
+        by_line = {}
+        for note in self.song.notes:  # the notes that stay, in time order, by lyrics line
+            by_line.setdefault(note.line, []).append(note)
+        groups = [by_line[k] for k in sorted(by_line)]
+        lines = [[(self.note_time(n), self.note_time(n) + n.d, not n.sung) for n in group] for group in groups]
+        measured = SongMaker.pitches_from_voice(lines, self.voice['pitch'])
+        changed = 0
+        for group, pitches in zip(groups, measured):
+            for note, midi in zip(group, pitches):
+                index = self.note_index.get(id(note))
+                if midi is None or index is None or (targets and index not in targets):
+                    continue
+                if note.pitch != midi:
+                    note.pitch = midi
+                    changed += 1
+        self.lane.update()
+        self.refresh_labels()
+        self.lbl_part.setText(tr("Pitch measured again from the voice: {n} notes changed.").format(n=changed))
 
     def split_selected(self):
         """Button: splits the selected note in two, to give a missing syllable its own note."""

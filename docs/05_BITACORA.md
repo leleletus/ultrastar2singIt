@@ -426,3 +426,13 @@
 - Release v1.2.0 en el fork (leleletus) con `LetsSingConverter-1.2.0-windows.exe` y
   `LetsSingConverter-1.2.0-x86_64.AppImage`. Los ejecutables no llevan Demucs ni el modelo de habla.
 
+### 2026-11-07 · Editor: tono desde la voz (P)
+- El usuario movió FANCY (-0,65 s) y Tarantino (+5,3 s) en el tiempo y preguntó si el tono (altura) de las notas
+  seguía bien: no, SongMaker lo midió con la voz donde estaban antes. `SongMaker.pitches_from_voice` lo mide otra vez
+  donde están ahora, igual que `make_notes` (parte estable, octava de la línea, escala de la canción); botón «Tono
+  desde la voz» (P) para lo seleccionado o toda la canción. Control: en Virtual Diva (sin tocar) deja igual el 93 %
+  de los tonos y no cambia las medidas; FANCY tono ±1 con la voz 24 % → 71 %, Tarantino 26 % → 69 %. Aplicado a las
+  dos (copia en `_respaldo_editor/…_antes_de_tono`).
+- Los puntos de la voz se doblaban a la octava de la nota más cercana *tal como está*, así que al subir o bajar una
+  nota se movían: ahora usan el tono con el que se abrió la nota.
+

@@ -380,5 +380,9 @@
   "Undo all the changes": "Deshacer todos los cambios",
   "Undo every change made since the editor was opened? (Ctrl+Z brings them back)": "¿Deshacer todos los cambios hechos desde que se abrió el editor? (Ctrl+Z los recupera)",
   "Nothing to undo.": "No hay nada que deshacer.",
-  "{n} notes selected (drag one or Alt+arrows: they move together; Esc: none)": "{n} notas seleccionadas (arrastra una o Alt+flechas: se mueven juntas; Esc: ninguna)"
+  "{n} notes selected (drag one or Alt+arrows: they move together; Esc: none)": "{n} notas seleccionadas (arrastra una o Alt+flechas: se mueven juntas; Esc: ninguna)",
+  "Measure the pitch of the selected notes again from the voice where they are now (after moving them in time; with nothing selected: the whole song)": "Vuelve a medir el tono de las notas seleccionadas con la voz que suena donde están ahora (después de moverlas en el tiempo; sin nada seleccionado: toda la canción)",
+  "Pitch from voice": "Tono desde la voz",
+  "No note is selected: measure the pitch of every note of the song again from the voice? (Ctrl+Z undoes it)": "No hay notas seleccionadas: ¿volver a medir con la voz el tono de todas las notas de la canción? (Ctrl+Z lo deshace)",
+  "Pitch measured again from the voice: {n} notes changed.": "Tono medido otra vez con la voz: {n} notas cambiadas."
 }
