@@ -869,6 +869,12 @@ class SongMakerTest(unittest.TestCase):
         self.assertEqual([round(a / SongMaker.FRAME) for a, *_ in notes], [10, 40, 70])
         self.assertEqual([m for _, _, m, _ in notes], [60, 64, 67])
 
+    def test_spanish_silent_u(self):
+        import SongMaker
+        for word, parts in (("porque", "por|que"), ("aunque", "aun|que"), ("pequeño", "pe|que|ño"), ("seguir", "se|guir"),
+                            ("guitarra", "gui|ta|rra"), ("pingüino", "pin|güi|no"), ("conquista", "con|quis|ta")):
+            self.assertEqual('|'.join(SongMaker.syllables_es(word)), parts)
+
     def test_long_lines_are_split(self):
         import SongMaker
         self.assertEqual(SongMaker.split_long_line("Me llamó Cristina, Cristina, Cristina, Cristina, Cristina, Cristina, Cristina"),

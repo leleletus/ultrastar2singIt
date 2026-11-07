@@ -189,7 +189,8 @@ def syllables_es(word):
         return [word]
     cuts = []
     for (a1, b1), (a2, b2) in zip(nuclei, nuclei[1:]):
-        consonants = [k for k in range(b1, a2) if kinds[k] == 'C']
+        # the silent u of que/qui/gue/gui goes with its consonant: por-que, pe-que-ño, se-guir (not porq-ue)
+        consonants = [k for k in range(b1, a2) if kinds[k] == 'C' and not (low[k] == 'u' and k and low[k - 1] in 'qg')]
         cluster = ''.join(low[k] for k in consonants)
         if not consonants:
             cuts.append(a2)

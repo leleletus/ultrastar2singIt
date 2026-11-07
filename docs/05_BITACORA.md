@@ -462,4 +462,10 @@
   With You. Priceless y When I'm With You quedan para revisar con el usuario.
 - Revisión a oído conjunta (el usuario lo pidió: lo dudoso no se decide solo): `tools/review_points.py` marca 227
   puntos en 60 canciones; el editor salta entre ellos con N y dice por qué.
+- Sílabas en español: la u muda de que/qui/gue/gui contaba como consonante y partía «porq|ue», «aunq|ue»,
+  «peq|ue|ño», «seg|uir» (visto por el usuario en Goma de Mascar). Arreglado en `syllables_es`; 11 canciones con 61
+  sílabas así rehechas (Goma de Mascar no: el usuario la corrigió a mano).
+- Tiempos de referencia: la librería syncedlyrics (API no oficial de Musixmatch) no se usa. Probados el video de
+  letras oficial (OCR con tesseract: sirve para el orden y para ver que «(PRESS PLAY)» es un eco, pero muestra cada
+  línea ~1 s antes) y Whisper local (faster-whisper, large-v3-turbo) con tiempos por palabra.
 
