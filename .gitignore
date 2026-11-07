@@ -27,6 +27,8 @@ mods/
 !requirements*.txt
 !.github/
 !.github/**
+!packaging/
+!packaging/**
 !tests/
 !tests/**
 
