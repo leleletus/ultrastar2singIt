@@ -436,3 +436,16 @@
 - Los puntos de la voz se doblaban a la octava de la nota más cercana *tal como está*, así que al subir o bajar una
   nota se movían: ahora usan el tono con el que se abrió la nota.
 
+### 2026-11-07 · Todas las de SongMaker revisadas otra vez (salvo Dream y Goma de Mascar)
+- 28 canciones «sin Genius» sí lo tenían: el «no encontrada» quedó guardado de un día sin red. Recuperadas (solo
+  Alcaline y Shoong! siguen sin página).
+- Cuatro versiones de cada canción medidas igual (líneas que el modelo reconoce en su sitio y palabras frente a la
+  más completa): la actual, LRCLIB con sus tiempos, la letra de LRCLIB colocada por el modelo en toda la canción, y
+  la de Genius igual. 31 cambiadas (Cobra 64 → 97 %, Cut U Off 52 → 83 %, Rapunzel 60 → 85 %, Goals 63 → 83 %…);
+  34 se quedan. Las que el usuario intentaba arreglar a mano (Tarantino, FANCY, Queencard, Alcaline, Fiel) pasan a
+  la versión del modelo con su permiso; sus .bak van a la copia. `songmaker.json` lleva `"lyrics": "genius"` o
+  `"lrclib"` y `lyrics_aligned.json` las líneas. `_note_end` ya no se sale del audio en la última línea (Goals).
+- Editor: «Ajustar a las palabras» (R) coloca con el modelo las sílabas de lo seleccionado o de la línea (líneas
+  movidas 0,8 s a propósito vuelven a 0,01–0,02 s de su sitio) y les mide el tono; E / Shift+E seleccionan hasta el
+  final de la línea / la canción para mover un tramo que empieza a mitad de línea; Ctrl+Alt+flechas mueve 8 pulsos.
+

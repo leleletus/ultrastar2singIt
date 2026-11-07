@@ -451,6 +451,7 @@ def _line_onsets(novelty, voiced, a, b, weights, first_time):
 def _note_end(voiced, start, limit):
     """The end frame of a note starting at `start`: at the next syllable (limit) or where the voice stops."""
     silence = 0
+    limit = min(limit, len(voiced))  # a syllable placed at the very end of the audio
     for i in range(start, limit):
         silence = silence + 1 if not voiced[i] else 0
         if silence >= NOTE_GAP_FRAMES:
@@ -1176,7 +1177,7 @@ def remake_notes(folder, keep_dir=None, log=print, force=False):
                                 headers={'User-Agent': USER_AGENT})
         response.raise_for_status()
         cache.write_text(json.dumps([response.json()], ensure_ascii=False), encoding='utf-8')
-    if meta.get('lyrics') == 'genius':  # whole lyrics placed by the speech model (lyrics_from_genius)
+    if meta.get('lyrics'):  # whole lyrics placed by the speech model (lyrics_from_genius, or LRCLIB's text)
         timed = json.loads((folder / LYRICS_FILE).read_text(encoding='utf-8'))['lines']
         lines, offset = [(t, text) for t, text, _ in timed], 0.0
     else:

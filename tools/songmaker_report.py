@@ -137,7 +137,7 @@ def language_of(txt):
 def placement(folder):
     """How the current notes placed each line (made again in memory, nothing written), or None."""
     meta = json.loads((folder / 'songmaker.json').read_text(encoding='utf-8'))
-    if meta.get('lyrics') == 'genius':  # whole Genius lyrics placed by the speech model (lyrics_from_genius)
+    if meta.get('lyrics'):  # whole lyrics placed by the speech model (Genius, or LRCLIB's text without its times)
         timed = json.loads((folder / SongMaker.LYRICS_FILE).read_text(encoding='utf-8'))['lines']
         lines, offset = [(t, text) for t, text, _ in timed], 0.0
     else:
@@ -196,6 +196,8 @@ def song_section(name, rows, place, edited):
                      + ("" if has_model else " (sin modelo para esta canción)")
                      + ("; letra completa de Genius colocada por el modelo en toda la canción"
                         if meta.get('lyrics') == 'genius' else
+                        "; letra de LRCLIB colocada por el modelo en toda la canción (sin sus tiempos)"
+                        if meta.get('lyrics') else
                         f"; LRCLIB #{meta.get('lrclib_id')}, desfase {meta.get('offset', 0):+.2f} s".replace('.', ',')))
     for n in notes:
         out.append(f"- {n}")
