@@ -106,10 +106,16 @@ BIAS_S = -0.08   # Whisper's words start this much before the syllables (measure
 LIMIT_S = 0.6
 
 
+FAR_S = 2.5      # further than this, Whisper most likely matched another repetition of the line
+REPEAT_S = 10.0  # a line sung again this close (a hook): which repetition Whisper heard is not known
+
+
 def check(folder, bias=BIAS_S, limit=LIMIT_S):
     out = []
-    for t, text, diff, matched in offsets(folder):
-        if abs(diff - bias) > limit and matched >= 3:
+    found = offsets(folder)
+    for t, text, diff, matched in found:
+        repeated = any(abs(t2 - t) < REPEAT_S and t2 != t and norm(x2) == norm(text) for t2, x2, _, _ in found)
+        if limit < abs(diff - bias) <= FAR_S and matched >= 3 and not repeated:
             out.append({'t': round(min(t, t + diff), 1),
                         'why': f"Whisper oye «{text}» {diff - bias:+.1f} s respecto a la letra "
                                f"({int((t + diff) // 60)}:{(t + diff) % 60:04.1f} frente a {int(t // 60)}:{t % 60:04.1f}) "
