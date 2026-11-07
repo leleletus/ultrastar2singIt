@@ -111,6 +111,7 @@ their timing as it is, so only playback, voice analysis and sing mode work; the 
 | `Shift` + click a note | selects every note from the selected one to this one |
 | `Shift` + drag an empty place | selects the notes that start in that stretch (shaded while dragging; with `Ctrl` too, they are added to the ones already selected) |
 | `Ctrl+A` | selects the whole line of the selected note (or the line being played) |
+| `E` / `Shift+E` | selects from the selected note to the end of its line / of the song: a stretch that starts in the middle of a line, to move it (drag one of them, `Alt`+arrows = 1 beat, `Ctrl+Alt`+arrows = 8 beats) |
 | Drag one of the selected notes | **they all move together**: sideways in time (they stop at the first note that is not selected) or up/down in pitch |
 | Click one of the selected notes | only that one stays selected |
 | `Esc` | nothing selected. With nothing selected, `Esc` closes the editor and asks first if there are unsaved changes |
@@ -177,6 +178,7 @@ how many notes were deleted / texts fixed.
 | row minus | Delete line (*Borrar línea*) | `Ctrl+Delete` | deletes the line being sung (or the selected note's line) with all its notes, after asking |
 | I-beam Fix text | Fix text (*Corregir texto*) | `T` | fixes the text of the line being sung (or of the selected note's line); you can also **add** missing syllables (see below) |
 | ⑂ Split note | Split note (*Dividir nota*) | `S` | splits the selected note in two (same pitch) and asks for the text of the new half: a syllable that was missing. The note needs 2 beats or more |
+| ◎ Fit to words | Fit to words (*Ajustar a las palabras*) | `R` | the speech model places the syllables of the selected notes (nothing selected: the line being played) where their words are sung, with their length, then measures their pitch again. It looks from 1 s before to 1 s after them and never goes over the notes around. Move a line roughly to its place first if it is further away |
 | 〜 Pitch from voice | Pitch from voice (*Tono desde la voz*) | `P` | measures the pitch of the selected notes again from the voice where they are now (nothing selected: the whole song, it asks first). Use it after moving notes or the whole lyrics (#GAP, cuts) in time: SongMaker took each pitch from the voice where the note was before. `Ctrl+Z` undoes it |
 | | Fix syllable | double click a note | fixes the text of only that note |
 

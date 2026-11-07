@@ -384,5 +384,11 @@
   "Measure the pitch of the selected notes again from the voice where they are now (after moving them in time; with nothing selected: the whole song)": "Vuelve a medir el tono de las notas seleccionadas con la voz que suena donde están ahora (después de moverlas en el tiempo; sin nada seleccionado: toda la canción)",
   "Pitch from voice": "Tono desde la voz",
   "No note is selected: measure the pitch of every note of the song again from the voice? (Ctrl+Z undoes it)": "No hay notas seleccionadas: ¿volver a medir con la voz el tono de todas las notas de la canción? (Ctrl+Z lo deshace)",
-  "Pitch measured again from the voice: {n} notes changed.": "Tono medido otra vez con la voz: {n} notas cambiadas."
+  "Pitch measured again from the voice: {n} notes changed.": "Tono medido otra vez con la voz: {n} notas cambiadas.",
+  "Fit to the words: the speech model places the syllables of the selected notes (or of the line being played) where they are sung, with their length, and measures their pitch again": "Ajustar a las palabras: el modelo de habla coloca las sílabas de las notas seleccionadas (o de la línea que suena) donde se cantan, con su duración, y vuelve a medir su tono",
+  "Fit to words": "Ajustar a las palabras",
+  "Click the note where the stretch starts first.": "Primero haz clic en la nota donde empieza el tramo.",
+  "This song has no speech model output (tools/align_voices.py).": "Esta canción no tiene el análisis del modelo de habla (tools/align_voices.py).",
+  "Fitted to the words: {n} notes placed.": "Ajustado a las palabras: {n} notas colocadas.",
+  "{k} line(s) not recognised by the model: place them by hand.": "{k} línea(s) que el modelo no reconoce: colócalas a mano."
 }

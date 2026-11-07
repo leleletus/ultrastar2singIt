@@ -723,6 +723,10 @@ class SyncEditorDialog(QDialog):
         QShortcut(QKeySequence("Ctrl+Shift+Left"), self, activated=lambda: self.nudge_selected(longer=-1))
         QShortcut(QKeySequence("Ctrl+Shift+Right"), self, activated=lambda: self.nudge_selected(longer=1))
         QShortcut(QKeySequence("Ctrl+A"), self, activated=self.select_line)
+        QShortcut(QKeySequence("E"), self, activated=lambda: self.select_to_end(song=False))
+        QShortcut(QKeySequence("Shift+E"), self, activated=lambda: self.select_to_end(song=True))
+        QShortcut(QKeySequence("Ctrl+Alt+Left"), self, activated=lambda: self.nudge_selected(beats=-8))
+        QShortcut(QKeySequence("Ctrl+Alt+Right"), self, activated=lambda: self.nudge_selected(beats=8))
         sync.addWidget(self.btn_save)
         layout.addLayout(sync)
 
@@ -741,11 +745,17 @@ class SyncEditorDialog(QDialog):
                                                         "missing (then write it). Fix text (T) also splits notes "
                                                         "when you write more pieces than notes."),
                                      self.split_selected, self, ("S",), text=tr("Split note"), color=BLUE)
+        self.btn_fit_model = tool_button('focus-centered', tr("Fit to the words: the speech model places the syllables "
+                                                              "of the selected notes (or of the line being played) "
+                                                              "where they are sung, with their length, and measures "
+                                                              "their pitch again"),
+                                         self.fit_to_words, self, ("R",), text=tr("Fit to words"), color='#7c3aed')
         self.btn_repitch = tool_button('wave-sine', tr("Measure the pitch of the selected notes again from the voice "
                                                        "where they are now (after moving them in time; with nothing "
                                                        "selected: the whole song)"),
                                        self.pitch_from_voice, self, ("P",), text=tr("Pitch from voice"), color=BLUE)
-        for b in (self.btn_del_syllable, self.btn_del_line, self.btn_text, self.btn_split, self.btn_repitch):
+        for b in (self.btn_del_syllable, self.btn_del_line, self.btn_text, self.btn_split, self.btn_fit_model,
+                  self.btn_repitch):
             words.addWidget(b)
             self.edit_buttons.append(b)
         self.lbl_edits = QLabel()
@@ -1175,6 +1185,114 @@ class SyncEditorDialog(QDialog):
         self.note_index[id(new)] = k
         self.order.insert(self.order.index(self.note_index[id(note)]) + 1, k)
         return new
+
+    def select_to_end(self, song=False):
+        """E: from the selected note to the end of its line (Shift+E: to the end of the song), to move a stretch
+        that starts in the middle of a line (drag one of them or Alt+arrows; Ctrl+Alt+arrows: 8 beats)."""
+        if self.official or self.selected_note is None:
+            self.lbl_part.setText(tr("Click the note where the stretch starts first."))
+            return
+        first = self.note_index[id(self.selected_note)]
+        live = [i for i in self.order if i not in self.deleted]
+        start = live.index(first)
+        line = self.selected_note.line
+        picked = [i for i in live[start:] if song or self.all_notes[i].line == line]
+        self.chosen = set(picked)
+        self.lane.update()
+        self.refresh_labels()
+
+    def speech_model(self):
+        """(log-probabilities, vocabulary) of the speech model for this song, or None (made by SongMaker or
+        tools/align_voices.py)."""
+        if getattr(self, '_ctc', None) is None:
+            try:
+                import VoiceAlign
+                self._ctc = VoiceAlign.load_emissions(VoiceAlign.paths(self.song_dir)[1]) or False
+            except Exception:
+                self._ctc = False
+        return self._ctc or None
+
+    def fit_to_words(self):
+        """R: the selected notes (or the line being played) placed by the speech model where their words are sung:
+        start and length of every syllable (a held "~" note keeps its share of its syllable), then their pitch from
+        the voice. Looked for from 1 s before to 1 s after them, never over the notes around."""
+        if self.official:
+            return
+        ctc = self.speech_model()
+        if ctc is None:
+            self.lbl_part.setText(tr("This song has no speech model output (tools/align_voices.py)."))
+            return
+        import VoiceAlign
+        import SongMaker
+        logp, vocab = ctc
+        beat = self.beat_s()
+        targets = self.selected_indices() or self.line_notes(self.current_line())
+        if not targets or not beat:
+            return
+        live = [i for i in self.order if i not in self.deleted]
+        source = self.video_gap_s - self.trim_start_s  # editor time = time of the original audio + this
+        by_line = {}
+        for i in targets:
+            by_line.setdefault(self.all_notes[i].line, []).append(i)
+        moved, unsure = 0, 0
+        for line, idx in sorted(by_line.items()):
+            idx.sort(key=live.index)
+            first, last = live.index(idx[0]), live.index(idx[-1])
+            before = self.all_notes[live[first - 1]] if first > 0 else None
+            after = self.all_notes[live[last + 1]] if last + 1 < len(live) else None
+            shift = self.line_shift(line)
+            t0 = self.note_time(self.all_notes[idx[0]])
+            t1 = self.note_time(self.all_notes[idx[-1]]) + self.all_notes[idx[-1]].d
+            lo = max(t0 - 1.0, self.note_time(before) + before.d if before is not None else 0.0)
+            hi = min(t1 + 1.0, self.note_time(after) if after is not None else t1 + 1.0)
+            # units: a syllable and the held "~" notes after it
+            units = []
+            for i in idx:
+                text = self.text_of(i).strip()
+                if units and text in ('', '~'):
+                    units[-1][1].append(i)
+                else:
+                    units.append([text, [i]])
+            found = VoiceAlign.align_line(logp, vocab, int((lo - source) / SongMaker.FRAME),
+                                          int((hi - source) / SongMaker.FRAME), [u[0] for u in units])
+            if found is None or found[1] < SongMaker.ALIGN_MIN_LOGP:
+                unsure += 1
+                continue
+            spans = [((a * SongMaker.FRAME) + source, (b + 1) * SongMaker.FRAME + source) for a, b in found[0]]
+            gap = SongMaker.NOTE_GAP_FRAMES * SongMaker.FRAME
+            for k, ((_, notes), (a, b)) in enumerate(zip(units, spans)):
+                nxt = spans[k + 1][0] if k + 1 < len(spans) else hi
+                end = max(b + 0.1, a + SongMaker.MIN_NOTE_S)
+                if nxt - end <= SongMaker.LEGATO_FILL_S:
+                    end = nxt - gap
+                end = min(end, nxt - gap, hi)
+                total = sum(self.all_notes[i].d for i in notes) or 1.0
+                cursor = a
+                for j, i in enumerate(notes):  # held notes keep their share of the syllable
+                    n = self.all_notes[i]
+                    piece = (end - a) * (n.d / total)
+                    s0 = int(round((cursor - shift) / beat))
+                    s1 = int(round((cursor + piece - shift) / beat)) if j + 1 < len(notes) else \
+                        int(round((end - shift) / beat))
+                    n.t, n.d = s0 * beat, max(1, s1 - s0) * beat
+                    cursor += piece
+                    moved += 1
+            # whole beats can make two notes touch the same beat: keep them in order, one beat at least
+            ordered = [self.all_notes[i] for i in idx]
+            for p, q in zip(ordered, ordered[1:]):
+                if q.t < p.t + p.d:
+                    q.t = p.t + p.d
+            if after is not None and ordered[-1].t + ordered[-1].d > after.t:
+                ordered[-1].d = max(beat, after.t - ordered[-1].t)
+        self.rebuild_song()
+        if moved and self.voice is not None:  # their pitch where they are now
+            keep, sel = set(self.chosen), self.selected_note
+            self.chosen, self.selected_note = set(targets), None
+            self.pitch_from_voice()
+            self.chosen, self.selected_note = keep, sel
+        self.lbl_part.setText(tr("Fitted to the words: {n} notes placed.").format(n=moved) +
+                              (" " + tr("{k} line(s) not recognised by the model: place them by hand.").format(k=unsure)
+                               if unsure else ""))
 
     def pitch_from_voice(self):
         """P: the pitch of the selected notes (all the song when none is selected) measured again from the voice
