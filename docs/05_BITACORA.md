@@ -476,4 +476,11 @@
 - `songmaker.json` `"user_checked"`: el informe las pone al final como revisadas (Tarantino y Goma de Mascar).
 - Números en la letra («26», «10 ó 6», «V12», «40 band», «100»…): se escriben como se cantan con `"text_fixes"` en
   `songmaker.json`, que `remake_notes` aplica siempre.
+- Afortunadamente No Eres Tú revisada con el usuario (3 de 62): sus correcciones tocan pocas sílabas (5 % movidas más
+  de 0,1 s, ninguna tendencia: mediana 0,00 s), así que no hay un error sistemático, sino puntos sueltos (los «Uuuh»,
+  una línea corta 1,2 s antes). El estribillo corregido se copió a sus repeticiones localizadas por el tono.
+- `tools/whisper_check.py`: Whisper palabra por palabra frente a la letra. En las canciones revisadas a oído coincide
+  a −0,08 s de mediana (p10–p90 dentro de 0,2 s), salvo los estribillos con eco de Tarantino; las líneas a más de
+  0,6 s van a `revisar.json`. En Natural deja una sola («Si me pruebas…», 0,8 s antes).
+- El usuario solo corrige tiempos; el tono lo mide siempre el programa después (`P`).
 
