@@ -112,6 +112,7 @@ their timing as it is, so only playback, voice analysis and sing mode work; the 
 | `Shift` + drag an empty place | selects the notes that start in that stretch (shaded while dragging; with `Ctrl` too, they are added to the ones already selected) |
 | `Ctrl+A` | selects the whole line of the selected note (or the line being played) |
 | `E` / `Shift+E` | selects from the selected note to the end of its line / of the song: a stretch that starts in the middle of a line, to move it (drag one of them, `Alt`+arrows = 1 beat, `Ctrl+Alt`+arrows = 8 beats) |
+| `N` / `Shift+N` | next / previous point to check by ear (`tools/review_points.py` writes them to `revisar.json` in the song folder): it stops the song 1 s before the point and says why it is doubtful. `python SyncEditor.py <txt> [seconds]` opens the editor alone, at that second or at the first point |
 | Drag one of the selected notes | **they all move together**: sideways in time (they stop at the first note that is not selected) or up/down in pitch |
 | Click one of the selected notes | only that one stays selected |
 | `Esc` | nothing selected. With nothing selected, `Esc` closes the editor and asks first if there are unsaved changes |

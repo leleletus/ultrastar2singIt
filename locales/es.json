@@ -390,5 +390,7 @@
   "Click the note where the stretch starts first.": "Primero haz clic en la nota donde empieza el tramo.",
   "This song has no speech model output (tools/align_voices.py).": "Esta canción no tiene el análisis del modelo de habla (tools/align_voices.py).",
   "Fitted to the words: {n} notes placed.": "Ajustado a las palabras: {n} notas colocadas.",
-  "{k} line(s) not recognised by the model: place them by hand.": "{k} línea(s) que el modelo no reconoce: colócalas a mano."
+  "{k} line(s) not recognised by the model: place them by hand.": "{k} línea(s) que el modelo no reconoce: colócalas a mano.",
+  "This song has no points to check.": "Esta canción no tiene puntos para revisar.",
+  "To check {k} of {n}: {why}": "Revisar {k} de {n}: {why}"
 }

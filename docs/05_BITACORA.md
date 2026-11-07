@@ -454,4 +454,12 @@
   (más de 12 sílabas/s, o coletilla con menos del 25 % de voz debajo) y vuelve a colocar el resto, hasta que no
   queda ninguna. Elastigirl 17 quitadas → 97 % reconocidas; New Woman 13 → 100 %. Lista para el usuario en
   `~/LetsSing/LINEAS_QUITADAS.md`.
+- Tarantino: el video empieza con una conversación (0–30 s) y el modelo puso la letra encima de lo hablado; el
+  usuario: el primer «yeah» a ~36 s y «Got my nails» a 37,63 s. `align_lyrics(start=…)` / `"lyrics_start"` en
+  `songmaker.json`: con 35,5 s cae en 36,12 y 37,62 s (el GAP que el usuario había puesto a mano era el bueno).
+  Leyendo lo que oye el modelo (decodificación voraz de sus letras) antes de la primera línea salieron igual
+  Queencard («previously on…», ahora a 17,6 s), Priceless (diálogo), Lento (25,0 s), SPAGHETTI (31,4 s) y When I'm
+  With You. Priceless y When I'm With You quedan para revisar con el usuario.
+- Revisión a oído conjunta (el usuario lo pidió: lo dudoso no se decide solo): `tools/review_points.py` marca 227
+  puntos en 60 canciones; el editor salta entre ellos con N y dice por qué.
 

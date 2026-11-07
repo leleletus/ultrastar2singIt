@@ -672,10 +672,10 @@ _ADLIB = re.compile(r"^(?:[\s,!?.'¡¿-]*(?:ah+|oh+|uh+|eh+|ay+|yeah|yea|ya|hey|
                     r"huh|ha+|ja+)[\s,!?.'¡¿-]*)+$", re.IGNORECASE)
 
 
-def _place_lines(ctc, texts, spoken, voice_end):
+def _place_lines(ctc, texts, spoken, voice_end, start=0.0):
     import VoiceAlign
     logp, vocab = ctc
-    found = VoiceAlign.align_line(logp, vocab, 0, len(logp), spoken)
+    found = VoiceAlign.align_line(logp, vocab, int(start / FRAME), len(logp), spoken)
     if found is None:
         raise RuntimeError("the lyrics do not fit in the song (more letters than the audio can hold)")
     out = []
@@ -690,7 +690,7 @@ def _place_lines(ctc, texts, spoken, voice_end):
     return out
 
 
-def align_lyrics(ctc, texts, language='Spanish', voice_end=None, energy=None, dropped=None):
+def align_lyrics(ctc, texts, language='Spanish', voice_end=None, energy=None, dropped=None, start=0.0):
     """[(start s, line, confidence)] of whole lyrics on the whole song: the speech model looks for every line in
     order over all of it (no times needed), then measures each line again around where it fell (its confidence:
     mean log-probability of its letters, below ALIGN_MIN_LOGP the model is not sure). The model reads the lines as
@@ -698,14 +698,15 @@ def align_lyrics(ctc, texts, language='Spanish', voice_end=None, energy=None, dr
     Only what is sung is kept: lines that fall after voice_end (+1 s), lines piled up faster than CRAMMED_RATE
     (lyrics with more repetitions than this version sings) and, with energy, ad-libs alone ("Ah", "Yeah") with
     almost no voice under them (an echo or the backing track) are left out, and the rest placed again. dropped: a
-    list that gets the lines left out."""
+    list that gets the lines left out. start: second the singing starts (a music video that opens with people
+    talking: the model would put the lyrics on their words); "lyrics_start" in songmaker.json."""
     if not texts:
         raise RuntimeError("no lyrics to place")
     texts = list(texts)
     voiced = energy > _voice_threshold(energy) if energy is not None else None
     for _ in range(6):
         spoken = [''.join(line_syllables(text, language)) for text in texts]
-        timed = _place_lines(ctc, texts, spoken, voice_end)
+        timed = _place_lines(ctc, texts, spoken, voice_end, start)
         bad = set()
         for k, (t, text, _) in enumerate(timed):
             following = timed[k + 1][0] if k + 1 < len(timed) else t + 4.0
@@ -1256,7 +1257,8 @@ def lyrics_from_genius(folder, keep_dir=None, log=print, dry_run=False):
             language = row.split(':', 1)[1].strip() or language
     voice = np.load(SyncModel.voice_cache_path(str(folder)))
     energy = voice['energy'].astype(np.float32)
-    timed = align_lyrics(ctc, texts, language, voice_end_s(energy), energy)
+    meta = json.loads((folder / 'songmaker.json').read_text(encoding='utf-8'))
+    timed = align_lyrics(ctc, texts, language, voice_end_s(energy), energy, start=float(meta.get('lyrics_start') or 0))
     if dry_run:
         return timed
     meta_path = folder / 'songmaker.json'

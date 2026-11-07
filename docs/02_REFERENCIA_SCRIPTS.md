@@ -254,6 +254,7 @@ Todas se ejecutan con `python tools/<script>.py --help`. Las que cambian archivo
 | `songmaker_report.py` | informe de las canciones fabricadas: coincidencia con la voz, tono, bloques desfasados, inicio/fin, estilo, líneas que el modelo no reconoce; versiones antiguas al lado (`--version`) y prueba contra las oficiales (`--calibrate`) → `.md` con casillas para revisar a mano | solo lee |
 | `align_voices.py` | separa la voz (Demucs) y pasa el modelo de habla a una lista de canciones (`--songmaker`, `--list`, `--only`) | reanudable; una canción a la vez; `--vocals-only` sin el modelo |
 | `lyrics_from_genius.py` | da a una canción de SongMaker la letra completa de Genius colocada por el modelo de habla en toda la canción (cuando la de LRCLIB es de otra versión o le faltan versos) | `--dry-run` muestra dónde cae cada línea y su seguridad; el txt viejo va a `~/LetsSing/_respaldo_songmaker/` |
+| `review_points.py` | puntos de las canciones de SongMaker para revisar a oído: líneas que el modelo no reconoce, huecos donde se oyen palabras sin letra (letra que falta o gente hablando en el video), líneas sueltas | escribe `revisar.json` en cada canción (el editor salta con N) y `--md` una lista |
 
 Quitados el 2026-11-01 (siguen en el historial de git, `git show fb416d5:<ruta>`): `desync_detector.py` (sustituido
 por `sync_scan.py`), `mass_test.py` (sustituido por `tests/`), `merge_dlc_json.py` (lo hace el conversor con

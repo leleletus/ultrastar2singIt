@@ -547,6 +547,13 @@ class SyncEditorDialog(QDialog):
             self.voice = self.voice_of_source()
         self.report = []
         self.analysis = None      # running analysis: {'thread', 'error'}
+        # points to check by ear (tools/review_points.py: revisar.json), times of the original audio
+        self.review, self.review_now = [], None
+        try:
+            with open(os.path.join(self.song_dir, 'revisar.json'), encoding='utf-8') as f:
+                self.review = [(float(p['t']) + self.video_gap_s - self.trim_start_s, p['why']) for p in json.load(f)]
+        except (OSError, ValueError, KeyError, TypeError):
+            pass
 
         # playback clock: the player reports its position only every few frames, it is interpolated in between
         self.clock = QElapsedTimer()
@@ -723,6 +730,8 @@ class SyncEditorDialog(QDialog):
         QShortcut(QKeySequence("Ctrl+Shift+Left"), self, activated=lambda: self.nudge_selected(longer=-1))
         QShortcut(QKeySequence("Ctrl+Shift+Right"), self, activated=lambda: self.nudge_selected(longer=1))
         QShortcut(QKeySequence("Ctrl+A"), self, activated=self.select_line)
+        QShortcut(QKeySequence("N"), self, activated=lambda: self.next_review(1))
+        QShortcut(QKeySequence("Shift+N"), self, activated=lambda: self.next_review(-1))
         QShortcut(QKeySequence("E"), self, activated=lambda: self.select_to_end(song=False))
         QShortcut(QKeySequence("Shift+E"), self, activated=lambda: self.select_to_end(song=True))
         QShortcut(QKeySequence("Ctrl+Alt+Left"), self, activated=lambda: self.nudge_selected(beats=-8))
@@ -1720,6 +1729,8 @@ class SyncEditorDialog(QDialog):
             if now is not None and abs(extra) >= 0.3:
                 hint += tr("The voice of this line is {ms:+.0f} ms away: press the wand to fit it.").format(
                     ms=extra * 1000)
+        if getattr(self, 'review_now', None):
+            hint = "🔎 " + self.review_now + "  " + hint
         overlap = self.overlapping_line()
         if overlap is not None:
             hint = tr("Line {n} now starts before line {m} ends: move it later or remove that cut before saving.").format(
@@ -1847,6 +1858,29 @@ class SyncEditorDialog(QDialog):
 
     def seek_s(self, seconds):
         self.seek_ms(seconds * 1000)
+
+    def next_review(self, step):
+        """N / Shift+N: to the next / previous point to check by ear (revisar.json), 1 s before it, with why."""
+        if not self.review:
+            self.lbl_part.setText(tr("This song has no points to check."))
+            return
+        now = self.position_s() + 1.0
+        last = getattr(self, 'review_k', None)
+        if last is not None and abs(now - self.review[last][0]) < 3.0:  # still at the point jumped to
+            k = (last + step) % len(self.review)
+        elif step > 0:
+            later = [k for k, (t, _) in enumerate(self.review) if t > now + 0.5]
+            k = later[0] if later else 0
+        else:
+            earlier = [k for k, (t, _) in enumerate(self.review) if t < now - 1.5]
+            k = earlier[-1] if earlier else len(self.review) - 1
+        self.review_k = k
+        t, why = self.review[k]
+        if self.playing():
+            self.toggle_play()
+        self.seek_s(max(0.0, t - 1.0))
+        self.review_now = tr("To check {k} of {n}: {why}").format(k=k + 1, n=len(self.review), why=why)
+        self.refresh_labels()
 
     def skip(self, seconds):
         self.seek_s(self.position_s() + seconds)
@@ -2088,7 +2122,12 @@ class SyncEditorDialog(QDialog):
 
 
 if __name__ == '__main__':
+    # python SyncEditor.py <txt> [seconds]: the editor alone, at that second (or at the first point to check)
     app = QApplication(sys.argv)
     if len(sys.argv) > 1:
         dialog = SyncEditorDialog(sys.argv[1])
+        if len(sys.argv) > 2:
+            QTimer.singleShot(800, lambda: dialog.seek_s(float(sys.argv[2])))
+        elif dialog.review:
+            QTimer.singleShot(800, lambda: dialog.next_review(1))
         dialog.exec()
