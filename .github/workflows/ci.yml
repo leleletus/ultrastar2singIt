@@ -1,11 +1,10 @@
 name: Tests (Windows and Linux)
 
-# Every push and pull request: the tests on Windows and Linux, and the program built on both (a broken build or an
-# import that only fails on one system shows up here, not in a release).
+# The tests on Windows and Linux, and the program built on both (a broken build or an import that only fails on
+# one system shows up here, not in a release).
 on:
-  push:
-    branches: [main, linux-wine-support]
-  pull_request:
+  # only when started by hand (Actions tab): GitHub Actions is blocked on this account for a billing issue, and a
+  # run on every push failed and sent an email each time. Put back "push:" / "pull_request:" once Actions works.
   workflow_dispatch:
 
 jobs:
