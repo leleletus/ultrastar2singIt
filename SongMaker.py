@@ -1220,6 +1220,14 @@ def remake_notes(folder, keep_dir=None, log=print, force=False):
         if meta['lrclib_id'] not in versions:
             raise RuntimeError(f"{folder.name}: LRCLIB version {meta['lrclib_id']} is not in lrclib.json")
         lines, offset = versions[meta['lrclib_id']][2], meta['offset']
+    fixes = meta.get('text_fixes') or {}  # words written as they are sung ("26" -> "veintiséis"), kept here
+    if fixes:
+        fixed = []
+        for t, text in lines:
+            for wrong, right in fixes.items():
+                text = text.replace(wrong, right)
+            fixed.append((t, text))
+        lines = fixed
     voice = np.load(SyncModel.voice_cache_path(str(folder)))
     energy, pitch = voice['energy'].astype(np.float32), voice['pitch'].astype(np.float32)
     language = tags.get('LANGUAGE', 'Spanish').strip()

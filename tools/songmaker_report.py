@@ -162,9 +162,9 @@ def arrow(values):
     return ' → '.join(pct(v) for v in values)
 
 
-def song_section(name, rows, place, edited):
+def song_section(name, rows, place, edited, checked=None):
     cur = rows[-1][1]
-    out = [f"### {name}", ""]
+    out = [f"### {name}" + (" ✅" if checked else ''), ""]
     out.append("| versión | coincidencia | voz bajo las notas | tono ±1 | bloques desfasados | veredicto | notas cortas | "
                "saltos 5+ | rango |")
     out.append("|---|---|---|---|---|---|---|---|---|")
@@ -175,6 +175,8 @@ def song_section(name, rows, place, edited):
                    f"{m['verdict']} {m['detail']} | {pct(m['short'])} | {pct(m['jump5'])} | {m['range']:.0f} |")
     out.append("")
     notes = []
+    if checked:
+        notes.append(f"**✅ revisada a oído por ti ({checked}): lista**")
     if edited:
         notes.append("corregida a mano en el editor (tiene `.bak`): no se rehizo")
     start_gap = cur['first_note'] - cur['first_voice']
@@ -201,7 +203,7 @@ def song_section(name, rows, place, edited):
                         f"; LRCLIB #{meta.get('lrclib_id')}, desfase {meta.get('offset', 0):+.2f} s".replace('.', ',')))
     for n in notes:
         out.append(f"- {n}")
-    todo = to_check(cur, place)
+    todo = [] if checked else to_check(cur, place)
     for level, title in ((1, "Revisar primero (casi seguro que hay algo mal):"),
                          (2, "Si al cantarla suena raro (el modelo no pudo colocar bien las sílabas; las del método "
                              "anterior fallan ~1 de cada 3):")):
@@ -367,7 +369,11 @@ def main():
                   " | tono ±1 | líneas reconocidas por el modelo | bloques desfasados | veredicto | "
                   "revisar: primero / si suena raro |",
                   "|---|---|---|---|---|---|---|---|---|"]
-        ordered = sorted(done, key=lambda r: -priority(r[1][-1][1], r[2]))
+        # the ones the user checked by ear go last: they are done
+        ordered = sorted(done, key=lambda r: (bool(r[4].get('user_checked')), -priority(r[1][-1][1], r[2])))
+        checked = [r[0] for r in done if r[4].get('user_checked')]
+        lines += [f"**Revisadas a oído por ti: {len(checked)} de {len(done)}** "
+                  f"({', '.join(checked) if checked else 'ninguna todavía'}). Faltan {len(done) - len(checked)}.", ""]
         for i, (d, rows, place, edited, meta) in enumerate(ordered, 1):
             m = rows[-1][1]
             old = rows[0][1] if first else None
@@ -377,7 +383,8 @@ def main():
                 rate = sum(1 for x in place[0] if x['placed'] == 'model') / len(place[0])
                 share = pct(rate) + (' ⚠' if rate < MODEL_SHARE else '')
             todo = to_check(m, place)
-            todo = f"{sum(1 for x in todo if x[1] == 1)} / {sum(1 for x in todo if x[1] == 2)}"
+            todo = "✅ revisada" if meta.get('user_checked') else \
+                f"{sum(1 for x in todo if x[1] == 1)} / {sum(1 for x in todo if x[1] == 2)}"
             anchor = d.lower().replace(' ', '-')
             lines.append(f"| {i} | [{d}](#{''.join(c for c in anchor if c.isalnum() or c == '-')}) | {language} | "
                          + (arrow([old['match'] if old else None, m['match']]) if first else pct(m['match']))
@@ -385,7 +392,7 @@ def main():
                          + (" (editada)" if edited else '') + " |")
         lines += ["", "## Detalle por canción", ""]
         for d, rows, place, edited, meta in ordered:
-            lines += song_section(d, rows, place, edited)
+            lines += song_section(d, rows, place, edited, meta.get('user_checked'))
     if args.calibrate:
         lines += calibration(songs)
     missing = [r[0] for r in results if not r[1]]

@@ -468,4 +468,12 @@
 - Tiempos de referencia: la librería syncedlyrics (API no oficial de Musixmatch) no se usa. Probados el video de
   letras oficial (OCR con tesseract: sirve para el orden y para ver que «(PRESS PLAY)» es un eco, pero muestra cada
   línea ~1 s antes) y Whisper local (faster-whisper, large-v3-turbo) con tiempos por palabra.
+- Tarantino terminada con el usuario: los estribillos que el modelo no oye (autotune y eco «press play») se colocaron
+  buscando por el dibujo del tono de la voz cada repetición del primer estribillo, confirmado por el usuario (8 veces
+  «Tarantino, Tarantino», 6 «Got my feet…», 4 «It's a movie…»), y copiando sus notas; el eco «(press play)» que
+  añadió el usuario, copiado a los cuatro. Whisper entiende la letra pero sus tiempos fallan ahí (51,26 s frente a
+  49,72 s reales). Tono medido otra vez: 74 % a ±1 semitono (oficiales 72 %).
+- `songmaker.json` `"user_checked"`: el informe las pone al final como revisadas (Tarantino y Goma de Mascar).
+- Números en la letra («26», «10 ó 6», «V12», «40 band», «100»…): se escriben como se cantan con `"text_fixes"` en
+  `songmaker.json`, que `remake_notes` aplica siempre.
 
