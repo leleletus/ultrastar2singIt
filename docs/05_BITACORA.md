@@ -517,3 +517,12 @@
   oficial): `tools/remove_from_patch.py` saca del parche las 11 reemplazadas (9 de Wii, Con Calma, Calma Remix) a
   `_papelera/2026-11-10_reemplazadas_por_oficiales/parche`; las 9 carpetas de USDB, a la misma papelera. Las 88 de Wii
   pasan a `songs` (828 carpetas) y se convierten 90 (88 + las 2 oficiales de LS12, que faltaban en la tanda anterior).
+- Conversión de las 90: 0 fallos (el binkc de The Nights se quedó colgado al cerrar, pero su .bk2 está entero: 179,3 s
+  como el audio). Parche: 840 canciones, 0 problemas. `remove_from_patch.py` no veía `<ID>_preview.ogg` ni
+  `<ID>_feat.vxla` (quedaban 8 archivos de 4 viejas): corregido.
+- `switch_update.py --ftp IP:PUERTO`: la Switch ya no va por cable (MTP) sino por Wi-Fi con ftpd. Mismo
+  comportamiento: foto, muestra comprobada, respaldo de lo reemplazado y ahora también de lo borrado con `--prune`,
+  lista de canciones al final, reconexión si se corta. Subidos 799 archivos (6,5 GB, ~3,4 MB/s) y quitados 28 de las
+  4 viejas (respaldo `switch_backup_2026-11-10_161421`). En la consola: el juego arranca, la lista muestra las nuevas
+  (Party Rock Anthem de Wii, 4:23 como su audio). El aviso 2123-0011 y «datos en línea» son por Nintendo bloqueado.
+  El panel de herramientas de la app sigue ofreciendo solo MTP.

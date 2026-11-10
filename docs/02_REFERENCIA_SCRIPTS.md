@@ -227,7 +227,7 @@ Todas se ejecutan con `python tools/<script>.py --help`. Las que cambian archivo
 | Script | Uso | Notas |
 |---|---|---|
 | `validate_patch.py` | revisa un parche JSON (2024+) antes de copiarlo; en 2026 exige `vxla_feat` y avisa sin `beats` | solo lee |
-| `switch_update.py` | copia a la Switch por MTP (KDE `kioclient` + DBI) solo lo que cambió | foto `<dlc>.switch.json`, `--first-copy` (Switch sin parche), respaldo antes de reemplazar, `--prune`/`--prune-first`, reintentos [B-62, B-67, B-68] |
+| `switch_update.py` | copia a la Switch por MTP (KDE `kioclient` + DBI) o por FTP (`--ftp IP:PUERTO`, p. ej. ftpd en el 5000, por Wi-Fi) solo lo que cambió | foto `<dlc>.switch.json`, `--first-copy` (Switch sin parche), respaldo antes de reemplazar o borrar, `--prune`/`--prune-first`, reintentos [B-62, B-67, B-68] |
 | `sync_scan.py` | revisa toda la biblioteca contra la voz (Demucs), informe CSV y `<id>.sync.json` | continúa donde quedó; `--only-analyzed` [B-64] |
 | `sync_check.py` | lo mismo para una canción, con propuesta de GAP | solo lee |
 | `usdb_sources.py` | canciones de USDB cuyo audio viene de otro video | solo lee |
