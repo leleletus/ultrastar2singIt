@@ -510,4 +510,10 @@
 - Vídeos de Wii (MobiClip `.mo`, que ffmpeg no lee): en su lugar el videoclip oficial de YouTube, comprobado y
   cortado al audio oficial con `align_video` (`tools/fetch_official_videos.py`). Uptown Funk: 100 % de ajuste,
   empieza en +0,0 s. El vídeo intermedio se codifica rápido (`veryfast`, crf 16): luego se pasa a .bk2.
-
+- Vídeos de Wii: 78 de 88 con su videoclip oficial (comprobado y cortado); 10 sin vídeo (no lo hay, es imagen fija u
+  otra versión que no encaja): Just The Way You Are, Outside, How I Feel, Old Mac Donald, Twinkle Twinkle Little
+  Star, I Follow Rivers, Waves, Go West, Get Busy, Should I Stay Or Should I Go. Llevan el vídeo fijo de la portada.
+- Al quitar una canción de la biblioteca el conversor la dejaba en el parche (la de USDB habría salido junto a la
+  oficial): `tools/remove_from_patch.py` saca del parche las 11 reemplazadas (9 de Wii, Con Calma, Calma Remix) a
+  `_papelera/2026-11-10_reemplazadas_por_oficiales/parche`; las 9 carpetas de USDB, a la misma papelera. Las 88 de Wii
+  pasan a `songs` (828 carpetas) y se convierten 90 (88 + las 2 oficiales de LS12, que faltaban en la tanda anterior).
