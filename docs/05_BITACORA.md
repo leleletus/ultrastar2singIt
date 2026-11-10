@@ -484,3 +484,22 @@
   0,6 s van a `revisar.json`. En Natural deja una sola («Si me pruebas…», 0,8 s antes).
 - El usuario solo corrige tiempos; el tono lo mide siempre el programa después (`P`).
 
+### 2026-11-10 · Let's Sing 10, 11 y 12 (Switch) y los Wii 2014 y 2016
+- Pendiente (pedido del usuario): la revisión de las canciones de SongMaker queda parada; van 4 de 62 revisadas
+  (Tarantino, Goma de Mascar, Afortunadamente, Natural). Cobra: el usuario corrigió los primeros segundos y la
+  terminará él más adelante.
+- LS10/11/12 son las ediciones numeradas (otros IDs que 2018/2019/2020) con canciones en español en el juego base.
+  `tools/extract_switch_songs.py` (hactool, update aplicado sobre la base) sacó los 24 NSP; `official_inventory.py`
+  los comparó con la biblioteca: 22 nuevas en español + «Anywhere» (estaba en el megapack pero no en la
+  biblioteca), 2 hechas por nosotros (USDB) que pasan a la oficial (Con Calma, Calma Remix; esperan el sí del
+  usuario para mover las viejas a `_papelera`), 91 ya oficiales iguales o de un juego más nuevo.
+- La lista de canciones de LS11/12 no está en un .tsv sino en la `GameSongDatabase` (MonoBehaviour de Unity); las
+  portadas, en texturas de Unity (512×512 con el ID). UnityPy en el venv para leerlas.
+- ExtractorPro con el formato viejo: las sílabas no empiezan exactamente donde sus notas (todo salía «~») y el
+  UTF-8 venía declarado como ISO-8859-1 («TÃº»): ahora busca la sílaba que más se solapa y lee el texto con
+  `OfficialVxla._utf8_text`. `fix_years.py --year ""` rellena los años vacíos.
+- Wii (Let's Sing 2014 Europa y 2016 USA; el 2015 no estaba): mismos vxla 2.0 y audio .ogg; artista/título en
+  `files/common/level/SingTheHits.db` (SQLite); portadas en `textures/covers`. Vídeos en MobiClip de Wii (`.mo`,
+  cabecera MOC5) que ffmpeg no abre. Inventario: 53 nuevas, 7 de USDB que podrían pasar a la oficial, 14 ya
+  oficiales más nuevas.
+

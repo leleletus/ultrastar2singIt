@@ -143,7 +143,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('songs')
     parser.add_argument('--extracted', required=True)
-    parser.add_argument('--year', default='2020', help="only songs whose #YEAR is this placeholder")
+    parser.add_argument('--year', default='2020', help="only songs whose #YEAR is this placeholder (\"\": no year)")
     parser.add_argument('--apply', action='store_true')
     args = parser.parse_args()
 
@@ -153,6 +153,7 @@ def main():
         vxla_ids.setdefault(hashlib.sha1(f.read_bytes()).hexdigest(), re.sub(r'(_duet|_feat)$', '', f.stem))
     print(f"official years known: {len(years)}")
 
+    placeholder = int(args.year) if args.year.strip() else None  # --year "": songs with no #YEAR at all
     found = {'official': 0, 'musicbrainz': 0, 'itunes': 0}
     missing = []
     for d in sorted(p for p in Path(args.songs).iterdir() if p.is_dir()):
@@ -165,7 +166,7 @@ def main():
             continue
         song_id = vxla_ids.get(hashlib.sha1(official.read_bytes()).hexdigest())
         year, source = years.get(song_id), 'official'
-        if year is None or year == int(args.year):
+        if year is None or year == placeholder:
             source = 'musicbrainz'
             try:
                 year = with_retries(musicbrainz_year, data.get('ARTIST', ''), data.get('TITLE', ''))
@@ -173,14 +174,14 @@ def main():
                 year = None
                 print(f"   MusicBrainz error for {d.name}: {e}")
             time.sleep(1.1)  # MusicBrainz asks for one request per second
-        if year is None or year == int(args.year):
+        if year is None or year == placeholder:
             source = 'itunes'
             try:
                 year = with_retries(itunes_year, data.get('ARTIST', ''), data.get('TITLE', ''))
             except Exception as e:
                 year = None
                 print(f"   iTunes error for {d.name}: {e}")
-        if not year or year == int(args.year):
+        if not year or year == placeholder:
             missing.append(d.name)
             continue
         found[source] += 1

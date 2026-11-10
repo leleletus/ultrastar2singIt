@@ -5,6 +5,18 @@ import argparse
 import xml.etree.ElementTree as ET
 from PIL import Image
 import unicodedata
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import OfficialVxla  # noqa: E402
+
+
+def parse_vxla(path):
+    """XML root of a vxla; UTF-8 text declared as Windows-1252 (older games) is read as UTF-8, so the accents stay
+    right ("Tú", not "TÃº")."""
+    with open(path, 'rb') as f:
+        raw = f.read()
+    return ET.fromstring(OfficialVxla._utf8_text(raw) or raw)
 
 def strip_accents(s):
     return ''.join(c for c in unicodedata.normalize('NFD', s) if unicodedata.category(c) != 'Mn')
@@ -87,8 +99,7 @@ def build_metadata_from_json(json_path):
 def extract_vxla_metadata(vxla_path):
     meta = {}
     try:
-        tree = ET.parse(vxla_path)
-        root = tree.getroot()
+        root = parse_vxla(vxla_path)
         for layer in root.findall('IntervalLayer'):
             name = layer.get('name')
             if name == 'meta':
@@ -105,8 +116,7 @@ def fuzzy(s):
 
 def convert_vxla_to_txt(vxla_file, song_id, meta, output_folder, mega_dir):
     try:
-        tree = ET.parse(vxla_file)
-        root = tree.getroot()
+        root = parse_vxla(vxla_file)
     except:
         return False
 
@@ -206,12 +216,16 @@ def convert_vxla_to_txt(vxla_file, song_id, meta, output_folder, mega_dir):
                 
         # 4. Process Lyrics
         lyrics_map = {}
+        syllables = []  # (t1, t2, text): older games' syllables do not start exactly where their notes do
         for layer in root.findall('IntervalLayer'):
             if layer.get('name') == 'lyrics':
                 for interval in layer.findall('Interval'):
                     lyrics_map[float(interval.get('t1'))] = interval.get('value', '~')
+                    syllables.append((float(interval.get('t1')), float(interval.get('t2')), interval.get('value', '~')))
+        syllables.sort()
 
         last_t2 = 0
+        last_syllable = None
         for interval in notes_layer.findall('Interval'):
             t1 = float(interval.get('t1'))
             t2 = float(interval.get('t2'))
@@ -227,7 +241,16 @@ def convert_vxla_to_txt(vxla_file, song_id, meta, output_folder, mega_dir):
                 try: pitch = int(val)
                 except: continue
                 us_pitch = pitch - PITCH_OFFSET
-                lyric = clean_lyric(next((v for k, v in lyrics_map.items() if abs(k - t1) < 0.005), "~"))
+                lyric = next((v for k, v in lyrics_map.items() if abs(k - t1) < 0.005), None)
+                if lyric is None:  # the syllable that overlaps the note most; the same one again: a held note
+                    best, best_overlap = None, 0.0
+                    for k, (s1, s2, _) in enumerate(syllables):
+                        overlap = min(t2, s2) - max(t1, s1)
+                        if overlap > best_overlap:
+                            best, best_overlap = k, overlap
+                    lyric = syllables[best][2] if best is not None and best != last_syllable else "~"
+                    last_syllable = best if best is not None else last_syllable
+                lyric = clean_lyric(lyric)
                 
             if lyric in ("-", ""): lyric = "~"
             else:
