@@ -139,7 +139,7 @@ def main():
         pad = ['-vf', f'tpad=start_duration={max(0.0, -offset):.3f}:start_mode=clone:'
                       f'stop_duration={missing_end:.3f}:stop_mode=clone']
         subprocess.run(['ffmpeg', '-v', 'error', '-y', *start, '-i', str(video), '-t', f'{length:.3f}', '-an', *pad,
-                        '-c:v', 'libx264', '-crf', '18', '-preset', 'slow', '-pix_fmt', 'yuv420p', str(tmp)],
+                        '-c:v', 'libx264', '-crf', '16', '-preset', 'veryfast', '-pix_fmt', 'yuv420p', str(tmp)],
                        check=True)
         if target.exists() or (current and current.exists() and current.suffix.lower() != '.bk2'):
             keep = d.parent.parent / '_replaced_videos' / d.name

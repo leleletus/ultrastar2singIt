@@ -52,10 +52,23 @@ def main():
     out = Path(args.out) / 'Songs'
     for sub in MEDIA:
         (out / sub).mkdir(parents=True, exist_ok=True)
-    meta, missing_cover = [], {}
+    meta, missing_cover, used = [], {}, set()
     for s in chosen:
         src = Path(s['songs_dir'])
-        sid = s['id']
+        sid = name = s['id']
+        while name in used:  # two different songs with the same ID in different games ("Up" in 2014 and 2016)
+            name += '_2'
+        used.add(name)
+        if s.get('platform') == 'wii':  # files/common/{audio,vxla,textures/covers}; videos are Wii MobiClip (.mo)
+            wii = {'audio': src / 'common' / 'audio' / f"{sid}.ogg", 'vxla': src / 'common' / 'vxla' / f"{sid}.vxla",
+                   'vxla_duet': src / 'common' / 'vxla' / f"{sid}_DUET.vxla",
+                   'covers': src / 'common' / 'textures' / 'covers' / f"{sid}.png"}
+            for sub, f in wii.items():
+                if f.exists():
+                    shutil.copy2(f, out / sub / (f"{name}_duet.vxla" if sub == 'vxla_duet' else name + f.suffix))
+            meta.append({'id': name, 'artist': s['artist'], 'title': s['title'], 'year': s.get('year', ''),
+                         'source': s['pack']})
+            continue
         for sub, suffixes in MEDIA.items():
             for suffix in suffixes:
                 f = src / sub / f"{sid}{suffix}"

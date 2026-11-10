@@ -502,4 +502,12 @@
   `files/common/level/SingTheHits.db` (SQLite); portadas en `textures/covers`. Vídeos en MobiClip de Wii (`.mo`,
   cabecera MOC5) que ffmpeg no abre. Inventario: 53 nuevas, 7 de USDB que podrían pasar a la oficial, 14 ya
   oficiales más nuevas.
+- Con Calma y Calma (Remix) oficiales (LS12); las de USDB, a `_papelera/2026-11-10_reemplazadas_por_oficiales`.
+- Wii 2015 (Europa) también: los tres discos dan 79 nuevas y 9 de USDB que pasan a la oficial. El inventario
+  emparejaba solo por título («Magic» de Coldplay con el de Selena Gomez): ahora exige el mismo artista; las
+  repetidas entre discos se juntan por título y artista; dos canciones distintas con el mismo ID («Up» de 2014 y
+  2016) se guardan con nombres distintos. Género y año desde `SingTheHits.db`.
+- Vídeos de Wii (MobiClip `.mo`, que ffmpeg no lee): en su lugar el videoclip oficial de YouTube, comprobado y
+  cortado al audio oficial con `align_video` (`tools/fetch_official_videos.py`). Uptown Funk: 100 % de ajuste,
+  empieza en +0,0 s. El vídeo intermedio se codifica rápido (`veryfast`, crf 16): luego se pasa a .bk2.
 

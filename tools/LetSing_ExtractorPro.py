@@ -254,8 +254,8 @@ def convert_vxla_to_txt(vxla_file, song_id, meta, output_folder, mega_dir):
                 
             if lyric in ("-", ""): lyric = "~"
             else:
-                if check_space_after(t2, lyrics_data): lyric += " "
-                if check_space_before(t1, lyrics_data): lyric = " " + lyric
+                if check_space_after(t2, lyrics_data) and not lyric.endswith(" "): lyric += " "
+                if check_space_before(t1, lyrics_data) and not lyric.startswith(" "): lyric = " " + lyric
                         
             start_beat = seconds_to_beats(t1)
             duration = seconds_to_beats(t2) - start_beat

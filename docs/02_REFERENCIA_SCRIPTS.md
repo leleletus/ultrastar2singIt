@@ -246,6 +246,7 @@ Todas se ejecutan con `python tools/<script>.py --help`. Las que cambian archivo
 | `extract_switch_songs.py` | extrae la RomFS de NSP de Let's Sing (base con su update aplicado y cada DLC) con hactool | claves del ticket de cada NSP en un HOME temporal (no toca `~/.switch`); reanudable |
 | `official_inventory.py` | canciones de juegos extraídos (Switch y discos de Wii) frente a la biblioteca: nuevas, hechas por nosotros a cambiar por la oficial, oficiales más viejas | nombres de `.tsv`, `*_meta.xml`, la `GameSongDatabase` de Unity (LS11/12, UnityPy) o `SingTheHits.db` (Wii); solo lee |
 | `build_megapack.py` | junta las canciones elegidas en un megapack (lo que leen ExtractorPro y attach_official_vxla), con las portadas que el juego guarda en Unity | |
+| `fetch_official_videos.py` | a las canciones sin vídeo les busca el videoclip oficial en YouTube, comprueba con `align_video` que es la misma versión (inicio, medio y final) y lo corta al audio | sin tocar #GAP: la letra va con el audio; reanudable |
 | `reverse_vxla.py` | variante del extractor | [B-33] |
 | `unpacker.py` | menú Herramientas → Desempaquetar (usa la lógica del extractor) | [B-32] |
 | `cache_recovery.py` | menú Herramientas → Recuperar caché desde la salida | nunca sobrescribe [B-31] |

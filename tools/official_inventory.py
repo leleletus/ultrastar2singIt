@@ -40,6 +40,12 @@ def norm(text):
     return re.sub(r'[^a-z0-9]', '', text)
 
 
+def first_word(artist):
+    """Normalized first word of an artist ("Calvin Harris ft. Ellie Goulding" -> "calvin")."""
+    words = re.split(r'\s+', unicodedata.normalize('NFKD', (artist or '').lower()).strip())
+    return norm(words[0]) if words and words[0] else ''
+
+
 def vxla_meta(path):
     meta = {}
     try:
@@ -202,8 +208,9 @@ def library(songs_dir, megapack):
             entry.update(kind='oficial', id=sid, game=mega.get((sid or '').lower()), digest=d)
             if sid:
                 by_id[sid.lower()] = entry
+        entry['artist_norm'] = norm(artist)
         by_title[norm(artist) + '|' + norm(title)] = entry
-        by_title.setdefault('|' + norm(title), entry)
+        by_title.setdefault('|' + norm(title), []).append(entry)
     return by_id, by_title, mega
 
 
@@ -218,17 +225,20 @@ def main():
     found = [s for root in args.extracted for s in extracted_songs(root) + wii_songs(root)]
     # the same song in several packs of these games: the newest game's copy
     best = {}
-    for s in found:
-        key = s['id'].lower()
+    for s in found:  # same song: same title and same first word of the artist (IDs can differ between games)
+        key = norm(s['title']) + '|' + first_word(s['artist'])
         if key not in best or GAME_YEAR.get(s['game'], 0) > GAME_YEAR.get(best[key]['game'], 0):
             best[key] = s
     by_id, by_title, mega = library(args.songs, args.megapack)
     plan = {'nuevas': [], 'reemplazar_hecha_por_nosotros': [], 'reemplazar_oficial_mas_vieja': [],
             'ya_esta_igual_o_mas_nueva': []}
     for key, s in sorted(best.items(), key=lambda kv: (kv[1]['artist'].lower(), kv[1]['title'].lower())):
-        have = by_id.get(key) or by_title.get(norm(s['artist']) + '|' + norm(s['title'])) or \
-            by_title.get('|' + norm(s['title']))
-        in_mega = mega.get(key)
+        have = by_id.get(s['id'].lower()) or by_title.get(norm(s['artist']) + '|' + norm(s['title']))
+        if not have:  # same title written another way: only with the same artist ("Magic" of Coldplay is not Selena's)
+            word = first_word(s['artist'])
+            have = next((e for e in by_title.get('|' + norm(s['title']), [])
+                         if word and (word in e['artist_norm'] or e['artist_norm'].startswith(word[:4]))), None)
+        in_mega = mega.get(s['id'].lower())
         s = dict(s, folder=have['folder'] if have else None)
         if have and have['kind'] == 'oficial':
             old_year = GAME_YEAR.get(have.get('game') or '', 0)
