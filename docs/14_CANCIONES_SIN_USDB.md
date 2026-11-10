@@ -113,6 +113,9 @@ descargar todas de una vez y fabricar/convertir en paralelo.
   Ctrl+Supr), **corregir el texto** (doble clic en una nota, o T para la línea), modo cantar.
 - El inglés se silabea de forma aproximada.
 
+> **Pendiente (2026-11-10):** revisión a oído parada en 4 de 62 (Tarantino, Goma de Mascar, Afortunadamente No
+> Eres Tú, Natural) y Cobra a medias (la termina el usuario). Ver [06_BACKLOG_Y_MEJORAS.md](06_BACKLOG_Y_MEJORAS.md).
+
 ## Canciones hechas (2026-11-05)
 
 | Canción | Video | Letra (LRCLIB) |

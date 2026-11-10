@@ -1,5 +1,15 @@
 # 06 — Backlog, mejoras de interfaz y plan de trabajo
 
+## Pendientes que quedan para más adelante (2026-11-10)
+
+| Pendiente | Quién | Nota |
+|---|---|---|
+| Revisión a oído de las canciones de SongMaker | usuario + programa | 4 de 62 revisadas (Tarantino, Goma de Mascar, Afortunadamente No Eres Tú, Natural). Seguir con las de LISA y Paty Cantú; el método: el usuario corrige tiempos, el programa mide el tono (`P`) y copia sus arreglos a los estribillos repetidos. Lista: `~/LetsSing/INFORME_SONGMAKER.md`, puntos dudosos con `N` en el editor |
+| LISA - Cobra | usuario | corregidos solo los primeros segundos (el resto es rap); terminarla a mano cuando tenga tiempo, luego medir el tono y marcarla revisada |
+| Notas que se alargan sobre la reverberación («no» de Tarantino, «face») | programa | arreglado a mano en Tarantino; propuesto aplicarlo a las demás de SongMaker antes de revisarlas (esperando el sí) |
+| Let's Sing 2027 | usuario | cuando lo compre: IDs del juego y de sus DLC (International Hits, Mit Deutschen Hits, Français et International) desde DBI; ver si el formato es el de 2026 antes de activarle modo Feat, idiomas e IDs de juego |
+| Commit 98787ac en GitHub | usuario | reescrito como 5413561; pedir a GitHub Support que purgue el SHA viejo (también aparece en el PR #35 del original) |
+
 ## 0. Estado al 2026-11-01
 
 Las fases 1 a 4 y 6 del plan están hechas (bugs B-01…B-45 cerrados; ver [09_HISTORIAL_BUGS.md](09_HISTORIAL_BUGS.md)).
