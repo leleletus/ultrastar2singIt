@@ -526,3 +526,17 @@
   4 viejas (respaldo `switch_backup_2026-11-10_161421`). En la consola: el juego arranca, la lista muestra las nuevas
   (Party Rock Anthem de Wii, 4:23 como su audio). El aviso 2123-0011 y «datos en línea» son por Nintendo bloqueado.
   El panel de herramientas de la app sigue ofreciendo solo MTP.
+
+### 2026-11-11 — Más canciones y revisión de Lento
+- Tacatá salía «Tacat�» (la base de datos de Wii en otra codificación): título, carpeta y archivos corregidos y
+  reconvertida; el ID viejo (`TacatT`) fuera del parche con `remove_from_patch.py`.
+- Pedidas: Iris (Goo Goo Dolls), Who Knew (P!nk), Only Love Can Hurt Like This (Paloma Faith) estaban en USDB:
+  descargadas con el propio cargador de usdb_syncer (sin abrir su ventana; quedan con su `.usdb`). Iris: la
+  «Album Version» (ID 880) no trae vídeo y el videoclip oficial (3:35) es otro corte que la de álbum (4:52); se usa la
+  versión de USDB hecha sobre el videoclip (ID 15041). Géneros desde iTunes (`fix_genres` saltaba mal la carpeta
+  `_songmaker_downloads`). Parche: 843, 0 problemas.
+- Notas doradas de las de Wii: pocas por diseño del juego original (mediana 9 por canción, ~4 % del tiempo cantado;
+  Call Me Maybe 6), frente a ~24 y ~12 % en Let's Sing 2018–2023.
+- Lento (Julieta Venegas) corregida por el usuario: la línea final del segundo estribillo pasa a «…todo lo que tengo,
+  todo lo que tengo»; copiada al primer estribillo (la voz sigue cantando igual hasta 86,6 s), tono medido otra vez
+  desde la voz (46 de 305 notas), tono ±1 72 %. Revisadas: 5 de 62.
