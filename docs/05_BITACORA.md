@@ -544,3 +544,8 @@
   «tomoshibi»; tiempos en 5 líneas. Repetido donde se canta lo mismo (comprobado con la letra japonesa de LRCLIB):
   línea 2 (重ねたら), línea 39 (= la 24, sin la nota «wo» como la dejó el usuario) y línea 42 (灯火). Tono medido otra
   vez desde la voz (26 de 724 notas), tono ±1 94 %. Revisadas: 6 de 62.
+- BADGRRRL (LISA): la letra de Genius colocada por el modelo no traía el segundo estribillo entero, así que desde 0:50
+  cada frase caía en otro sitio y luego volvía a encajar; además tenía letras cirílicas («droppеd», «Leavе»). Su vídeo
+  es un lyric video: la línea que se canta sale resaltada en el centro; leída con tesseract cada 0,2 s → 67 líneas con
+  su hora (el primer «And it go» a 0:03.0; el modelo pone la primera sílaba a 0:03.5, lo que oyó el usuario). Notas
+  rehechas con SongMaker sobre esas líneas (respaldo `_respaldo_songmaker/20261111_badgrrrl_antes_de_letra_del_video`).
