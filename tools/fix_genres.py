@@ -83,7 +83,10 @@ def main():
     args = parser.parse_args()
     found, missing = collections.Counter(), []
     for d in sorted(p for p in Path(args.songs).iterdir() if p.is_dir()):
-        txt = ConvertFiles.choose_txt_file([p for p in d.iterdir() if p.suffix.lower() == '.txt'])
+        txts = [p for p in d.iterdir() if p.suffix.lower() == '.txt']
+        if not txts:  # not a song (e.g. _songmaker_downloads)
+            continue
+        txt = ConvertFiles.choose_txt_file(txts)
         data = UltrastarToSingit.parse_file(txt)
         if data.get('GENRE', '').strip():
             continue
