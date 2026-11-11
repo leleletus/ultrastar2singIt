@@ -540,3 +540,7 @@
 - Lento (Julieta Venegas) corregida por el usuario: la línea final del segundo estribillo pasa a «…todo lo que tengo,
   todo lo que tengo»; copiada al primer estribillo (la voz sigue cantando igual hasta 86,6 s), tono medido otra vez
   desde la voz (46 de 305 notas), tono ±1 72 %. Revisadas: 5 de 62.
+- Koi no Uta (Yunomi) corregida por el usuario: 重ね se leía «omone» → «kasane», «Ori» → «Furi» (降り), 灯火 «touka» →
+  «tomoshibi»; tiempos en 5 líneas. Repetido donde se canta lo mismo (comprobado con la letra japonesa de LRCLIB):
+  línea 2 (重ねたら), línea 39 (= la 24, sin la nota «wo» como la dejó el usuario) y línea 42 (灯火). Tono medido otra
+  vez desde la voz (26 de 724 notas), tono ±1 94 %. Revisadas: 6 de 62.

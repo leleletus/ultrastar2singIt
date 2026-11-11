@@ -4,7 +4,7 @@
 
 | Pendiente | Quién | Nota |
 |---|---|---|
-| Revisión a oído de las canciones de SongMaker | usuario + programa | 5 de 62 revisadas (Tarantino, Goma de Mascar, Afortunadamente No Eres Tú, Natural, Lento). Seguir con las de LISA y Paty Cantú; el método: el usuario corrige tiempos, el programa mide el tono (`P`) y copia sus arreglos a los estribillos repetidos. Lista: `~/LetsSing/INFORME_SONGMAKER.md`, puntos dudosos con `N` en el editor |
+| Revisión a oído de las canciones de SongMaker | usuario + programa | 6 de 62 revisadas (Tarantino, Goma de Mascar, Afortunadamente No Eres Tú, Natural, Lento, Koi no Uta). Seguir con las de LISA y Paty Cantú; el método: el usuario corrige tiempos, el programa mide el tono (`P`) y copia sus arreglos a los estribillos repetidos. Lista: `~/LetsSing/INFORME_SONGMAKER.md`, puntos dudosos con `N` en el editor |
 | LISA - Cobra | usuario | corregidos solo los primeros segundos (el resto es rap); terminarla a mano cuando tenga tiempo, luego medir el tono y marcarla revisada |
 | Notas que se alargan sobre la reverberación («no» de Tarantino, «face») | programa | arreglado a mano en Tarantino; propuesto aplicarlo a las demás de SongMaker antes de revisarlas (esperando el sí) |
 | Let's Sing 2027 | usuario | cuando lo compre: IDs del juego y de sus DLC (International Hits, Mit Deutschen Hits, Français et International) desde DBI; ver si el formato es el de 2026 antes de activarle modo Feat, idiomas e IDs de juego |
