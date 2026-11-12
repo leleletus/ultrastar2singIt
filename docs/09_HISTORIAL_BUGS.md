@@ -13,7 +13,7 @@ Resumen al 2026-11-05: **75 bugs registrados, 73 cerrados, 2 pendientes**. El de
 
 | Qué | Estado |
 |---|---|
-| Mod: terminar la canción al acabar la letra (BBHMM y similares) | Pendiente; el salto del intro ya funciona (release skip-intro-v1) |
+| Mod: terminar la canción al acabar la letra (BBHMM y similares) | Hecho en la v2 del mod (2026-11-12): mantener ZR/ZL 3 s tras la última nota; también en Feat |
 | Mod: que el video salte directo tras el salto del intro (ahora se pone al día acelerando un momento) | Pendiente |
 | 14 canciones sin videoclip (imagen fija) | Lista con enlaces en `~/LetsSing/VIDEOS_PENDIENTES.md`; clic derecho → Añadir un video |
 | Revisión de sincronía de las 274 canciones UltraStar contra la voz (`tools/sync_scan.py`) | Hecha (278 ok, 11 parcial, 1 desfase, 3 dudosa); desde la app: 5. Opciones avanzadas |

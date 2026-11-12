@@ -1,7 +1,8 @@
 # 10 — Mod para Let's Sing 2026: saltar el intro y terminar al acabar la letra
 
-Estado: **funciona en la consola (2026-11-01)**. Botón (ZR/ZL, SL/SR) durante el intro, salto a 3 s antes de la
-primera nota. Todo lo de abajo sale del código del juego, no de suposiciones; las direcciones valen **solo** para la
+Estado: **v1 funciona en la consola (2026-11-01)**: botón (ZR/ZL, SL/SR) durante el intro, salto a 3 s antes de la
+primera nota. **v2 (2026-11-12)**: también en Feat, y mantener el botón 3 s después de la última nota salta a 1 s
+antes del final; copiada a la consola el 2026-11-12, a falta de que el usuario confirme la prueba. Todo lo de abajo sale del código del juego, no de suposiciones; las direcciones valen **solo** para la
 versión analizada.
 
 **Repositorio del mod**: https://github.com/leleletus/letssing2026-skip-intro (código, `build.sh`, release con el
@@ -66,6 +67,14 @@ dificultad `VeryEasy…VeryHard`; voz `Women, Men, Both`.
   `atmosphere/contents/0100EE4020D18000/exefs/`. Un gancho en `InGameClassic.UpdateVx` (cada fotograma, solo partida
   normal) lee el mando con `nn::hid::GetNpadState` y, si se pulsa ZR/ZL con más de 6 s hasta la primera nota, llama a
   `InGameSimple.SetTime(primeraNota - 3)`.
+- **v2, Feat**: `InGameFeat` no tiene `UpdateVx` propio: corre el de `InGameSimple` (`0x47A4700`), y el de
+  `InGameClassic` no llama al de la base (repite su código). Por eso la v1 no hacía nada en Feat; la v2 engancha los
+  dos y mira el nombre de la clase (`InGameClassic` o `InGameFeat` exactos: ni Fest ni los de Carrera, que heredan).
+- **v2, saltar el final**: el juego termina la canción en `UpdateVx` cuando `karaokeTime` (+0xAC) `+ deltaTime >
+  songEnd` (+0xA8): marca la canción como jugada y llama a `SwitchToResult`. El mod no llama a `SwitchToResult`:
+  con el botón mantenido 3 s (medidos con el reloj de la canción) después de la última nota de todas las voces
+  (`KaraokeNotes` y `KaraokeNotesAll`, fin de nota en `KaraokeObject.EndTime` +0x14) y más de 2 s por delante, hace
+  `SetTime(songEnd - 1)` y el juego acaba por su camino normal un segundo después.
 - `main.npdm` = el del juego + llamadas al sistema `0x40`, `0x43`, `0x74`, `0x75` (sin ellas: "Undefined System
   Call 0x74", B-69).
 - Compilar: `./build.sh` en el repositorio del mod (devkitA64 + `npdmtool`). La salida es idéntica en código al
@@ -76,7 +85,5 @@ dificultad `VeryEasy…VeryHard`; voz `Women, Men, Both`.
 
 ### Pendiente
 
-1. **Terminar al acabar la letra**: en `UpdateVx`, si `KTime` > última nota + 3 s, llamar a `SwitchToResult()` una
-   vez (canciones como Bitch Better Have My Money, cuyo video sigue tras la última línea).
-2. **Video sin acelerar**: tras el salto, el video Bink se pone al día acelerando un momento (`VideoDesyncTolerance`);
+1. **Video sin acelerar**: tras el salto, el video Bink se pone al día acelerando un momento (`VideoDesyncTolerance`);
    lo ideal es moverlo directo al mismo tiempo que el audio.
