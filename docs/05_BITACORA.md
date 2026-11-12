@@ -549,3 +549,16 @@
   es un lyric video: la línea que se canta sale resaltada en el centro; leída con tesseract cada 0,2 s → 67 líneas con
   su hora (el primer «And it go» a 0:03.0; el modelo pone la primera sílaba a 0:03.5, lo que oyó el usuario). Notas
   rehechas con SongMaker sobre esas líneas (respaldo `_respaldo_songmaker/20261111_badgrrrl_antes_de_letra_del_video`).
+
+### 2026-11-12 — Mod de saltar intro v2 y Switch al día
+- `mods/skip_intro` v2 (commit local 1c3bb8f, sin publicar hasta probarlo): también en Feat (`InGameFeat` no tiene
+  `UpdateVx` propio, corre el de `InGameSimple` en 0x47A4700, y el de `InGameClassic` no llama al de la base: se
+  enganchan los dos) y saltar el final: mantener ZR/ZL 3 s después de la última nota de todas las voces
+  (`KaraokeNotes` y `KaraokeNotesAll`) → `SetTime(songEnd − 1)`; el juego termina solo (`InGameSimple.UpdateVx` pasa a
+  resultados cuando `karaokeTime + dt > songEnd`). `main.npdm` idéntico al de la v1.
+- Espera tras la última nota en el parche: mediana 6,9 s; 97 canciones de más de 20 s, 41 de más de 30 s
+  (`~/LetsSing/colas_finales.json`). La más larga: Last Friday Night (3 min 18 s, y 56 s de intro).
+- Switch por MTP: 36 archivos (187 MB: Iris, Who Knew, Only Love Can Hurt Like This, Tacatá, Lento, Koi no Uta,
+  BADGRRRL, géneros de Milkshake y Bailando) y fuera los 7 del Tacatá viejo (respaldo
+  `switch_backup_2026-11-12_105723`); `subsdk9` de la v2 leído de vuelta e idéntico (la v1 de la consola, en
+  `switch_backup_2026-11-12_mod_v1`).
