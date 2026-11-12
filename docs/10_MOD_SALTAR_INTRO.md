@@ -2,7 +2,7 @@
 
 Estado: **v1 funciona en la consola (2026-11-01)**: botón (ZR/ZL, SL/SR) durante el intro, salto a 3 s antes de la
 primera nota. **v2 (2026-11-12)**: también en Feat, y mantener el botón 3 s después de la última nota salta a 1 s
-antes del final; copiada a la consola el 2026-11-12, a falta de que el usuario confirme la prueba. Todo lo de abajo sale del código del juego, no de suposiciones; las direcciones valen **solo** para la
+antes del final; **probada en la consola el 2026-11-12** en Classic y en Feat (el intro y el final). Los 3 s se cuentan con el reloj de la canción y no hay aviso en pantalla: contando deprisa se suelta antes y no salta. Todo lo de abajo sale del código del juego, no de suposiciones; las direcciones valen **solo** para la
 versión analizada.
 
 **Repositorio del mod**: https://github.com/leleletus/letssing2026-skip-intro (código, `build.sh`, release con el

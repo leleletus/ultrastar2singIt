@@ -562,3 +562,6 @@
   BADGRRRL, géneros de Milkshake y Bailando) y fuera los 7 del Tacatá viejo (respaldo
   `switch_backup_2026-11-12_105723`); `subsdk9` de la v2 leído de vuelta e idéntico (la v1 de la consola, en
   `switch_backup_2026-11-12_mod_v1`).
+- Mod v2 probado por el usuario en la consola: saltar el intro y el final funcionan en Classic y en Feat. El retraso
+  que parecía haber al final era que contaba los 3 s demasiado rápido y soltaba antes (los archivos de la canción no
+  tienen nada después de la última nota). Release `v2` del mod pasado de preliminar a definitivo («Latest»).
