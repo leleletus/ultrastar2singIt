@@ -579,3 +579,10 @@
   la 35 (línea 19) no lleva su arreglo: comparadas con la voz, en la 19 la última palabra es una nota sostenida y en
   la 35 se cantan dos sílabas más. Tono medido otra vez desde la voz (23 de 272 notas), tono ±1 97 %, sin solapes.
   Reconvertida (el .bk2 no se rehace). Revisadas: 7 de 63.
+- Rudolph, aviso del usuario: el «yipee» que añadió (línea 35) sonaba más agudo que lo escrito. Cierto: la voz está
+  en 740 Hz (tono 18 del txt) y `pitches_from_voice` lo había doblado una octava abajo (6) por estar a más de 7
+  semitonos del centro de la línea. Espectro de las voces: sin energía en la octava baja. Mismo fallo en otras 9
+  notas (finales de las líneas 8, 12 y 24: el coro sube una octava cuando la melodía baja de si3; escritas en
+  −4/−6/−8, cantadas en 8/6/4; la línea 28, igual que la 12, ya estaba bien). 11 notas corregidas a mano, respaldo
+  en `_respaldo_songmaker/20261113_rudolph_antes_de_octavas`. Reconvertida; parche 844, 0 problemas. Falta
+  copiar a la Switch los 3 archivos (vxla, vxla_feat, lista).
