@@ -565,3 +565,13 @@
 - Mod v2 probado por el usuario en la consola: saltar el intro y el final funcionan en Classic y en Feat. El retraso
   que parecía haber al final era que contaba los 3 s demasiado rápido y soltaba antes (los archivos de la canción no
   tienen nada después de la última nota). Release `v2` del mod pasado de preliminar a definitivo («Latest»).
+
+### 2026-11-13 — Rudolph the Red-Nosed Reindeer (pedida con un vídeo concreto)
+- Hecha con SongMaker desde el vídeo que dio el usuario (youtube `hega-GxyW6o`, vídeo infantil con la letra en
+  pantalla, 157 s, sin artista). Se dejaron en `lrclib.json` las 33 versiones con tiempos de la canción y el encaje
+  eligió la de The Countdown Kids (156 s, desfase +0,5 s, encaje 0,82): se le puso ese artista (antes de convertir;
+  carpeta y caché de voz renombradas a mano, `TCK…`).
+- Comprobación con el propio vídeo: una frase por pantalla; OCR cada 0,2 s → 42 pantallas. Los inicios de las 37
+  líneas caen a ±0,5 s del cambio de pantalla; voz bajo las notas ~95 % y tono ±1 ~97 % por línea. En 7 líneas el
+  OCR no leía la fila de arriba (parecía que sobraba letra): vistas a ojo 3 de ellas, la letra es la del vídeo.
+- Convertida (bk2 de 4,4 MB: el vídeo casi no se mueve). Parche: 844, 0 problemas. Falta copiarla a la Switch.
