@@ -575,3 +575,7 @@
   líneas caen a ±0,5 s del cambio de pantalla; voz bajo las notas ~95 % y tono ±1 ~97 % por línea. En 7 líneas el
   OCR no leía la fila de arriba (parecía que sobraba letra): vistas a ojo 3 de ellas, la letra es la del vídeo.
 - Convertida (bk2 de 4,4 MB: el vídeo casi no se mueve). Parche: 844, 0 problemas. Falta copiarla a la Switch.
+- Rudolph corregida por el usuario en el editor (tiempos en 6 líneas; letra y notas en la 25 y la 35). La gemela de
+  la 35 (línea 19) no lleva su arreglo: comparadas con la voz, en la 19 la última palabra es una nota sostenida y en
+  la 35 se cantan dos sílabas más. Tono medido otra vez desde la voz (23 de 272 notas), tono ±1 97 %, sin solapes.
+  Reconvertida (el .bk2 no se rehace). Revisadas: 7 de 63.
