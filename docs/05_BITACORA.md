@@ -586,3 +586,27 @@
   −4/−6/−8, cantadas en 8/6/4; la línea 28, igual que la 12, ya estaba bien). 11 notas corregidas a mano, respaldo
   en `_respaldo_songmaker/20261113_rudolph_antes_de_octavas`. Reconvertida; parche 844, 0 problemas. Falta
   copiar a la Switch los 3 archivos (vxla, vxla_feat, lista).
+
+### 2026-11-15 — SongMaker: líneas con hueco (v6), octavas cantadas y guía de uso
+
+- Aviso del usuario: en muchas canciones pendientes una palabra o sonido cae antes de que empiece la frase, luego
+  las sílabas se aprietan para volver a la sincronía, y se repite en los estribillos. Medido contra sus propias
+  correcciones (6 canciones, 2.974 notas emparejadas; error = nota a más de 0,15 s de donde la dejó): el creador
+  actual falla en 112 (3,8 %). Probado: toda la canción de una vez con bandas de ±1/2/4 s (peor: roba audio entre
+  líneas mal reconocidas), cada línea junto con la siguiente (149), penalización de silencios dentro de la línea
+  (134–208), tiempos por palabra de Whisper (10–27 % de palabras a más de 0,3 s frente al 0,5–2,7 % actual).
+  Lo único que mejora sin empeorar nada: colocar junto con la siguiente solo las líneas que salen con un hueco
+  (112 → 106). `NOTE_MAKER_VERSION = 6`, `VoiceAlign.align_lines`, `SongMaker._hole`.
+- Aplicado a las pendientes no tocadas a mano (el txt de las 53 era exactamente el de la v5): cambian 8 canciones,
+  11 líneas reparadas (Gyal You a Party Animal, Destino, FIESTA 3, ROCKSTAR 2, V12, Bad Boy, FANCY, Strategy). Los txt
+  de antes en `_papelera/notas_v5`. Rosa Pastel, Cobra y Dream tienen `.bak`: no se tocan. Reconvertidas (bk2
+  conservados); parche 844, 0 problemas.
+- Octavas: `SongMaker.sung_octaves` (armónicos impares de la voz separada) en `pitches_from_voice` (tecla `P` del
+  editor), `make_notes` y `remake_notes`. Sobre el txt de Rudolph de antes del arreglo a mano sube exactamente las 11
+  notas corregidas a mano y ninguna más. En toda la biblioteca de SongMaker subiría 1.464 de 33.103 notas (4,4 %);
+  no se ha aplicado en masa: entra al medir el tono de cada canción después de su revisión.
+- `tools/after_review.py`: el paso de después de la revisión a oído (tono, solapes, respaldo, marca de revisada).
+- README: guía «Adding songs, step by step» (USDB → SongMaker → revisión → consola). `docs/14`: sección «Después de
+  corregirla a oído».
+- Pendiente de copiar a la Switch: Rudolph (octavas) y las 8 reparadas.
+

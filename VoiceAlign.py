@@ -192,6 +192,34 @@ def align_line(logp, vocab, a, b, syllables):
     return out, letter_logp, mean
 
 
+def align_lines(logp, vocab, a, b, lines):
+    """Consecutive lines looked for together between frames a and b: [(spans of the syllables, mean log-probability
+    of the letters)] per line, or None. The lines share out the audio between them, so words of the next line are
+    not taken for the end of this one."""
+    blank = vocab.get('<blank>', vocab.get('<pad>', 0))
+    groups = [[letters(s, vocab) for s in syllables] for syllables in lines]
+    tokens = [x for line in groups for g in line for x in g]
+    a, b = max(0, a), min(len(logp), b)
+    if b - a < 2 or any(not any(line) for line in groups):
+        return None
+    found = _viterbi(logp[a:b], tokens, blank)
+    if found is None:
+        return None
+    spans, k, out = found[0], 0, []
+    for line in groups:
+        row, first = [], k
+        for g in line:
+            if g:
+                row.append((a + spans[k][0], a + spans[k + len(g) - 1][1]))
+                k += len(g)
+            else:
+                row.append(row[-1] if row else None)
+        start = next(x for x in row if x is not None)
+        row = [x if x is not None else start for x in row]
+        out.append((row, float(np.mean([logp[a + t0, tok] for (t0, _), tok in zip(spans[first:k], tokens[first:k])]))))
+    return out
+
+
 def file_id(song_dir):
     import naming
     folder = os.path.basename(os.path.normpath(song_dir)).rstrip('.')

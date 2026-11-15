@@ -79,6 +79,39 @@ estribillos y secciones). Si se cae la conexión, espera a que vuelva (cada 30 s
 `make_song.py` sin `--fetch-only` fabrica la canción sin internet y la conversión tampoco lo necesita. Así se pueden
 descargar todas de una vez y fabricar/convertir en paralelo.
 
+## Después de corregirla a oído
+
+En el editor de sincronía (clic derecho → **Arreglar sincronía…**) se corrige solo lo que se oye mal: posición y
+duración de palabras o frases, dividir o clonar notas, letra. **Una nota movida, clonada o dividida conserva el tono
+del sitio de donde vino**, así que al terminar hay que medir el tono otra vez:
+
+- en el editor: **P** sin ninguna nota seleccionada (toda la canción) y guardar; o
+- en terminal, con la lista de lo que cambia y de las notas que se solapan:
+
+```
+python tools/after_review.py "<canciones>/<carpeta>"                     # solo muestra
+python tools/after_review.py "<canciones>/<carpeta>" --apply --checked   # escribe y la marca como revisada
+```
+
+El txt de antes queda en `<canciones>/../_respaldo_songmaker/<fecha>_<carpeta>/`. Después, convertir la canción (solo
+se rehacen las notas; el `.bk2` se conserva) y pasarla a la consola (`tools/switch_update.py`).
+
+**Octavas.** La medida dobla a la octava de su línea toda nota a más de 7 semitonos del resto (así se deshacen los
+errores del detector de tono). Un grito agudo o un coro que sube una octava de verdad quedaba escrito una octava
+abajo (Rudolph: el «yipee» y los finales de tres líneas). Desde el 2026-11-15 `SongMaker.sung_octaves` mira la voz
+separada: una nota cantada donde está escrita tiene ese tono y sus armónicos impares; cantada una octava arriba solo
+tiene los pares. Las notas sin armónicos impares se suben. Se aplica en `P`, en `after_review.py` y al crear o rehacer
+una canción. El juego puntúa igual en cualquier octava; cambia lo que se dibuja.
+
+**Líneas con un hueco** (versión 6 del creador de notas). Cuando el tiempo de la línea siguiente llega tarde en la
+letra, el final de una línea podía caer sobre las primeras palabras de la siguiente: quedaba un hueco en medio de la
+línea y la siguiente empezaba tarde y apretada. Una línea que sale con un hueco (≥ 1,2 s y 4 veces su paso normal)
+se coloca ahora junto con la siguiente y se queda así si el hueco desaparece. Medido contra las 6 canciones
+corregidas a oído (2.974 notas): notas a más de 0,15 s de la corrección 112 → 106, sin ninguna que empeore.
+Probado y descartado con esa misma medida: colocar toda la canción de una vez (149–200), colocar siempre cada línea
+con la siguiente (149), penalizar los silencios dentro de la línea (134–208) y usar los tiempos por palabra de
+Whisper (falla 4–10 veces más que las notas actuales).
+
 ## Fiabilidad
 
 - Con el modelo de habla (versión 5), en las mismas 20 oficiales: inicio de sílaba a **0,03 s** de la oficial

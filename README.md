@@ -65,9 +65,13 @@ sung and fix misspelt words, and sing over it with a microphone. Every button an
 | `fix_covers.py` | gives every song its own cover: USDB link, official cover, single/album of the store (never compilations) |
 | `fix_years.py` | real release year (MusicBrainz, iTunes) for songs rebuilt from DLCs that had the DLC year |
 | `artist_genders.py` | men / women / both for each artist (MusicBrainz), used for the "gender" of Let's Sing 2026 |
+| `make_song.py` / `make_songs.py` | makes a song USDB does not have from a YouTube video (one / a resumable queue): see [Adding songs](#adding-songs-step-by-step) |
+| `after_review.py` | after fixing a made song by ear: pitch of every note measured again where the note is now, overlaps listed, song marked as reviewed |
+| `remake_notes.py` | writes the notes of made songs again with the current note maker (never the ones fixed by hand) |
 | `align_voices.py` / `songmaker_report.py` | speech-model alignment of SongMaker lyrics (resumable batch) / report of the made songs with what to fix by hand |
+| `remove_from_patch.py` | takes songs out of a converted patch (files moved to a trash folder, entry out of the song list) |
 | `validate_patch.py` | checks the patch before copying it: files, values the game accepts, covers, lyrics |
-| `switch_update.py` | copies to the Switch over MTP (DBI) only the files that changed; `--prune` removes renamed ones |
+| `switch_update.py` | copies to the Switch only the files that changed, over MTP (DBI, cable) or FTP (`--ftp HOST:PORT`, Wi-Fi); `--prune` removes renamed ones |
 
 **Let's Sing 2026** (only this edition; older ones are generated as before): the "Title" list of the game is sorted
 by the song ID, so the patch uses title-first IDs; real language (English/French/Spanish/German/Korean/Other), genre
@@ -78,6 +82,72 @@ skip-intro mod works: [`docs/10_MOD_SALTAR_INTRO.md`](docs/10_MOD_SALTAR_INTRO.m
 
 **GUI**: fast song table with per-song status, convert only the checked songs or a single one, coloured log,
 settings remembered, full Spanish translation. Tests: `python -m unittest discover -s tests -t .`
+
+## Adding songs, step by step
+Everything below can be done from the window; the commands are the same tools, for a terminal (run them with the
+project's Python: `venv/bin/python` on Linux). `<songs>` is your songs folder and `<patch>` the DLC folder of the
+output (e.g. `<output>/0100EE4020D19003`). In Spanish, with more detail: [`docs/12_CANCIONES_NUEVAS.md`](docs/12_CANCIONES_NUEVAS.md)
+and [`docs/14_CANCIONES_SIN_USDB.md`](docs/14_CANCIONES_SIN_USDB.md).
+
+### 1. Is the song on USDB? Use it
+Songs from [USDB](https://usdb.animux.de) have notes written by people: always better than automatic ones. Search
+for the song in [usdb_syncer](https://github.com/bohning/usdb_syncer) (artist and title; when there are several
+entries prefer the one with a video link and the most votes) and download it into `<songs>`. Then, in the converter:
+tick **Only pending** → **Check all visible** → **Convert checked**.
+
+### 2. Not on USDB: make it (SongMaker)
+**Tools → Make a song that is not on USDB...** asks for the artist, the title, the YouTube link of the music video,
+the language and, optionally, the year, the genre and the link of the official audio (use it when the video has
+spoken scenes or pauses that break the song: the video is then cut to that audio). From a terminal:
+
+    python tools/make_song.py <songs> "<artist>" "<title>" <YouTube link> --language English --year 1949 --genre Pop
+    python tools/make_song.py <songs> "<artist>" "<title>" <video link> --audio <official audio link>
+
+To make the song from **one exact video** (its audio, its lyrics), give that video as the link; the lyrics are taken
+from the LRCLIB version that fits that audio best, whoever sings it. Several songs in one go, resumable after a power
+cut: `tools/make_songs.py <songs> <queue.json> all` (the format of the queue is at the top of that file).
+
+What it does, in order (a few minutes per song on CPU; needs `requirements-slow.txt`, ffmpeg and internet):
+1. downloads the video and the audio (yt-dlp);
+2. separates the singer's voice (Demucs) and measures its loudness and pitch every 20 ms;
+3. gets the timed lyrics from [LRCLIB](https://lrclib.net) and picks the version and the shift that fit the voice;
+4. places every syllable with a speech model (MMS forced aligner) and writes one note per syllable with the pitch
+   that is sung. The result is a normal UltraStar folder with a `songmaker.json` next to the txt.
+
+It then converts like any other song. **Automatic notes are a draft**: most lines come out right, some do not (a word
+put before the singer starts, the end of a line squeezed, a chorus the lyrics repeat one time more or less than the
+recording). Check every made song by ear:
+
+### 3. Check a made song by ear (sync editor)
+Tick **Only SongMaker** to see the made songs, right click → **Fix sync…** The list of made songs, with the lines
+most likely to be wrong in each one, is written by `python tools/songmaker_report.py <songs> --md <file.md>`; in the
+editor **N** jumps to the next doubtful point.
+
+- Fix only what you hear: move a word or a line to where it is sung, change its length, split or clone a note, fix
+  or delete lyrics ([all the buttons and shortcuts](#sync-editor-buttons-and-shortcuts)).
+- **A note you moved, cloned or split keeps the pitch of the place it came from.** When you finish, press **P** with
+  no note selected (the pitch of the whole song is measured again from the voice) and save. The same from a terminal,
+  with a list of what changes and of the notes that overlap:
+
+      python tools/after_review.py "<songs>/<song folder>"                    # only shows
+      python tools/after_review.py "<songs>/<song folder>" --apply --checked  # writes, and marks the song as reviewed
+
+  Shouts and jumps of a whole octave are kept where they are sung (the measure looks at the harmonics of the voice,
+  not only at the pitch tracker). The game itself accepts any octave; this is for what is drawn on the screen.
+- A chorus sung several times is fixed once per repetition: the editor does not copy a fix to the other ones.
+- Convert the song again (only the notes are made again; the `.bk2` video is kept).
+
+To write the notes of made songs again with a newer version of the note maker (never the ones already fixed by hand,
+which have a `.bak` next to the txt): `python tools/remake_notes.py <songs> --only "<song folder>"`.
+
+### 4. Copy to the console
+    python tools/validate_patch.py <patch>                 # files, values the game accepts, covers, lyrics
+    python tools/switch_update.py <patch> --apply          # cable: DBI → "Run MTP responder"; copies only what changed
+    python tools/switch_update.py <patch> --ftp 192.168.1.20:5000 --apply    # Wi-Fi: an FTP server on the Switch (ftpd)
+    python tools/remove_from_patch.py <patch>/romfs <ID> --trash <folder> --apply   # take a song out of the patch
+
+`switch_update.py` only lists without `--apply`; every file it replaces on the console is saved on the PC first, and
+nothing is deleted there without `--prune`. Both are also in section 5 of the window (library tools).
 
 ## Sync editor: buttons and shortcuts
 Open it with a right click on a song → *Fix sync…* (*Arreglar sincronización...*). Tick **Only SongMaker** (*Solo

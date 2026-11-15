@@ -254,6 +254,7 @@ Todas se ejecutan con `python tools/<script>.py --help`. Las que cambian archivo
 | `make_song.py` | fabrica una canción que USDB no tiene (SongMaker) | `--fetch-only` para descargar primero |
 | `make_songs.py` | cola de SongMaker reanudable: `fetch`, `build`, `convert`, `all` | salta lo hecho; cola en disco |
 | `remake_notes.py` | rehace las notas de las canciones fabricadas con el generador actual | sin internet ni videos; txt anterior a `_papelera/notas_v1`; salta las corregidas a mano (`--force`) [B-75] |
+| `after_review.py` | después de corregir a oído una canción fabricada: mide el tono de cada nota donde está ahora (`pitches_from_voice` + `sung_octaves`), lista los solapes, guarda el txt anterior en `_respaldo_songmaker/` y marca `user_checked` (`--checked`) | solo muestra sin `--apply` |
 | `note_style.py` | compara cómo están escritas las notas: oficiales frente a fabricadas (duración, saltos, notas por sílaba, rap) | solo lee |
 | `note_calibrate.py` | mide el generador de notas contra las oficiales que tienen la voz analizada | solo lee; `--align yes/no/only` (con o sin el modelo de habla) |
 | `songmaker_report.py` | informe de las canciones fabricadas: coincidencia con la voz, tono, bloques desfasados, inicio/fin, estilo, líneas que el modelo no reconoce; versiones antiguas al lado (`--version`) y prueba contra las oficiales (`--calibrate`) → `.md` con casillas para revisar a mano | solo lee |

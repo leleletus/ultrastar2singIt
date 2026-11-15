@@ -358,7 +358,7 @@ def _smooth_pitch(pitch):
 # notes repeat it, two fifths move 1-2 semitones, under a tenth jump 5 or more) and rap written as pitchless notes.
 # make_notes writes like that: the syllables go where the voice attacks, each one is a single steady note until
 # the next, and only a long syllable whose pitch clearly moves gets a second note.
-NOTE_MAKER_VERSION = 5          # 1: notes cut from the voice; 2: written like the official songs; 3: no backing vocals; 4: whole bracketed lines kept; 5: syllables placed by the speech model
+NOTE_MAKER_VERSION = 6          # 1: notes cut from the voice; 2: written like the official songs; 3: no backing vocals; 4: whole bracketed lines kept; 5: syllables placed by the speech model; 6: a line with a hole is placed together with the next one
 MIN_SYLLABLE_FRAMES = 3         # 60 ms
 SYLLABLE_S = (0.12, 0.35)       # expected length of a syllable (the line's voice shared out, kept in this range)
 ONSET_DURATION_WEIGHT = 4.0     # how much a syllable far from its expected length costs, against attack strength
@@ -546,6 +546,8 @@ ALIGN_MIN_LOGP = -6.0  # mean log-probability of the line's letters under which 
 LEGATO_FILL_S = 0.25   # a silence this short before the next syllable is sung through (official notes are legato)
 ALIGN_MIN_GAP_S = 0.18  # syllables closer than this are moved apart (half each way)
 ALIGN_AFTER_PREVIOUS = True  # a line is not looked for before the notes of the line before have ended
+HOLE_MIN_S = 1.2       # a silence this long between two syllables of a line (and HOLE_TIMES its usual step): its end
+HOLE_TIMES = 4.0       # may have been put on the first words of the next line; both lines are then placed together
 
 
 def rap_features(pitch, notes, rate):
@@ -727,18 +729,35 @@ def align_lyrics(ctc, texts, language='Spanish', voice_end=None, energy=None, dr
     return timed
 
 
-def _aligned_onsets(ctc, syllables, a, b, after=0, info=None):
+def _hole(starts):
+    """True when a line has a long silence between two of its syllables (HOLE_MIN_S, HOLE_TIMES its usual step)."""
+    if len(starts) < 4:
+        return False
+    steps = np.diff(np.asarray(starts, dtype=float)) * FRAME
+    return bool(np.any((steps >= HOLE_MIN_S) & (steps >= HOLE_TIMES * float(np.median(steps)))))
+
+
+def _aligned_onsets(ctc, syllables, a, b, after=0, info=None, following=None):
     """Start frame of each syllable from the speech model (VoiceAlign), looked for from ALIGN_BEFORE_S before the
     line's window (but after the line before has ended: frame `after`) to its end; None when the model is not sure
-    (then the voice's onsets are used)."""
+    (then the voice's onsets are used). following: (syllables, end frame) of the next line. A line left with a hole
+    (its last words put far from the rest: on the first words of the next line, whose time in the lyrics came
+    late) is looked for again together with the next line, and that is kept when the hole is gone."""
     import VoiceAlign
     logp, vocab = ctc
-    found = VoiceAlign.align_line(logp, vocab, max(after, a - int(ALIGN_BEFORE_S / FRAME)), b, syllables)
+    first = max(after, a - int(ALIGN_BEFORE_S / FRAME))
+    found = VoiceAlign.align_line(logp, vocab, first, b, syllables)
     if info is not None:
         info['sure'] = None if found is None else found[1]
     if found is None or found[1] < ALIGN_MIN_LOGP:
         return None
     starts = [s for s, _ in found[0]]
+    if following is not None and _hole(starts):
+        both = VoiceAlign.align_lines(logp, vocab, first, following[1], [syllables, following[0]])
+        if both is not None and both[0][1] >= ALIGN_MIN_LOGP and not _hole([s for s, _ in both[0][0]]):
+            starts = [s for s, _ in both[0][0]]
+            if info is not None:
+                info['sure'], info['with_next'] = both[0][1], True
     gap = ALIGN_MIN_GAP_S / FRAME
     for _ in range(3):  # two syllables too close: the model puts the first late and the second early
         for k in range(len(starts) - 1):
@@ -754,11 +773,66 @@ def _aligned_onsets(ctc, syllables, a, b, after=0, info=None):
     return starts
 
 
-def pitches_from_voice(lines, pitch):
+OCTAVE_WEAK = 0.15      # a note is sung an octave up when the tones only its written pitch would have (1st, 3rd,
+OCTAVE_LOUD = 0.5       # 5th harmonic) are under this share of the octave's own (2nd, 4th, 6th), which hold the loudest
+
+
+def load_vocals(folder):
+    """(samples, rate) of the isolated voice kept next to the song (VoiceAlign), or None."""
+    import VoiceAlign
+    path = VoiceAlign.paths(str(folder))[0]
+    if not os.path.exists(path):
+        return None
+    import soundfile as sf
+    audio, rate = sf.read(path, dtype='float32')
+    return (audio.mean(axis=1) if audio.ndim > 1 else audio), rate
+
+
+def sung_octaves(lines, midis, vocals):
+    """The notes written an octave under what is sung, put back up: a shout or a choir that jumps an octave is
+    folded down to the octave of its line by the rules that undo the mistakes of the pitch tracker (a note more
+    than 7 semitones from the rest). The voice itself tells them apart: sung at the written pitch it has that
+    tone and its odd harmonics; sung an octave up, only the even ones (the harmonics of the octave). lines: [[(start s, end s, ...)]],
+    midis: [[midi or None]], vocals: (samples, rate) of the isolated voice. Returns midis, changed where needed."""
+    audio, rate = vocals
+    out = []
+    for line, notes in zip(lines, midis):
+        row = []
+        for (start, end, *_), midi in zip(line, notes):
+            if midi is not None:
+                length = end - start
+                a, b = int((start + 0.2 * length) * rate), int((end - 0.1 * length) * rate)
+                if b - a < int(0.06 * rate):
+                    a, b = int(start * rate), int(end * rate)
+                piece = audio[max(0, a):b]
+                if len(piece) >= int(0.04 * rate):
+                    size = 1 << 14
+                    spectrum = np.abs(np.fft.rfft(piece * np.hanning(len(piece)), size))
+                    freqs = np.fft.rfftfreq(size, 1.0 / rate)
+                    loudest = float(spectrum[(freqs > 80) & (freqs < 2500)].max())
+
+                    def tone(hz):
+                        band = (freqs > hz * 0.965) & (freqs < hz * 1.035)
+                        return float(spectrum[band].max()) if band.any() else 0.0
+                    for _ in range(2):
+                        hz = 440.0 * 2 ** ((midi - 69) / 12)
+                        octave = max(tone(2 * hz), tone(4 * hz), tone(6 * hz))
+                        own = max(tone(hz), tone(3 * hz), tone(5 * hz))
+                        if 2 * hz < 1500 and octave >= OCTAVE_LOUD * loudest and own < OCTAVE_WEAK * octave:
+                            midi += 12
+                        else:
+                            break
+            row.append(midi)
+        out.append(row)
+    return out
+
+
+def pitches_from_voice(lines, pitch, vocals=None):
     """Pitch (midi) of every note measured again from the voice where the note is now, the way make_notes does it
     (the steady part of the note, the line's octave, the song's scale): for notes moved in time in the sync editor,
     whose pitch was taken from the voice where they were before. lines: [[(start s, end s, rap)]]; returns the same
-    shape with a midi value, or None for rap notes."""
+    shape with a midi value, or None for rap notes. vocals: (samples, rate) of the isolated voice (load_vocals), to
+    keep the notes really sung an octave up (sung_octaves)."""
     smooth = _smooth_pitch(np.asarray(pitch, dtype=np.float32))
     heard = smooth[~np.isnan(smooth)]
     song_median = float(np.median(heard)) if len(heard) else 60.0
@@ -799,10 +873,12 @@ def pitches_from_voice(lines, pitch):
             while song_center - (middle + shift) > 7:
                 shift += 12
         out.append([None if m is None else int(round(m + shift)) for m in levelled])
+    if vocals is not None:
+        out = sung_octaves(lines, out, vocals)
     return out
 
 
-def make_notes(lines, offset, energy, pitch, language, ctc=None, report=None):
+def make_notes(lines, offset, energy, pitch, language, ctc=None, report=None, vocals=None):
     """[[(start s, end s, midi or None for rap, syllable)] per line]. ctc: (log-probabilities, vocabulary) of the
     speech model (VoiceAlign.load_emissions) to place the syllables, else they are placed from the voice alone.
     report: a list that gets one dict per lyrics line (time, text, how its syllables were placed, the model's
@@ -815,14 +891,18 @@ def make_notes(lines, offset, energy, pitch, language, ctc=None, report=None):
     song_median = float(np.median(heard)) if len(heard) else 60.0
     result, features, rows = [], [], []  # rows: the lines with notes from the voice (rap is looked for in them)
     last_end = 0  # frame where the notes of the line before end
+    windows = []  # (first frame, last frame, syllables) of every line
     for index, (t, text) in enumerate(lines):
-        syllables = line_syllables(lead_vocal(text), language)
-        if not syllables:  # an empty line, or only backing vocals
-            continue
         start = t + offset - 0.25
         end = min((lines[index + 1][0] + offset - 0.05) if index + 1 < len(lines) else start + LINE_MAX_S,
                   start + LINE_MAX_S)
-        a, b = max(0, int(start / FRAME)), min(len(energy), int(end / FRAME))
+        windows.append((max(0, int(start / FRAME)), min(len(energy), int(end / FRAME)),
+                        line_syllables(lead_vocal(text), language)))
+    for index, (t, text) in enumerate(lines):
+        a, b, syllables = windows[index]
+        if not syllables:  # an empty line, or only backing vocals
+            continue
+        following = next(((w[2], w[1]) for w in windows[index + 1:] if w[2]), None)
         if LOCAL_VOICE_SHARE and b > a:  # the voice of this line: its loud part, not the reverb or the next line
             local = float(np.percentile(energy[a:b], 90)) * LOCAL_VOICE_SHARE
             voiced = energy > max(threshold, local)
@@ -830,7 +910,7 @@ def make_notes(lines, offset, energy, pitch, language, ctc=None, report=None):
             voiced = song_voiced
         weights = [1 + 0.2 * len(re.sub(r'\W', '', s)) for s in syllables]
         info = {'t': t + offset, 'text': text, 'sure': None}
-        onsets = (_aligned_onsets(ctc, syllables, a, b, last_end if ALIGN_AFTER_PREVIOUS else 0, info)
+        onsets = (_aligned_onsets(ctc, syllables, a, b, last_end if ALIGN_AFTER_PREVIOUS else 0, info, following)
                   if ctc is not None and b > a else None)
         aligned = onsets is not None
         info['placed'] = 'model' if aligned else 'voice'
@@ -893,6 +973,10 @@ def make_notes(lines, offset, energy, pitch, language, ctc=None, report=None):
                                else a + MIN_NOTE_S))
             notes.append((a, b, None if m is None else m + shift, s))
         out.append(notes)
+    if vocals is not None:  # (samples, rate) of the isolated voice: notes sung an octave up are not left folded down
+        midis = sung_octaves(out, [[None if n[2] is None else int(round(n[2])) for n in line] for line in out], vocals)
+        out = [[(a, b, m if m is None or k is None or k == int(round(m)) else m + (k - int(round(m))), s)
+                for (a, b, m, s), k in zip(line, row)] for line, row in zip(out, midis)]
     return out
 
 
@@ -1148,7 +1232,8 @@ def make_song(artist, title, url, songs_dir, language='Spanish', year=None, genr
 
     log("4/4 Notes")
     ctc = speech_model(folder, audio, log)
-    lines_notes = [notes for notes in make_notes(version[2], offset, energy, pitch, language, ctc=ctc) if notes]
+    lines_notes = [notes for notes in make_notes(version[2], offset, energy, pitch, language, ctc=ctc,
+                                                 vocals=load_vocals(folder)) if notes]
     tags = {'TITLE': title, 'ARTIST': artist, 'LANGUAGE': language, 'YEAR': year, 'GENRE': genre,
             'MP3': audio.name, 'AUDIO': audio.name, 'VIDEO': video.name if video else None,
             'COVER': cover.name if cover else None,
@@ -1232,7 +1317,8 @@ def remake_notes(folder, keep_dir=None, log=print, force=False):
     energy, pitch = voice['energy'].astype(np.float32), voice['pitch'].astype(np.float32)
     language = tags.get('LANGUAGE', 'Spanish').strip()
     ctc = speech_model(folder, None, log, make=False)
-    lines_notes = [n for n in make_notes(lines, offset, energy, pitch, language, ctc=ctc) if n]
+    lines_notes = [n for n in make_notes(lines, offset, energy, pitch, language, ctc=ctc,
+                                         vocals=load_vocals(folder)) if n]
     if keep_dir:
         keep = Path(keep_dir) / folder.name
         keep.mkdir(parents=True, exist_ok=True)

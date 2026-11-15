@@ -1325,7 +1325,7 @@ class SyncEditorDialog(QDialog):
             by_line.setdefault(note.line, []).append(note)
         groups = [by_line[k] for k in sorted(by_line)]
         lines = [[(self.note_time(n), self.note_time(n) + n.d, not n.sung) for n in group] for group in groups]
-        measured = SongMaker.pitches_from_voice(lines, self.voice['pitch'])
+        measured = SongMaker.pitches_from_voice(lines, self.voice['pitch'], SongMaker.load_vocals(self.song_dir))
         changed = 0
         for group, pitches in zip(groups, measured):
             for note, midi in zip(group, pitches):
