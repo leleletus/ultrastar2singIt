@@ -87,3 +87,42 @@ dificultad `VeryEasy…VeryHard`; voz `Women, Men, Both`.
 
 1. **Video sin acelerar**: tras el salto, el video Bink se pone al día acelerando un momento (`VideoDesyncTolerance`);
    lo ideal es moverlo directo al mismo tiempo que el audio.
+
+## v3 (2026-11-15, en pruebas): canción aleatoria con ZL+ZR
+
+Pedido del usuario: una canción al azar de la categoría donde está (Recomendadas, Favoritas, todas...), y si no
+gusta, volver y pedir otra. **Compila; sin probar en la consola ni en el emulador.**
+
+Lo que hace el juego al validar una portada (`SongsScreen.UpdateVx`, `0x46014C0`, estado 1 de la rejilla = detalle):
+
+| Paso | Dónde |
+|---|---|
+| Si el orden es Recomendadas (`SortManager.CurrentSortType == 0`) y la categoría es una `SuggestionCategory`: `SuggestionsManager.Instance.CurrentSuggestions` (+0xC0) = `category.Suggestions` (+0x40); si no, null | `0x4601CF4`–`0x4601DC8` |
+| Sonido `KaraokeHubSFX.ValidateCover` | `0x4601E14` |
+| `GameManager.Instance.set_CurrentGameSong(song)` (virtual, slot 7: clase +0x1A8) | `0x4601E7C` |
+| `GameManager.Instance.GoTo("PlayerSelection4P", false)` (virtual, slot 27: clase +0x2E8) | `0x4601EA4` |
+
+Piezas: `SongsScreen.songsGrid` +0xF8; `SongsGrid` estado +0x2C (0 portadas, 1 detalle), `CurrentCategory` +0x130
+(`GridSongCategory`), su `Category` +0xD0 (`BaseHubCategory`), `_songs` +0x30 (`List<GameSong>`: `_items` +0x10,
+`_size` +0x18). `GameSong.get_IsLocked` `0x477B9F0`, `get_CanRetrieveData` `0x477B970`. Instancias:
+`GameManager.get_Instance` `0x4580350`, `SortManager.get_Instance` `0x45A5D80` (`get_CurrentSortType` `0x45A62D0`),
+`SuggestionsManager.get_Instance` `0x45A8630`, `PlaylistManager.get_Instance` `0x46A0920` (`get_IsInPlaylist`
+`0x46A0150`). El nombre de la escena es un literal: su casilla de metadatos está en `0x85204E0` y se inicializa
+con `il2cpp_codegen_initialize_runtime_metadata` (`0x75BE00`); barrera de escritura `0x75BD30`. Órdenes
+(`SortType`): Recommended 0, Favorite 1, Title 2, Artist 3, Language 4, Year 5, Theme 6, Genre 7.
+
+El mod (gancho en `SongsScreen.UpdateVx`, antes del original): cuando baja el primero de ZL/ZR copia las canciones
+cantables de la categoría actual (así da igual lo que haga ese botón solo en la lista); con los dos pulsados elige
+una al azar (no la anterior), repite los pasos de la tabla salvo el sonido y no ejecuta el original ese fotograma.
+No actúa editando una lista de reproducción, ni dos veces en 3 s.
+
+Direcciones del desensamblado: en la salida de `disasm.py` los destinos de `bl`/`b` van +0x100 (dirección del ELF)
+y los de `adrp` ya son de memoria; las entradas de la GOT guardan la dirección de memoria de la casilla (RELR).
+`il2cpp_work/got.py` y `dis2.py` lo resuelven y nombran las casillas.
+
+**Idea aparcada: una portada «Aleatorio» al inicio de cada categoría.** Haría falta una canción falsa en el parche
+(portada, audio corto) e insertarla la primera en cada `BaseHubCategory._songs` al montar la rejilla
+(`SongsGrid.SetupCategories`, `0x45F59A0`), y cambiarla por una al azar en `set_CurrentGameSong` (`0x4582210`).
+Riesgos: la lista de Favoritas podría ser la guardada (se guardaría la falsa), contadores y «nuevas». El usuario
+propuso ZL+ZR como alternativa (2026-11-15) y se hizo eso.
+

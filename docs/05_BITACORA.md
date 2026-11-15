@@ -609,4 +609,8 @@
 - README: guía «Adding songs, step by step» (USDB → SongMaker → revisión → consola). `docs/14`: sección «Después de
   corregirla a oído».
 - Pendiente de copiar a la Switch: Rudolph (octavas) y las 8 reparadas.
+- Mod v3 (en pruebas): ZL+ZR en la lista de canciones → canción al azar de la categoría actual. Análisis y
+  direcciones en `docs/10`. Compilado (`mods/skip_intro`, commit local `e61cd4f`, sin publicar); archivos en
+  `~/.cache/letssing_mod/release_v3/`. Sin probar: la Switch está desconectada y no se abrió el emulador (poca
+  memoria libre con la otra sesión compilando y el usuario editando).
 
