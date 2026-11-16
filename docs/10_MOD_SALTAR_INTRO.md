@@ -126,3 +126,16 @@ y los de `adrp` ya son de memoria; las entradas de la GOT guardan la dirección 
 Riesgos: la lista de Favoritas podría ser la guardada (se guardaría la falsa), contadores y «nuevas». El usuario
 propuso ZL+ZR como alternativa (2026-11-15) y se hizo eso.
 
+## v4 (2026-11-15): de dónde sale la canción aleatoria — probada en la consola
+
+- Por orden de la lista (`SortManager.CurrentSortType`): Recomendadas, Idioma, Año, Tema y Género → la fila del
+  cursor (`SongsGrid.CurrentCategory`); Título, Artista y Favoritas → todas las filas (`SongsGrid.Categories`,
+  +0x148, `GridSongCategory[]`), sin repetir canciones.
+- Al volver con B el juego pone el cursor en la primera fila que contiene la canción, que puede ser otra. El mod
+  guarda el nombre de la fila (`BaseHubCategory.Name`, +0x20; `String`: longitud +0x10, caracteres UTF-16 +0x14) y
+  el orden; si el cursor sigue sobre la última canción aleatoria (`SongsGrid._currentCover` +0x120,
+  `GridSongCover.get_Song` `0x45EB4F0`), elige de la fila con ese nombre.
+- Prueba del usuario (2026-11-15): con la v3, desde «Para ti», tras 2 o 3 canciones salió una de «Todas las
+  canciones»; con la v4, repitiendo muchas veces, ni una vez. Publicada como release `v4` («Latest»). Sin
+  confirmar: la aleatoria en Feat.
+

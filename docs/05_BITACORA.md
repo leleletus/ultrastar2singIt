@@ -630,4 +630,7 @@
   la fila (`BaseHubCategory.Name`, +0x20) y el orden; si el cursor sigue sobre la última canción aleatoria
   (`SongsGrid._currentCover` +0x120, `GridSongCover.get_Song` `0x45EB4F0`), usa la fila con ese nombre. Copiada a
   la Switch por FTP; la v3 de la SD en `~/LetsSing/switch_backup_2026-11-15_mod_v3`.
+- Mod v4 probada por el usuario en la consola (la aleatoria ya no se sale de la fila): release `v4` normal y
+  «Latest», README del mod reescrito con las tres funciones (commit `2a0d53b`), descripción del repositorio y
+  README del programa actualizados.
 

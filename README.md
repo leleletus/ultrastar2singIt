@@ -29,13 +29,15 @@ To make the whole process even more user-friendly, I've implemented a GUI and pa
 so you don't need to worry about installing Python or any dependencies.
 
 ## What this fork adds (`linux-wine-support` branch)
-**Mod for Let's Sing 2026: skip long intros and the wait at the end.** Press ZR/ZL during a song's intro and it
-jumps to 3 s before the first note; hold it for 3 s after the last note and it jumps to 1 s before the end, so the
-results and the score come as usual. Classic and Feat modes. **Only for game update v131072** (build ID
-`1C344DD17322D4FA3E8F50063340C7D0`). **v3: random song.** In the song list, ZL and ZR together start a random
-song; B comes back to the list and ZL+ZR gives another one. v4 (pre-release) takes it from the row the cursor is in
-when the list is ordered by Recommended, Language, Year, Theme or Genre, and from the whole list in Title, Artist
-and Favorites.
+**Mod for Let's Sing 2026: random song, skip long intros and the wait at the end.** All with ZL/ZR:
+- **Random song:** in the song list, ZL and ZR together start a random song as if it had been chosen with A; B
+  comes back to the list and ZL+ZR gives another one. It is taken from the row the cursor is in when the list is
+  ordered by Recommended, Language, Year, Theme or Genre, and from the whole list in Title, Artist and Favorites.
+- **Skip the intro:** press ZR/ZL during a song's intro and it jumps to 3 s before the first note.
+- **Skip the end:** hold it for 3 s after the last note and it jumps to 1 s before the end, so the results and the
+  score come as usual.
+
+Classic and Feat modes. **Only for game update v131072** (build ID `1C344DD17322D4FA3E8F50063340C7D0`).
 Its own repository, with the download, compatibility and build instructions:
 [leleletus/letssing2026-skip-intro](https://github.com/leleletus/letssing2026-skip-intro).
 
