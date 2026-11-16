@@ -626,7 +626,7 @@
 - Aviso del usuario con la v3: en Recomendadas, desde «Para ti», tras 2 o 3 canciones salió una de «Todas las
   canciones». Causa probable (por el código, sin comprobar en la consola): al volver con B el juego pone el cursor
   en la primera fila que contiene la canción (`TryGetFirstCoverAndCategory`); si «Para ti» se rehízo sin ella, cae
-  en «Todas» y la v3 elegía de la fila del cursor. v4 (commit `e…` del mod, mismo pre-release): guarda el nombre de
+  en «Todas» y la v3 elegía de la fila del cursor. v4 (commit `b11f0f0` del mod, mismo pre-release): guarda el nombre de
   la fila (`BaseHubCategory.Name`, +0x20) y el orden; si el cursor sigue sobre la última canción aleatoria
   (`SongsGrid._currentCover` +0x120, `GridSongCover.get_Song` `0x45EB4F0`), usa la fila con ese nombre. Copiada a
   la Switch por FTP; la v3 de la SD en `~/LetsSing/switch_backup_2026-11-15_mod_v3`.
