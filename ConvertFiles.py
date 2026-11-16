@@ -588,7 +588,7 @@ def create_video_intermediate(file, list_in_dir, output_video_file_name, trim_st
     visible: the size of the .bk2 is decided by binkc alone."""
     seek = ['-ss', str(trim_start)] if trim_start > 0 else []
     video_filter = 'scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,fps=25'
-    return _ffmpeg(seek + ['-i', os.fspath(file), '-c:v', 'libx264', '-preset', 'medium', '-bf', '0',
+    return _ffmpeg(seek + ['-i', os.fspath(file), '-c:v', 'libx264', '-preset', 'veryfast', '-bf', '0',
                            '-crf', str(VIDEO_INTERMEDIATE_CRF), '-an', '-vf', video_filter],
                    list_in_dir / output_video_file_name)
 

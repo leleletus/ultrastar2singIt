@@ -178,7 +178,7 @@ def encode(row, quality, keep_root, temp_root, delete_old=False):
     try:
         intermediate, out = work / 'input.avi', work / 'output.bk2'
         seek = ['-ss', str(row['trim'])] if row['trim'] > 0 else []
-        made = run([FFMPEG, '-v', 'error', '-y'] + seek + ['-i', row['video'], '-c:v', 'libx264', '-preset', 'medium',
+        made = run([FFMPEG, '-v', 'error', '-y'] + seek + ['-i', row['video'], '-c:v', 'libx264', '-preset', 'veryfast',
                     '-bf', '0', '-crf', INTERMEDIATE_CRF, '-an', '-vf', VIDEO_FILTER, os.fspath(intermediate)],
                    timeout=3600)
         if made.returncode != 0 or not intermediate.exists():
