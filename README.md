@@ -47,6 +47,16 @@ Detailed technical notes, bug list, regressions and work log (in Spanish) are in
 "Clear cache" keeps them (double confirmation), a failed encode never replaces a good file, and before the output
 folder is cleared any video without a copy in its song folder is rescued.
 
+**Video quality.** A clip is encoded to `.bk2` at a constant quality (RAD's `/Q`, `video_quality: 0.2` in
+`config.yml`), not at the bitrate of its source: Bink 2 needs several times the bits of H.264/VP9/AV1 for the same
+picture, so copying the source bitrate gave blocky videos whenever the picture moved (VMAF against the source on
+clips with a lot of movement: 60 at 900 kbps and 82 at 2500 kbps before; 93 at quality 0.2, 96-98 at 0.3). Quiet
+videos come out small and busy ones bigger, 60-110 MB for a song as a rule; "Max video size" (250 MB by default)
+is only a ceiling. Videos converted before this change are made again with
+`python tools/reencode_videos.py <songs> <patch> --apply` (first without `--apply`: it lists what it would do). It
+only touches a video whose original is in the song folder and lasts the same as the current `.bk2`; a still
+cover, a game's own video or a clip whose original is gone are left exactly as they are.
+
 **Sync editor** (right click on a song → *Fix sync…*), a small video editor for the lyrics: move all the lyrics
 or only a part of the song, see where the singer really is, fix the pitch of a note, delete lyrics where nothing is
 sung and fix misspelt words, and sing over it with a microphone. Every button and shortcut is described in
@@ -75,6 +85,7 @@ sung and fix misspelt words, and sing over it with a microphone. Every button an
 | `remake_notes.py` | writes the notes of made songs again with the current note maker (never the ones fixed by hand) |
 | `align_voices.py` / `songmaker_report.py` | speech-model alignment of SongMaker lyrics (resumable batch) / report of the made songs with what to fix by hand |
 | `remove_from_patch.py` | takes songs out of a converted patch (files moved to a trash folder, entry out of the song list) |
+| `reencode_videos.py` | makes again, from the original video of each song, the `.bk2` that were encoded with too little data (blocky when the picture moves); unattended and resumable, the old ones are kept |
 | `validate_patch.py` | checks the patch before copying it: files, values the game accepts, covers, lyrics |
 | `switch_update.py` | copies to the Switch only the files that changed, over MTP (DBI, cable) or FTP (`--ftp HOST:PORT`, Wi-Fi); `--prune` removes renamed ones |
 

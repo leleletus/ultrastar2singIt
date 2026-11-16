@@ -634,3 +634,31 @@
   «Latest», README del mod reescrito con las tres funciones (commit `2a0d53b`), descripción del repositorio y
   README del programa actualizados.
 
+### 2026-11-15 — Calidad de los .bk2: calidad constante y reconversión desatendida
+
+- Orden del usuario: reconvertir ya los .bk2 que se ven mal (cuadros al haber movimiento), sin esperar a la prueba
+  pendiente; condición: no cambiar nunca un vídeo en movimiento por una carátula fija ni perder vídeos editados.
+- Causa: el .bk2 copiaba el bitrate del vídeo original (con tope de 80 MB) y pasaba por un x264 intermedio a ese
+  mismo bitrate. Bink 2 necesita varias veces los bits de H.264/VP9/AV1.
+- Medido con VMAF (0–100 contra el original a 720p, trozos de 20 s con movimiento; el .bk2 se pasa a PNG con
+  `binkconv` y se compara con ffmpeg `libvmaf`):
+
+  | | Fiel (AV1 782 kbps) | Party Rock Anthem (H.264 7.300 kbps) |
+  |---|---|---|
+  | método anterior | 60 (916 kbps) | 82 (2.477 kbps) |
+  | bitrate fijo 2.500 | 90 | 88 |
+  | bitrate fijo 4.500 | — | 97 |
+  | calidad 0,15 | 90 (1.833 kbps) | — |
+  | calidad 0,2 | 93 (2.411 kbps) | — |
+  | calidad 0,3 | 96 (3.530 kbps) | 98 (6.189 kbps) |
+
+- `binkc`: `/D` de 1000 en adelante son bytes por segundo, de 1 a 200 un porcentaje; `/Q` de 0,001 a 1 es calidad
+  constante. Necesita el escritorio (sin `DISPLAY` falla en 5 s). `binkconv` no puede escribir AVI bajo Wine, sí PNG.
+- Elegido: `/Q0.2` desde un intermedio x264 CRF 12 que se borra al terminar; suelo de 256 kbps (un .bk2 diminuto
+  se toma por carátula fija) y techo. En el conversor: `video_quality: 0.2`, `max_video_size` 250 (solo techo),
+  `create_video_intermediate`, intermedio `<id>.tmp.avi`. Las ediciones XML (mp4) no cambian.
+- `tools/reencode_videos.py` + `~/LetsSing/reconvertir_videos.sh`: plan de 831 carpetas → 733 a reconvertir
+  (705 + 28 cuyo .bk2 se hizo del clip entero aunque la canción empieza en `#START`: el nuevo sale cortado como el
+  audio), 64 con vídeo del juego, 33 de carátula fija; ninguna sin vídeo original. Peores primero. Los .bk2 y .avi
+  antiguos pasan a `~/LetsSing/_replaced_videos/`.
+

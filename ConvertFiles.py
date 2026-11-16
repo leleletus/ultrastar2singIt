@@ -573,6 +573,26 @@ def create_video(file, list_in_dir, output_video_file_name, target_bitrate_kbps,
     return created
 
 
+# A .bk2 of a real clip is made at a constant quality (binkc /Q), not at the bitrate of the source: Bink 2 needs
+# several times the bits of H.264/VP9/AV1 for the same picture. Measured with VMAF against the source (100 =
+# identical) on clips with a lot of movement: source bitrate (the method before) 60 at 900 kbps and 82 at 2500 kbps;
+# quality 0.15 = 90, 0.2 = 93, 0.3 = 96-98. tools/reencode_videos.py makes the old ones again.
+VIDEO_QUALITY_DEFAULT = 0.2
+VIDEO_INTERMEDIATE_CRF = 12        # x264 fed to binkc: loses nothing visible; deleted after the encode
+VIDEO_INTERMEDIATE_TMP = '.tmp.avi'  # ".tmp." names are never taken for a source video
+MIN_CLIP_KBPS = 256                # a real clip is never left smaller (tiny .bk2 are taken for still covers)
+
+
+def create_video_intermediate(file, list_in_dir, output_video_file_name, trim_start=0.0):
+    """The clip as binkc needs it (1280x720, 25 fps, x264 without B-frames) at a quality that loses nothing
+    visible: the size of the .bk2 is decided by binkc alone."""
+    seek = ['-ss', str(trim_start)] if trim_start > 0 else []
+    video_filter = 'scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,fps=25'
+    return _ffmpeg(seek + ['-i', os.fspath(file), '-c:v', 'libx264', '-preset', 'medium', '-bf', '0',
+                           '-crf', str(VIDEO_INTERMEDIATE_CRF), '-an', '-vf', video_filter],
+                   list_in_dir / output_video_file_name)
+
+
 def is_still_bk2(path, duration):
     """A .bk2 made from the still cover: a real clip takes 100+ KB per second, a still image ~3."""
     return path.stat().st_size < STILL_BK2_BYTES_PER_S * max(duration or 0, 1)
@@ -671,7 +691,7 @@ def _big_temp_dir():
 
 
 def create_video_bink(file, list_in_dir, output_video_file_name, quality=None, duration=None,
-                      compression_percentage=None):
+                      compression_percentage=None, data_rate_kbps=None, real_clip=None):
     """Encode a .bk2 with RAD Video Tools. The result is written to the song folder only when binkc
     produced a valid file, an existing .bk2 is never replaced by a failed encode."""
     if not _rad_path:
@@ -703,10 +723,12 @@ def create_video_bink(file, list_in_dir, output_video_file_name, quality=None, d
             bink_args = [_rad_path, 'binkc', bink_in, bink_out, file_format,
                          '/(1280', '/)720', remove_sound]
 
-        if compression_percentage:
+        if data_rate_kbps:
+            bink_args.append('/D' + str(int(data_rate_kbps * 125)))  # 1000 and up: bytes per second
+        elif compression_percentage:
             # data rate as a percentage of the input (from the original converter): keeps "Max video size"
             bink_args.append('/D' + str(compression_percentage))
-        if quality:
+        if quality and not data_rate_kbps:
             bink_args.append('/Q' + str(quality))
         bink_args.append('/#')
 
@@ -728,7 +750,7 @@ def create_video_bink(file, list_in_dir, output_video_file_name, quality=None, d
         if size >= MIN_VALID_BK2_BYTES:
             shutil.copy2(temp_out, final_out)
             logger.info(f"Successfully created {output_video_file_name}")
-            if duration and quality is None:  # only real videos: still covers encode in seconds
+            if duration and (quality is None if real_clip is None else real_clip):  # still covers take seconds
                 _record_encode(duration, wall, running)
             return True
 
@@ -1462,6 +1484,11 @@ def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None,
     output_format = get_output_format(cfg)
     dlc_json_name = str(cfg.dlc.json_name) if cfg.dlc.json_name else None
     target_size_mb = float(cfg.conversion_tweaks.max_video_size or 50)
+    try:
+        video_quality = min(1.0, max(0.001, float(getattr(cfg.conversion_tweaks, 'video_quality', None)
+                                                  or VIDEO_QUALITY_DEFAULT)))
+    except (TypeError, ValueError):
+        video_quality = VIDEO_QUALITY_DEFAULT
     pitch_correction_method = str(cfg.conversion_tweaks.pitch_correction or FAST).lower()
     vocal_isolation = getattr(cfg.conversion_tweaks, "vocal_isolation", False)
     ignore_medley = bool(cfg.conversion_tweaks.no_medley)
@@ -1689,8 +1716,29 @@ def convert_files(dirs_to_convert, cfg, stop_event=None, progress_callback=None,
                 # already in the game's format
                 shutil.copy2(real_video, output_video_path)
                 logger.info(f"Using {real_video.name} as {output_video_file_name}")
+            elif not is_video_still_image(real_video):
+                # a real clip: constant quality from an intermediate that loses nothing (see VIDEO_QUALITY_DEFAULT)
+                temp_video_file = list_in_dir / (name_id + VIDEO_INTERMEDIATE_TMP)
+                try:
+                    if create_video_intermediate(real_video, list_in_dir, temp_video_file.name, trim_start):
+                        create_video_bink(temp_video_file, list_in_dir, output_video_file_name, video_quality,
+                                          duration, real_clip=True)
+                        made_kbps = output_video_path.stat().st_size * 8 / 1000 / max(duration - trim_start, 1) \
+                            if output_video_path.exists() else None
+                        refit = None
+                        if made_kbps is not None and made_kbps < MIN_CLIP_KBPS:
+                            refit = MIN_CLIP_KBPS
+                        elif made_kbps is not None and made_kbps > limited_bitrate_kbps:  # over "Max video size"
+                            refit = limited_bitrate_kbps
+                        if refit:
+                            output_video_path.unlink()
+                            create_video_bink(temp_video_file, list_in_dir, output_video_file_name, None, duration,
+                                              data_rate_kbps=refit, real_clip=True)
+                finally:
+                    if temp_video_file.exists():
+                        temp_video_file.unlink()
             else:
-                quality = 0.1 if is_video_still_image(real_video) else None
+                quality = 0.1
                 temp_video_file = list_in_dir / (name_id + naming.VIDEO_INTERMEDIATE_SUFFIX)
                 if not temp_video_file.exists():
                     create_video(real_video, list_in_dir, temp_video_file.name, target_bitrate_kbps, trim_start)
