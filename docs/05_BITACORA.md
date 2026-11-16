@@ -617,4 +617,10 @@
   notas); la v2 de la SD guardada en `~/LetsSing/switch_backup_2026-11-15_mod_v2`. Publicada a petición del usuario
   mientras la prueba: código en el repositorio del mod y **pre-release `v3`** (`letssing2026_saltar_intro_v3.zip`);
   la v2 sigue como «Latest». Pasarla a release normal cuando el usuario confirme la prueba en la consola.
+- Mod v3 probada por el usuario en la consola (canción aleatoria en Favoritas: funciona): pasada a release normal
+  y «Latest». Pedido: en Recomendadas, Idioma y Año al azar dentro de la fila del cursor; en Título y Artista (filas
+  = letras) al azar entre todas. **v4** (commit `e8d59f1` del mod, pre-release `v4`): fila actual en Recomendadas,
+  Idioma, Año, Tema y Género; todas las filas (`SongsGrid.Categories`, +0x148, sin repetir canciones) en Título,
+  Artista y Favoritas. Compilada, sin probar; falta copiarla a la Switch (FTP cerrado), archivos en
+  `~/.cache/letssing_mod/release_v4/`.
 
