@@ -613,4 +613,8 @@
   direcciones en `docs/10`. Compilado (`mods/skip_intro`, commit local `e61cd4f`, sin publicar); archivos en
   `~/.cache/letssing_mod/release_v3/`. Sin probar: la Switch está desconectada y no se abrió el emulador (poca
   memoria libre con la otra sesión compilando y el usuario editando).
+- Mod v3 copiada a la Switch por FTP (192.168.18.198:5000) junto con Rudolph y las 8 reparadas (19 archivos de
+  notas); la v2 de la SD guardada en `~/LetsSing/switch_backup_2026-11-15_mod_v2`. Publicada a petición del usuario
+  mientras la prueba: código en el repositorio del mod y **pre-release `v3`** (`letssing2026_saltar_intro_v3.zip`);
+  la v2 sigue como «Latest». Pasarla a release normal cuando el usuario confirme la prueba en la consola.
 

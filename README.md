@@ -32,7 +32,9 @@ so you don't need to worry about installing Python or any dependencies.
 **Mod for Let's Sing 2026: skip long intros and the wait at the end.** Press ZR/ZL during a song's intro and it
 jumps to 3 s before the first note; hold it for 3 s after the last note and it jumps to 1 s before the end, so the
 results and the score come as usual. Classic and Feat modes. **Only for game update v131072** (build ID
-`1C344DD17322D4FA3E8F50063340C7D0`).
+`1C344DD17322D4FA3E8F50063340C7D0`). **v3 (pre-release, not tested on a console yet): random song.** In the song
+list, ZL and ZR together start a random song of the category the cursor is in (Recommended, Favorites, a letter, a
+genre...); B comes back to the list and ZL+ZR gives another one.
 Its own repository, with the download, compatibility and build instructions:
 [leleletus/letssing2026-skip-intro](https://github.com/leleletus/letssing2026-skip-intro).
 
