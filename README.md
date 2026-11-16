@@ -81,6 +81,7 @@ sung and fix misspelt words, and sing over it with a microphone. Every button an
 | `fix_years.py` | real release year (MusicBrainz, iTunes) for songs rebuilt from DLCs that had the DLC year |
 | `artist_genders.py` | men / women / both for each artist (MusicBrainz), used for the "gender" of Let's Sing 2026 |
 | `make_song.py` / `make_songs.py` | makes a song USDB does not have from a YouTube video (one / a resumable queue): see [Adding songs](#adding-songs-step-by-step) |
+| `cancion_lista.sh` / `pasar_a_switch.sh` | one command after fixing a song by ear (pitch again + mark reviewed + convert + validate) / copy to the Switch only what changed (cable or `IP:PORT` for FTP). Step by step in Spanish: [docs/15_GUIA_PARA_SEGUIR_SOLO.md](docs/15_GUIA_PARA_SEGUIR_SOLO.md) |
 | `after_review.py` | after fixing a made song by ear: pitch of every note measured again where the note is now, overlaps listed, song marked as reviewed |
 | `remake_notes.py` | writes the notes of made songs again with the current note maker (never the ones fixed by hand) |
 | `align_voices.py` / `songmaker_report.py` | speech-model alignment of SongMaker lyrics (resumable batch) / report of the made songs with what to fix by hand |

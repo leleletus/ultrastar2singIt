@@ -243,6 +243,9 @@ def main():
                         help="with --apply: also remove from the Switch the files of the photo that are no longer in "
                              "the patch (e.g. after the songs were renamed); only files this tool knows it put there, "
                              "each one backed up first")
+    parser.add_argument('--no-video-backup', action='store_true',
+                        help="with --apply: do not download the .bk2 videos that get replaced (after re-encoding "
+                             "hundreds of videos the backup would be tens of GB; the other files are still backed up)")
     args = parser.parse_args()
 
     patch = os.path.abspath(os.path.expanduser(args.patch))
@@ -347,7 +350,7 @@ def main():
     started, sent = time.time(), 0
     for n, k in enumerate(changed, 1):
         if k in on_switch:  # keep what the Switch had
-            if not back_up(k):
+            if not (args.no_video_backup and k.endswith('.bk2')) and not back_up(k):
                 sys.exit(f"Could not back up {k} from the Switch: stopped before changing anything else.")
         else:
             make_dirs(remote, k, made)

@@ -662,3 +662,22 @@
   audio), 64 con vídeo del juego, 33 de carátula fija; ninguna sin vídeo original. Peores primero. Los .bk2 y .avi
   antiguos pasan a `~/LetsSing/_replaced_videos/`.
 
+
+## 2026-11-16 — Tanda de vídeos a 6 a la vez, limpieza, scripts para seguir sin ayuda
+
+- Tanda de reconversión: relanzada a las 22:59 del 15 con 6 a la vez y el intermedio x264 en `veryfast`
+  (~18 vídeos/hora frente a ~16 con 3; el procesador ya estaba al 90 %). El lanzador bloquea la suspensión
+  (`systemd-inhibit`) además de fijar el perfil «Performance». A las 06:00 del 16: ~200 de 732 hechos, ~23 h restantes,
+  un fallo (`Steven Universe - Stronger Than You`: `binkc` colgado, cortado a las 2 h; conserva su vídeo antiguo,
+  causa sin mirar). La calidad con `veryfast` no se ha vuelto a medir con VMAF.
+- Limpieza de `~/LetsSing`: borrados `_papelera`, `switch_backup_*`, `_replaced_videos` y los registros y colas
+  antiguos (~3,3 GB). Se conservan `_respaldo_songmaker`, `_respaldo_editor`, los `.txt.bak` y `VIDEOS_PENDIENTES`.
+- `tools/cancion_lista.sh`: tonos (`after_review.py --apply --checked`) + conversión de esas canciones + validación.
+  Probado con Rudolph (0 notas cambian, 844 canciones, 0 problemas).
+- `tools/pasar_a_switch.sh [IP:PUERTO]`: valida y lanza `switch_update.py --apply`; `VER=1` solo lista.
+- `switch_update.py --no-video-backup`: no descarga los `.bk2` que se reemplazan (con cientos de vídeos la copia
+  de seguridad serían decenas de GB). `pasar_a_switch.sh` lo usa salvo `CON_COPIA_DE_VIDEOS=1`. Sin probar todavía
+  contra la consola.
+- Guía práctica: `docs/15_GUIA_PARA_SEGUIR_SOLO.md`.
+- Pendiente al acabar la tanda: reintentar Steven Universe, pasar el parche a la Switch (a las 06:00 ya son 197
+  archivos y 10,2 GB de diferencia; mirar el espacio de la SD), mirar la sincronía de las canciones «whole clip».
