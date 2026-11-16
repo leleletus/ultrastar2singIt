@@ -657,7 +657,7 @@
 - Elegido: `/Q0.2` desde un intermedio x264 CRF 12 que se borra al terminar; suelo de 256 kbps (un .bk2 diminuto
   se toma por carátula fija) y techo. En el conversor: `video_quality: 0.2`, `max_video_size` 250 (solo techo),
   `create_video_intermediate`, intermedio `<id>.tmp.avi`. Las ediciones XML (mp4) no cambian.
-- `tools/reencode_videos.py` + `~/LetsSing/reconvertir_videos.sh`: plan de 831 carpetas → 733 a reconvertir
+- `tools/reencode_videos.py` + `~/LetsSing/reconvertir_videos.sh`: plan de 831 carpetas → 733 a reconvertir (Fiel hecha como prueba: 38,9 → 97,9 MB, 2.281 kbps, 11,3 min; tanda de 732 lanzada a las 20:35 con 3 a la vez y borrado de los antiguos, por orden del usuario)
   (705 + 28 cuyo .bk2 se hizo del clip entero aunque la canción empieza en `#START`: el nuevo sale cortado como el
   audio), 64 con vídeo del juego, 33 de carátula fija; ninguna sin vídeo original. Peores primero. Los .bk2 y .avi
   antiguos pasan a `~/LetsSing/_replaced_videos/`.
