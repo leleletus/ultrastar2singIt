@@ -695,3 +695,20 @@
   3. mirar en el juego la sincronía de las canciones «made from the whole clip»;
   4. seguir corrigiendo canciones de SongMaker: editor → `~/LetsSing/cancion_lista.sh "nombre"`.
 - Sin medir: calidad (VMAF) con el intermedio en `veryfast`.
+
+## 2026-11-17 — Tanda de vídeos terminada y parche en la Switch
+
+- Reconversión: 732 de 732 vídeos (la pasada acabó a las 03:39 con 1 fallo; `Steven Universe - Stronger Than You`
+  salió bien al relanzar, en 2 min). El parche creció 6,0 GB (38,3 → 44,3 GB). Validador: 844 canciones, 0 problemas.
+- SD de la Switch: solo quedaban 3 GB. Medida entera por MTP (`~/LetsSing/analisis/switch_sd/walk.py`, solo lee):
+  `emuMMC` 569 GB, `Nintendo/Contents/registered` 59,6 GB, `Nintendo/Contents/placehld` 12,5 GB (descargas a medias
+  del modo normal; el usuario las canceló desde la consola y la carpeta quedó vacía), `music` ~5 GB, `JKSV` 3,1 GB.
+  `kioclient` trata `#` en los nombres como fragmento de URL (carpetas que parecen repetirse, `stat` que falla).
+- Copia por MTP con `tools/pasar_a_switch.sh`: 733 archivos, 41,8 GB. Se cortó dos veces con «Access denied»: DBI a
+  veces ignora el borrado previo y la copia encuentra el archivo viejo. `switch_update.py` repite ahora borrado +
+  copia hasta 4 veces; con eso, 465 archivos seguidos sin cortes (~11 MB/s de media frente a ~18 sin reintentos).
+  Comprobación final: 0 archivos por copiar.
+- Reinicio de la consola tras un golpe (menú HOME): sin informe en `atmosphere/crash_reports` ni `fatal_reports`;
+  los informes guardados (8, 9 y 15 de noviembre) son de un homebrew (`03db12780bd84000`, 2349-0008).
+- Pendiente: ver los vídeos nuevos en el juego y la sincronía de las canciones «made from the whole clip»; VMAF con
+  el intermedio `veryfast` sin medir.

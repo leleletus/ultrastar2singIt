@@ -104,8 +104,12 @@ class KioRemote:
         result = kio('copy', '--overwrite', 'file://' + src, f"{self.url}/{rel}")
         if result.returncode != 0 and self.size(rel) is not None:
             # DBI's MTP responder refuses to overwrite: remove it (already backed up, or a leftover) and copy again
-            kio('remove', f"{self.url}/{rel}")
-            result = kio_retry('copy', 'file://' + src, f"{self.url}/{rel}")
+            for attempt in range(4):  # the remove itself is sometimes dropped: the copy then finds the old file
+                kio_retry('remove', f"{self.url}/{rel}")
+                result = kio_retry('copy', 'file://' + src, f"{self.url}/{rel}")
+                if result.returncode == 0:
+                    break
+                time.sleep(3 * (attempt + 1))
         return result.returncode == 0, result.stderr.strip()[:200]
 
     def remove(self, rel):
