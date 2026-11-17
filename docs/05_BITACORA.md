@@ -681,3 +681,17 @@
 - Guía práctica: `docs/15_GUIA_PARA_SEGUIR_SOLO.md`.
 - Pendiente al acabar la tanda: reintentar Steven Universe, pasar el parche a la Switch (a las 06:00 ya son 197
   archivos y 10,2 GB de diferencia; mirar el espacio de la SD), mirar la sincronía de las canciones «whole clip».
+
+## 2026-11-16 20:25 — Estado al cierre
+
+- Tanda de vídeos en marcha (unidad `letssing-reencode`, 6 a la vez): 557 de 732 hechos (517 de esta pasada + 40
+  anteriores), ~7,5 h restantes (acabaría hacia las 04:00 del 17). Un solo fallo: `Steven Universe - Stronger Than
+  You` (conserva su vídeo antiguo).
+- Pendiente, a mano (guía: `15_GUIA_PARA_SEGUIR_SOLO.md`):
+  1. cuando el registro diga `Finished this run`, relanzar `BORRAR_ANTIGUOS=1 ~/LetsSing/reconvertir_videos.sh`
+     para reintentar los fallidos;
+  2. `~/LetsSing/pasar_a_switch.sh` (antes `VER=1` y mirar el espacio de la SD; la copia real con
+     `--no-video-backup` no se ha probado contra la consola);
+  3. mirar en el juego la sincronía de las canciones «made from the whole clip»;
+  4. seguir corrigiendo canciones de SongMaker: editor → `~/LetsSing/cancion_lista.sh "nombre"`.
+- Sin medir: calidad (VMAF) con el intermedio en `veryfast`.
